@@ -21,6 +21,29 @@ export const sendRequest = async (req, res) => {
       });
     }
 
+    // Role check: Ensure Creator can only connect with Brand, and Brand can only connect with Creator
+    if (mongoose.Types.ObjectId.isValid(creatorId) && mongoose.Types.ObjectId.isValid(brandId)) {
+      const [creatorProfile, brandProfile] = await Promise.all([
+        Profile.findById(creatorId),
+        Profile.findById(brandId),
+      ]);
+
+      if (creatorProfile && brandProfile) {
+        if (creatorProfile.role === "creator" && brandProfile.role === "creator") {
+          return res.status(400).json({
+            success: false,
+            message: "A creator cannot connect with another creator. Connections can only be built between Brands and Creators.",
+          });
+        }
+        if (creatorProfile.role === "brand" && brandProfile.role === "brand") {
+          return res.status(400).json({
+            success: false,
+            message: "A brand cannot connect with another brand. Connections can only be built between Brands and Creators.",
+          });
+        }
+      }
+    }
+
     const filter = { creatorId, brandId };
 
     if (campaignId) {

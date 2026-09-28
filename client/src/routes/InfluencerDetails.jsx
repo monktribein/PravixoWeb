@@ -1337,20 +1337,34 @@ export default function InfluencerDetails() {
 
 
   // ===================================================
-  // HIRE
+  // HIRE / CONNECT ROLE CHECK
   // ===================================================
 
+  const checkConnectionRoleEligibility = () => {
+    if (!user || !myProfile) {
+      toast.error("Please log in to send collaboration requests");
+      navigate("/login");
+      return false;
+    }
+
+    const currentRole = myProfile.role;
+    const targetRole = inf?.role || (isBrand ? "brand" : "creator");
+
+    if (currentRole === "creator" && targetRole === "creator") {
+      toast.error("A creator cannot collaborate or connect with another creator. Creators can only connect with Brands.");
+      return false;
+    }
+
+    if (currentRole === "brand" && targetRole === "brand") {
+      toast.error("A brand cannot collaborate or connect with another brand. Brands can only connect with Creators.");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleHire = async () => {
-    if (!myProfile) {
-      toast.error("Please log in to hire creators");
-      return;
-    }
-
-    if (myProfile.role !== "brand") {
-      toast.error("Only brands can hire creators");
-      return;
-    }
-
+    if (!checkConnectionRoleEligibility()) return;
     setIsConnectionModalOpen(true);
   };
 
@@ -1362,7 +1376,7 @@ export default function InfluencerDetails() {
     async (event) => {
       event.preventDefault();
 
-      if (!myProfile) return;
+      if (!checkConnectionRoleEligibility()) return;
 
       if (!pitchText.trim()) {
         toast.error(
@@ -1517,7 +1531,7 @@ export default function InfluencerDetails() {
   if (profileLoading && !inf) {
     return (
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <div className="relative aspect-[1361/450] w-full rounded-b-2xl sm:rounded-b-3xl bg-secondary/50 animate-pulse border border-border/50" />
+        <div className="relative h-44 sm:h-56 md:h-64 w-full rounded-b-2xl sm:rounded-b-3xl bg-secondary/50 animate-pulse border border-border/50" />
         <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 -mt-14 sm:-mt-20 px-4">
           <div className="h-28 w-28 sm:h-36 sm:w-36 rounded-full bg-secondary animate-pulse border-4 border-background shadow-elevated" />
           <div className="space-y-2 flex-1 pb-2">
@@ -1857,7 +1871,7 @@ export default function InfluencerDetails() {
       {/* COVER */}
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="relative aspect-[1361/450] overflow-hidden w-full rounded-b-2xl sm:rounded-b-3xl rounded-t-none shadow-sm border border-border/50">
+        <div className="relative h-44 sm:h-56 md:h-64 overflow-hidden w-full rounded-b-2xl sm:rounded-b-3xl rounded-t-none shadow-sm border border-border/50">
           <img
             src={inf.cover}
             alt=""
@@ -2752,11 +2766,7 @@ export default function InfluencerDetails() {
                     <div
                       key={tier.name}
                       onClick={() => {
-                        if (!user) {
-                          toast.error("Please login to send proposals");
-                          navigate("/login");
-                          return;
-                        }
+                        if (!checkConnectionRoleEligibility()) return;
                         setIsConnectionModalOpen(true);
                       }}
                       className={`rounded-2xl border p-5 relative cursor-pointer hover:border-primary/50 transition-all flex flex-col justify-between ${

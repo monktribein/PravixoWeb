@@ -243,7 +243,7 @@ export default function Browse() {
   }, [liveProfiles, role]);
 
   /* =========================
-     ALL ITEMS
+     ALL ITEMS & AVAILABLE LOCATIONS
   ========================= */
 
   const allItems = useMemo(() => {
@@ -254,6 +254,34 @@ export default function Browse() {
 
     return formattedLiveProfiles.length > 0 ? formattedLiveProfiles : mockItems;
   }, [formattedLiveProfiles, role]);
+
+  const availableLocations = useMemo(() => {
+    const locSet = new Set();
+    // Add default predefined locations
+    locations.forEach((loc) => {
+      if (loc) locSet.add(loc.trim());
+    });
+    // Add any location found on active profiles
+    allItems.forEach((item) => {
+      if (item.location) {
+        String(item.location)
+          .split(",")
+          .forEach((locPart) => {
+            const clean = locPart.trim();
+            if (clean && clean.toLowerCase() !== "pan india" && clean.toLowerCase() !== "india") {
+              // If not already in set as a specific city
+              const existingMatch = Array.from(locSet).find(
+                (l) => l.toLowerCase().startsWith(clean.toLowerCase()) || clean.toLowerCase().startsWith(l.toLowerCase().split(",")[0].trim())
+              );
+              if (!existingMatch) {
+                locSet.add(clean.includes("India") ? clean : `${clean}, India`);
+              }
+            }
+          });
+      }
+    });
+    return Array.from(locSet).sort();
+  }, [allItems]);
 
   /* =========================
      FILTERED ITEMS
@@ -353,11 +381,14 @@ export default function Browse() {
           selectedLocation
         ).toLowerCase();
 
-        if (
-          !itemLocation.includes(
-            filterLocation
-          )
-        ) {
+        const cityName = filterLocation.split(",")[0].trim();
+
+        const matchesLocation =
+          itemLocation.includes(filterLocation) ||
+          itemLocation.includes(cityName) ||
+          (itemLocation.includes("pan india") && cityName !== "");
+
+        if (!matchesLocation) {
           return false;
         }
       }
@@ -658,11 +689,24 @@ export default function Browse() {
               Min. Followers
             </span>
 
-            <span className="font-semibold text-foreground">
-              {formatFollowers(
-                minFollowers
-              )}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={0}
+                max={10000000}
+                step={100}
+                value={minFollowers === 0 ? "" : minFollowers}
+                placeholder="0"
+                onChange={(e) => {
+                  const val = e.target.value === "" ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
+                  setMinFollowers(val);
+                }}
+                className="w-20 rounded-lg border border-border bg-background px-2 py-0.5 text-right text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <span className="text-[11px] font-medium text-muted-foreground">
+                ({formatFollowers(minFollowers)})
+              </span>
+            </div>
           </div>
 
           <Slider
@@ -670,10 +714,28 @@ export default function Browse() {
             onValueChange={(val) =>
               setMinFollowers(val[0])
             }
-            max={1000000}
-            step={10000}
+            max={500000}
+            step={500}
             className="mt-3"
           />
+
+          <div className="mt-2 flex flex-wrap gap-1">
+            {[0, 1000, 5000, 10000, 50000, 100000].map((count) => (
+              <button
+                key={count}
+                type="button"
+                onClick={() => setMinFollowers(count)}
+                className={cn(
+                  "rounded-md border px-1.5 py-0.5 text-[10px] font-semibold transition-all",
+                  minFollowers === count
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card/60 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {count === 0 ? "Any" : `${formatFollowers(count)}+`}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -721,7 +783,7 @@ export default function Browse() {
             All Locations
           </option>
 
-          {locations.map((loc) => (
+          {availableLocations.map((loc) => (
             <option
               key={loc}
               value={loc}
