@@ -29,6 +29,11 @@ import {
   ShieldCheck,
   Shield,
   Wallet,
+  Calendar,
+  CheckCircle2,
+  X,
+  Users,
+  Megaphone,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -392,6 +397,264 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
   );
 }
 
+const FALLBACK_CAMPAIGNS = [
+  {
+    _id: "camp_1",
+    title: "Summer Linen Collection 2026",
+    description: "Looking for high-engagement fashion and lifestyle creators for our upcoming linen apparel launch with aesthetic styling reels and stories.",
+    category: "Fashion",
+    location: "Mumbai, India",
+    brand: {
+      fullName: "Zara Studio India",
+      avatarUrl: "https://images.unsplash.com/photo-1544441893-675973e31985?w=150&auto=format&fit=crop&q=80",
+      location: "Mumbai, India",
+      verificationStatus: "verified",
+    },
+    totalBudget: 75000,
+    creatorMinBudget: 8000,
+    creatorMaxBudget: 15000,
+    isBarterAllowed: true,
+    minFollowers: 10000,
+    deliverables: ["1 Dedicated Reel", "2 Story Posts with Link"],
+    startDate: "2026-10-01",
+    endDate: "2026-10-25",
+  },
+  {
+    _id: "camp_2",
+    title: "Organic Plant Protein Shake Review",
+    description: "Seeking fitness creators, trainers, and athletes to test and review our all-new 100% plant-based protein formula in high-energy workout reels.",
+    category: "Fitness",
+    location: "Bengaluru, India",
+    brand: {
+      fullName: "Fast&Up Nutrition",
+      avatarUrl: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=150&auto=format&fit=crop&q=80",
+      location: "Bengaluru, India",
+      verificationStatus: "verified",
+    },
+    totalBudget: 120000,
+    creatorMinBudget: 12000,
+    creatorMaxBudget: 25000,
+    isBarterAllowed: true,
+    minFollowers: 15000,
+    deliverables: ["1 High-Energy Reel", "1 Carousel Post"],
+    startDate: "2026-10-05",
+    endDate: "2026-10-30",
+  },
+  {
+    _id: "camp_3",
+    title: "Next-Gen Noise Cancelling Earbuds Launch",
+    description: "Unboxing, sound-test and daily commute reel review for our flagship wireless earbuds featuring spatial audio.",
+    category: "Technology",
+    location: "Delhi NCR, India",
+    brand: {
+      fullName: "boAt Audio Labs",
+      avatarUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=150&auto=format&fit=crop&q=80",
+      location: "Delhi NCR, India",
+      verificationStatus: "verified",
+    },
+    totalBudget: 150000,
+    creatorMinBudget: 15000,
+    creatorMaxBudget: 35000,
+    isBarterAllowed: false,
+    minFollowers: 25000,
+    deliverables: ["1 Dedicated Tech Reel", "1 Story Set"],
+    startDate: "2026-10-10",
+    endDate: "2026-11-05",
+  },
+  {
+    _id: "camp_4",
+    title: "Artisanal Cold Brew Coffee Tasting Experience",
+    description: "Calling all food and coffee lovers to showcase our gourmet Arabica cold brew blends, cafe vibes, and morning coffee recipes.",
+    category: "Food & Dining",
+    location: "Delhi, India",
+    brand: {
+      fullName: "Blue Tokai Roasters",
+      avatarUrl: "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=150&auto=format&fit=crop&q=80",
+      location: "Delhi, India",
+      verificationStatus: "verified",
+    },
+    totalBudget: 45000,
+    creatorMinBudget: 5000,
+    creatorMaxBudget: 10000,
+    isBarterAllowed: true,
+    minFollowers: 5000,
+    deliverables: ["1 Aesthetic Reel", "Product Tasting Review"],
+    startDate: "2026-10-02",
+    endDate: "2026-10-20",
+  },
+  {
+    _id: "camp_5",
+    title: "Luxury Resort Weekend Getaway Showcase",
+    description: "Complimentary luxury stay + paid coverage for travel creators to highlight our cliffside villas, infinity pool, and sunset dining.",
+    category: "Travel",
+    location: "Goa, India",
+    brand: {
+      fullName: "Taj Exotica Goa",
+      avatarUrl: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=150&auto=format&fit=crop&q=80",
+      location: "Goa, India",
+      verificationStatus: "verified",
+    },
+    totalBudget: 200000,
+    creatorMinBudget: 25000,
+    creatorMaxBudget: 50000,
+    isBarterAllowed: true,
+    minFollowers: 40000,
+    deliverables: ["2 Travel Reels", "3 Stories", "High-Res Photos"],
+    startDate: "2026-10-15",
+    endDate: "2026-11-15",
+  },
+  {
+    _id: "camp_6",
+    title: "Hydra-Glow Vitamin C Serum Campaign",
+    description: "Authentic skincare routines and before/after glow transformations using our dermatologically tested 10% Vitamin C serum.",
+    category: "Beauty",
+    location: "Kolkata, India",
+    brand: {
+      fullName: "Dot & Key Skincare",
+      avatarUrl: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=150&auto=format&fit=crop&q=80",
+      location: "Kolkata, India",
+      verificationStatus: "verified",
+    },
+    totalBudget: 90000,
+    creatorMinBudget: 10000,
+    creatorMaxBudget: 20000,
+    isBarterAllowed: true,
+    minFollowers: 12000,
+    deliverables: ["1 GRWM Skincare Reel", "1 Product Review Post"],
+    startDate: "2026-10-08",
+    endDate: "2026-10-31",
+  },
+];
+
+function HomeCampaignCard({ camp, onSelect }) {
+  const brandName = camp.brand?.fullName || camp.brand?.name || "Brand Partner";
+  const brandAvatar = resolveImageUrl(camp.brand?.avatarUrl || camp.brand?.avatar) || getGenderAvatar(brandName, "male", "brand");
+  const isBarter = Boolean(camp.isBarterAllowed);
+  const minBudget = Number(camp.creatorMinBudget || camp.budgetPerCreator || 0);
+  const maxBudget = Number(camp.creatorMaxBudget || camp.totalBudget || minBudget || 0);
+  const minFollowers = Number(camp.minFollowers || 0);
+
+  return (
+    <div
+      onClick={() => onSelect(camp)}
+      className="group relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border/80 bg-card p-5 sm:p-6 shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-pink-500/40 hover:shadow-pink-500/10 cursor-pointer card-3d"
+    >
+      {/* Background soft ambient gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-pink-500/[0.03] via-transparent to-purple-500/[0.03] pointer-events-none" />
+
+      <div className="relative space-y-4">
+        {/* Brand Header */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src={brandAvatar}
+              alt={brandName}
+              className="h-11 w-11 rounded-2xl border-2 border-border/80 object-cover bg-muted shrink-0 shadow-xs group-hover:border-pink-500/40 transition-colors"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = getGenderAvatar(brandName, "male", "brand");
+              }}
+            />
+            <div className="min-w-0">
+              <h4 className="text-sm font-bold text-foreground truncate flex items-center gap-1 group-hover:text-pink-500 transition-colors">
+                <span className="truncate">{brandName}</span>
+                {(camp.brand?.verificationStatus === "verified" || camp.brand?.isVerified) && (
+                  <ShieldCheck className="h-3.5 w-3.5 text-blue-500 shrink-0 inline-block fill-blue-500/15" title="Verified Brand" />
+                )}
+              </h4>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                <MapPin className="h-3 w-3 text-pink-500/70 shrink-0" />
+                <span className="truncate">{camp.location || camp.brand?.location || "Pan India"}</span>
+              </div>
+            </div>
+          </div>
+
+          <Badge className="rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20 text-[10px] font-bold shrink-0 px-2.5 py-0.5">
+            {camp.category || "General"}
+          </Badge>
+        </div>
+
+        {/* Title & Description */}
+        <div>
+          <h3 className="font-display text-base font-bold text-foreground line-clamp-1 group-hover:text-pink-500 transition-colors">
+            {camp.title}
+          </h3>
+          <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            {camp.description}
+          </p>
+        </div>
+
+        {/* Deliverables / Badges */}
+        {camp.deliverables && camp.deliverables.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {camp.deliverables.slice(0, 2).map((deliv, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center gap-1 rounded-lg bg-secondary/60 text-[10px] font-medium text-foreground px-2 py-0.5 border border-border/50"
+              >
+                <Sparkles className="h-2.5 w-2.5 text-pink-500" />
+                <span className="truncate max-w-[120px]">{deliv}</span>
+              </span>
+            ))}
+            {camp.deliverables.length > 2 && (
+              <span className="rounded-lg bg-secondary/60 text-[10px] font-medium text-muted-foreground px-1.5 py-0.5 border border-border/50">
+                +{camp.deliverables.length - 2} more
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Budget & Action Strip */}
+      <div className="relative mt-5 border-t border-border/70 pt-3.5 space-y-3">
+        <div className="flex items-center justify-between text-xs">
+          <div className="space-y-0.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground block">
+              Creator Payout
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-display text-sm sm:text-base font-black text-gradient-sunset">
+                {minBudget > 0
+                  ? maxBudget > minBudget
+                    ? `₹${minBudget.toLocaleString()} - ₹${maxBudget.toLocaleString()}`
+                    : `₹${minBudget.toLocaleString()}`
+                  : isBarter
+                  ? "Product Perks"
+                  : `₹${Number(camp.totalBudget || 0).toLocaleString()}`}
+              </span>
+              {isBarter && (
+                <span className="inline-flex items-center gap-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 text-[9px] font-bold text-emerald-600">
+                  <Handshake className="h-2.5 w-2.5" /> Barter
+                </span>
+              )}
+            </div>
+          </div>
+
+          {minFollowers > 0 && (
+            <div className="text-right">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground block">
+                Requirement
+              </span>
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-foreground">
+                <Users className="h-3 w-3 text-pink-500" />
+                {minFollowers >= 1000 ? `${(minFollowers / 1000).toFixed(0)}k+` : minFollowers} fans
+              </span>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="w-full inline-flex items-center justify-center gap-1.5 rounded-full gradient-sunset py-2 text-xs font-bold text-white shadow-glow transition-all hover:scale-[1.02] active:scale-95 group-hover:opacity-95"
+        >
+          <span>View Campaign Details</span>
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
@@ -402,31 +665,39 @@ export default function Home() {
 
   const [liveCreators, setLiveCreators] = useState([]);
   const [liveBrands, setLiveBrands] = useState([]);
+  const [liveCampaigns, setLiveCampaigns] = useState([]);
 
   const [creatorsApi, setCreatorsApi] = useState(null);
   const [brandsApi, setBrandsApi] = useState(null);
+  const [campaignsApi, setCampaignsApi] = useState(null);
   const [categoriesApi, setCategoriesApi] = useState(null);
 
   const [creatorsHovered, setCreatorsHovered] = useState(false);
   const [brandsHovered, setBrandsHovered] = useState(false);
+  const [campaignsHovered, setCampaignsHovered] = useState(false);
   const [categoriesHovered, setCategoriesHovered] = useState(false);
 
   const [creatorsIndex, setCreatorsIndex] = useState(0);
   const [brandsIndex, setBrandsIndex] = useState(0);
+  const [campaignsIndex, setCampaignsIndex] = useState(0);
   const [categoriesIndex, setCategoriesIndex] = useState(0);
 
   const [creatorsSnaps, setCreatorsSnaps] = useState([]);
   const [brandsSnaps, setBrandsSnaps] = useState([]);
+  const [campaignsSnaps, setCampaignsSnaps] = useState([]);
   const [categoriesSnaps, setCategoriesSnaps] = useState([]);
+
+  const [selectedCampaignModal, setSelectedCampaignModal] = useState(null);
 
   useEffect(() => {
     document.title = "Pravixo — Hire creators that move the needle";
 
-    const fetchLiveProfiles = async () => {
+    const fetchLiveProfilesAndCampaigns = async () => {
       try {
-        const [creatorsRes, brandsRes] = await Promise.all([
-          api.get("/profiles", { params: { role: "creator" } }),
-          api.get("/profiles", { params: { role: "brand" } }),
+        const [creatorsRes, brandsRes, campaignsRes] = await Promise.all([
+          api.get("/profiles", { params: { role: "creator" } }).catch(() => ({ data: [] })),
+          api.get("/profiles", { params: { role: "brand" } }).catch(() => ({ data: [] })),
+          api.get("/campaigns/discover").catch(() => ({ data: [] })),
         ]);
 
         const creatorsData =
@@ -441,19 +712,35 @@ export default function Home() {
           brandsRes.data ||
           [];
 
+        const campaignsData =
+          campaignsRes.data?.data ||
+          campaignsRes.data?.campaigns ||
+          campaignsRes.data ||
+          [];
+
         if (Array.isArray(creatorsData)) {
           setLiveCreators(creatorsData);
         }
         if (Array.isArray(brandsData)) {
           setLiveBrands(brandsData);
         }
+        if (Array.isArray(campaignsData) && campaignsData.length > 0) {
+          setLiveCampaigns(campaignsData);
+        }
       } catch (error) {
-        console.error("Failed to load profiles for home:", error);
+        console.error("Failed to load profiles/campaigns for home:", error);
       }
     };
 
-    fetchLiveProfiles();
+    fetchLiveProfilesAndCampaigns();
   }, []);
+
+  const featuredCampaigns = useMemo(() => {
+    if (liveCampaigns && liveCampaigns.length > 0) {
+      return liveCampaigns;
+    }
+    return FALLBACK_CAMPAIGNS;
+  }, [liveCampaigns]);
 
   const isTestOrDummyProfile = (p) => {
     if (!p) return true;
@@ -590,6 +877,15 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [brandsApi, brandsHovered]);
 
+  // Autoplay for campaigns
+  useEffect(() => {
+    if (!campaignsApi || campaignsHovered) return;
+    const interval = setInterval(() => {
+      campaignsApi.scrollNext();
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [campaignsApi, campaignsHovered]);
+
   // Categories snaps & select listener
   useEffect(() => {
     if (!categoriesApi) return;
@@ -604,19 +900,19 @@ export default function Home() {
     };
   }, [categoriesApi]);
 
-  // Creators snaps & select listener
+  // Campaigns snaps & select listener
   useEffect(() => {
-    if (!creatorsApi) return;
-    const updateCreators = () => {
-      setCreatorsSnaps(creatorsApi.scrollSnapList?.() || []);
-      setCreatorsIndex(creatorsApi.selectedScrollSnap?.() || 0);
+    if (!campaignsApi) return;
+    const updateCampaigns = () => {
+      setCampaignsSnaps(campaignsApi.scrollSnapList?.() || []);
+      setCampaignsIndex(campaignsApi.selectedScrollSnap?.() || 0);
     };
-    updateCreators();
-    creatorsApi.on?.("select", updateCreators);
+    updateCampaigns();
+    campaignsApi.on?.("select", updateCampaigns);
     return () => {
-      creatorsApi.off?.("select", updateCreators);
+      campaignsApi.off?.("select", updateCampaigns);
     };
-  }, [creatorsApi]);
+  }, [campaignsApi]);
 
   // Brands snaps & select listener
   useEffect(() => {
@@ -631,6 +927,20 @@ export default function Home() {
       brandsApi.off?.("select", updateBrands);
     };
   }, [brandsApi]);
+
+  // Creators snaps & select listener
+  useEffect(() => {
+    if (!creatorsApi) return;
+    const updateCreators = () => {
+      setCreatorsSnaps(creatorsApi.scrollSnapList?.() || []);
+      setCreatorsIndex(creatorsApi.selectedScrollSnap?.() || 0);
+    };
+    updateCreators();
+    creatorsApi.on?.("select", updateCreators);
+    return () => {
+      creatorsApi.off?.("select", updateCreators);
+    };
+  }, [creatorsApi]);
 
   return (
     <div className="overflow-hidden">
@@ -953,25 +1263,30 @@ export default function Home() {
       </section>
 
       {/* =========================
-          FEATURED CREATORS
+          RECENT & NEW CAMPAIGNS
       ========================= */}
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="mb-10 flex items-end justify-between">
+      <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
+        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="font-display text-3xl font-bold sm:text-4xl">
-              Featured creators
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-pink-500/10 px-2.5 py-0.5 text-[11px] font-bold text-pink-500 border border-pink-500/20">
+                <Megaphone className="h-3 w-3" /> Live Opportunities
+              </span>
+            </div>
+            <h2 className="font-display text-3xl font-bold sm:text-4xl text-foreground">
+              Recent & New Campaigns
             </h2>
-            <p className="mt-2 text-muted-foreground">
-              Hand-picked by our team this week.
+            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+              Explore active paid deals and barter collaboration briefs posted by verified brands.
             </p>
           </div>
 
           <div className="flex items-center gap-4">
             <Link
-              to="/browse?role=creator"
+              to="/browse?role=brand"
               className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
             >
-              <span>View all creators</span>
+              <span>Explore all campaigns</span>
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
 
@@ -979,18 +1294,18 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent"
-                onClick={() => creatorsApi?.scrollPrev()}
-                aria-label="Previous slide"
+                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
+                onClick={() => campaignsApi?.scrollPrev()}
+                aria-label="Previous campaign slide"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent"
-                onClick={() => creatorsApi?.scrollNext()}
-                aria-label="Next slide"
+                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
+                onClick={() => campaignsApi?.scrollNext()}
+                aria-label="Next campaign slide"
               >
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -999,24 +1314,23 @@ export default function Home() {
         </div>
 
         <div
-          onMouseEnter={() => setCreatorsHovered(true)}
-          onMouseLeave={() => setCreatorsHovered(false)}
+          onMouseEnter={() => setCampaignsHovered(true)}
+          onMouseLeave={() => setCampaignsHovered(false)}
         >
           <Carousel
-            setApi={setCreatorsApi}
+            setApi={setCampaignsApi}
             opts={{ loop: true, align: "start" }}
             className="w-full"
           >
             <CarouselContent className="-ml-3 sm:-ml-6">
-              {featuredCreators.map((inf) => (
+              {featuredCampaigns.map((camp) => (
                 <CarouselItem
-                  key={inf.id}
+                  key={camp._id || camp.id}
                   className="basis-full pl-3 sm:basis-1/2 sm:pl-6 lg:basis-1/3"
                 >
-                  <FeaturedProfileCard
-                    inf={inf}
-                    user={user}
-                    handleCardClick={handleProfileCardClick}
+                  <HomeCampaignCard
+                    camp={camp}
+                    onSelect={(selected) => setSelectedCampaignModal(selected)}
                   />
                 </CarouselItem>
               ))}
@@ -1024,21 +1338,21 @@ export default function Home() {
           </Carousel>
         </div>
 
-        {/* Creator Dots */}
-        {creatorsSnaps.length > 1 && (
+        {/* Campaign Dots */}
+        {campaignsSnaps.length > 1 && (
           <div className="mt-6 flex justify-center gap-1.5">
-            {creatorsSnaps.map((_, index) => (
+            {campaignsSnaps.map((_, index) => (
               <button
                 key={index}
                 type="button"
                 className={cn(
-                  "h-1.5 rounded-full transition-all duration-300",
-                  index === creatorsIndex
-                    ? "w-5 bg-primary"
+                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                  index === campaignsIndex
+                    ? "w-5 bg-pink-500"
                     : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
                 )}
-                onClick={() => creatorsApi?.scrollTo(index)}
-                aria-label={`Go to slide ${index + 1}`}
+                onClick={() => campaignsApi?.scrollTo(index)}
+                aria-label={`Go to campaign slide ${index + 1}`}
               />
             ))}
           </div>
@@ -1072,7 +1386,7 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent"
+                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
                 onClick={() => brandsApi?.scrollPrev()}
                 aria-label="Previous slide"
               >
@@ -1081,7 +1395,7 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent"
+                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
                 onClick={() => brandsApi?.scrollNext()}
                 aria-label="Next slide"
               >
@@ -1125,12 +1439,105 @@ export default function Home() {
                 key={index}
                 type="button"
                 className={cn(
-                  "h-1.5 rounded-full transition-all duration-300",
+                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
                   index === brandsIndex
                     ? "w-5 bg-primary"
                     : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
                 )}
                 onClick={() => brandsApi?.scrollTo(index)}
+                aria-label={`Go to slide ${index + 1}`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* =========================
+          FEATURED CREATORS
+      ========================= */}
+      <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
+        <div className="mb-10 flex items-end justify-between">
+          <div>
+            <h2 className="font-display text-3xl font-bold sm:text-4xl">
+              Featured creators
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              Hand-picked by our team this week.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <Link
+              to="/browse?role=creator"
+              className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
+            >
+              <span>View all creators</span>
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Link>
+
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
+                onClick={() => creatorsApi?.scrollPrev()}
+                aria-label="Previous slide"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
+                onClick={() => creatorsApi?.scrollNext()}
+                aria-label="Next slide"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          onMouseEnter={() => setCreatorsHovered(true)}
+          onMouseLeave={() => setCreatorsHovered(false)}
+        >
+          <Carousel
+            setApi={setCreatorsApi}
+            opts={{ loop: true, align: "start" }}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-3 sm:-ml-6">
+              {featuredCreators.map((inf) => (
+                <CarouselItem
+                  key={inf.id}
+                  className="basis-full pl-3 sm:basis-1/2 sm:pl-6 lg:basis-1/3"
+                >
+                  <FeaturedProfileCard
+                    inf={inf}
+                    user={user}
+                    handleCardClick={handleProfileCardClick}
+                  />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+        </div>
+
+        {/* Creator Dots */}
+        {creatorsSnaps.length > 1 && (
+          <div className="mt-6 flex justify-center gap-1.5">
+            {creatorsSnaps.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                  index === creatorsIndex
+                    ? "w-5 bg-primary"
+                    : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                )}
+                onClick={() => creatorsApi?.scrollTo(index)}
                 aria-label={`Go to slide ${index + 1}`}
               />
             ))}
@@ -1223,6 +1630,186 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* =========================
+          CAMPAIGN DETAILS MODAL
+      ========================= */}
+      {selectedCampaignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div
+            className="absolute inset-0"
+            onClick={() => setSelectedCampaignModal(null)}
+          />
+          <div className="relative w-full max-w-lg rounded-3xl border border-border bg-card p-6 sm:p-7 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            {/* Close button */}
+            <button
+              onClick={() => setSelectedCampaignModal(null)}
+              className="absolute top-4 right-4 h-8 w-8 rounded-full bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {/* Brand Header */}
+            <div className="flex items-center gap-3.5 pb-4 border-b border-border/80">
+              <img
+                src={
+                  resolveImageUrl(selectedCampaignModal.brand?.avatarUrl || selectedCampaignModal.brand?.avatar) ||
+                  getGenderAvatar(selectedCampaignModal.brand?.fullName || "Brand", "male", "brand")
+                }
+                alt=""
+                className="h-14 w-14 rounded-2xl border border-border object-cover bg-muted shrink-0 shadow-sm"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = getGenderAvatar("Brand", "male", "brand");
+                }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h3 className="font-display text-base sm:text-lg font-bold text-foreground">
+                    {selectedCampaignModal.brand?.fullName || selectedCampaignModal.brand?.name || "Brand Partner"}
+                  </h3>
+                  <Badge className="rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20 text-[10px] font-bold">
+                    {selectedCampaignModal.category || "Campaign"}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3 text-pink-500" />
+                    {selectedCampaignModal.location || selectedCampaignModal.brand?.location || "Pan India"}
+                  </span>
+                  <span>•</span>
+                  <span className="text-emerald-500 font-semibold flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Active Campaign
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Campaign Info */}
+            <div className="mt-5 space-y-4">
+              <div>
+                <h2 className="font-display text-xl font-bold text-foreground">
+                  {selectedCampaignModal.title}
+                </h2>
+                <p className="mt-2 text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  {selectedCampaignModal.description}
+                </p>
+              </div>
+
+              {/* Budget and Compensation Box */}
+              <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground font-medium">Estimated Creator Payout:</span>
+                  <span className="font-display text-base font-black text-gradient-sunset">
+                    {Number(selectedCampaignModal.creatorMinBudget || selectedCampaignModal.budgetPerCreator || 0) > 0
+                      ? Number(selectedCampaignModal.creatorMaxBudget || 0) > Number(selectedCampaignModal.creatorMinBudget || 0)
+                        ? `₹${Number(selectedCampaignModal.creatorMinBudget).toLocaleString()} - ₹${Number(selectedCampaignModal.creatorMaxBudget).toLocaleString()}`
+                        : `₹${Number(selectedCampaignModal.creatorMinBudget || selectedCampaignModal.budgetPerCreator).toLocaleString()}`
+                      : selectedCampaignModal.isBarterAllowed
+                      ? "Product Perks / Barter Exchange"
+                      : `₹${Number(selectedCampaignModal.totalBudget || 0).toLocaleString()}`}
+                  </span>
+                </div>
+                {Number(selectedCampaignModal.totalBudget || 0) > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground font-medium">Total Campaign Budget:</span>
+                    <span className="font-semibold text-foreground">
+                      ₹{Number(selectedCampaignModal.totalBudget).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {selectedCampaignModal.isBarterAllowed && (
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold pt-1 border-t border-border/40">
+                    <Handshake className="h-3.5 w-3.5" />
+                    <span>Open to product perks, gifting, or service exchange (Barter deals).</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Requirements & Deliverables */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Campaign Requirements
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl border border-border/70 p-3 bg-card space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground block">Audience Requirement</span>
+                    <span className="font-bold text-foreground flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5 text-pink-500" />
+                      {Number(selectedCampaignModal.minFollowers || 0) > 0
+                        ? `${Number(selectedCampaignModal.minFollowers) >= 1000 ? `${(Number(selectedCampaignModal.minFollowers)/1000).toFixed(0)}k+` : selectedCampaignModal.minFollowers} Followers`
+                        : "All Creator Sizes"}
+                    </span>
+                  </div>
+                  <div className="rounded-xl border border-border/70 p-3 bg-card space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground block">Timeline / Window</span>
+                    <span className="font-bold text-foreground flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 text-pink-500" />
+                      {selectedCampaignModal.startDate
+                        ? `${new Date(selectedCampaignModal.startDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })} - ${selectedCampaignModal.endDate ? new Date(selectedCampaignModal.endDate).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Open"}`
+                        : "Immediate / Ongoing"}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedCampaignModal.deliverables && selectedCampaignModal.deliverables.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-muted-foreground">Required Deliverables:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedCampaignModal.deliverables.map((deliv, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-pink-500/10 text-pink-500 border border-pink-500/20 px-2.5 py-1 text-xs font-semibold"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 text-pink-500" />
+                          {deliv}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Button */}
+              <div className="pt-3 flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelectedCampaignModal(null)}
+                  className="flex-1 rounded-full font-bold text-xs h-10 cursor-pointer"
+                >
+                  Close
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const campId = selectedCampaignModal._id;
+                    setSelectedCampaignModal(null);
+                    if (!user) {
+                      navigate("/login", {
+                        state: { from: `/browse?campaign=${campId}` },
+                      });
+                    } else if (profile?.role === "creator") {
+                      navigate("/dashboard/influencer?tab=discover");
+                    } else {
+                      navigate("/browse?role=brand");
+                    }
+                  }}
+                  className="flex-1 rounded-full gradient-sunset border-0 text-white shadow-glow font-bold text-xs h-10 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                >
+                  {!user
+                    ? "Sign In to Apply"
+                    : profile?.role === "creator"
+                    ? "Apply on Dashboard"
+                    : "Explore on Platform"}
+                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div

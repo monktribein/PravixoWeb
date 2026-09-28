@@ -32,7 +32,7 @@ export function SiteFooter() {
 
             <div className="mt-6 flex items-center gap-2.5">
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/pravixoofficial/"
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Instagram"
