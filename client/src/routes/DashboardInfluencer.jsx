@@ -6822,19 +6822,21 @@ const CAMPAIGNS_PER_PAGE = 6;
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Link
-                        to={`/messages?recipientId=${u._id}`}
-                        onClick={() => setFollowModalType(null)}
-                      >
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground"
-                          title="Send Message"
+                      {u.role && u.role !== "creator" && (
+                        <Link
+                          to={`/messages?recipientId=${u._id}`}
+                          onClick={() => setFollowModalType(null)}
                         >
-                          <MessageCircle className="h-3.5 w-3.5" />
-                        </Button>
-                      </Link>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground"
+                            title="Send Message"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                          </Button>
+                        </Link>
+                      )}
 
                       {followModalType === "following" && (
                         <Button

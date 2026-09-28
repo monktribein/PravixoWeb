@@ -17,7 +17,22 @@ export const toggleFollow = async (req, res) => {
       return res.status(400).json({ success: false, message: "You cannot follow yourself." });
     }
 
-    // Role check: Only Brand can follow Creator and Creator can follow Brand
+    const existingFollow = await Follow.findOne({
+      followerId,
+      followingId: targetProfileId,
+    });
+
+    // If already following, ALWAYS allow unfollowing regardless of roles
+    if (existingFollow) {
+      await Follow.findByIdAndDelete(existingFollow._id);
+      return res.status(200).json({
+        success: true,
+        isFollowing: false,
+        message: "Unfollowed successfully.",
+      });
+    }
+
+    // Role check: Only Brand can follow Creator and Creator can follow Brand when creating a NEW follow
     if (mongoose.Types.ObjectId.isValid(followerId) && mongoose.Types.ObjectId.isValid(targetProfileId)) {
       const [followerProfile, targetProfile] = await Promise.all([
         Profile.findById(followerId).select("role"),
@@ -38,20 +53,6 @@ export const toggleFollow = async (req, res) => {
           });
         }
       }
-    }
-
-    const existingFollow = await Follow.findOne({
-      followerId,
-      followingId: targetProfileId,
-    });
-
-    if (existingFollow) {
-      await Follow.findByIdAndDelete(existingFollow._id);
-      return res.status(200).json({
-        success: true,
-        isFollowing: false,
-        message: "Unfollowed successfully.",
-      });
     }
 
     const newFollow = await Follow.create({
@@ -122,14 +123,27 @@ export const checkFollowStatus = async (req, res) => {
 export const getFollowers = async (req, res) => {
   try {
     const { profileId } = req.params;
+    const targetProfile = await Profile.findById(profileId).select("role");
+
     const followers = await Follow.find({ followingId: profileId })
       .populate("followerId", "fullName handle avatarUrl role category location")
       .sort({ createdAt: -1 })
       .lean();
 
+    // Clean up any legacy same-role follows automatically
+    const validFollowers = [];
+    for (const f of followers) {
+      if (f.followerId && targetProfile?.role && f.followerId.role === targetProfile.role) {
+        // Same role follow - clean up from database
+        await Follow.findByIdAndDelete(f._id);
+      } else if (f.followerId) {
+        validFollowers.push(f.followerId);
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      data: followers.map((f) => f.followerId).filter(Boolean),
+      data: validFollowers,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -140,14 +154,27 @@ export const getFollowers = async (req, res) => {
 export const getFollowing = async (req, res) => {
   try {
     const { profileId } = req.params;
+    const currentProfile = await Profile.findById(profileId).select("role");
+
     const following = await Follow.find({ followerId: profileId })
       .populate("followingId", "fullName handle avatarUrl role category location")
       .sort({ createdAt: -1 })
       .lean();
 
+    // Clean up any legacy same-role follows automatically
+    const validFollowing = [];
+    for (const f of following) {
+      if (f.followingId && currentProfile?.role && f.followingId.role === currentProfile.role) {
+        // Same role following - clean up from database
+        await Follow.findByIdAndDelete(f._id);
+      } else if (f.followingId) {
+        validFollowing.push(f.followingId);
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      data: following.map((f) => f.followingId).filter(Boolean),
+      data: validFollowing,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
