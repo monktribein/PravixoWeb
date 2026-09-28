@@ -13,6 +13,7 @@ import Addons from "./routes/Addons";
 import Blog from "./routes/Blog";
 import BlogDetails from "./routes/BlogDetails";
 import Browse from "./routes/Browse";
+import CategoriesPage from "./routes/CategoriesPage";
 import Careers from "./routes/Careers";
 import Connections from "./routes/Connections";
 import Contact from "./routes/Contact";
@@ -84,6 +85,7 @@ function Layout() {
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:id" element={<BlogDetails />} />
           <Route path="/browse" element={<Browse />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/careers" element={<Careers />} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/contact" element={<Contact />} />

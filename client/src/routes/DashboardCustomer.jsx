@@ -2209,12 +2209,12 @@ const [submittingVerification, setSubmittingVerification] =
                         <div>
                           <div className="flex items-center justify-between">
                             <Label htmlFor="brandStartingPrice">Starting Campaign Budget / Price (₹)</Label>
-                            <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-primary select-none">
+                            <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-pink-500 select-none">
                               <input
                                 type="checkbox"
                                 checked={isBarterAllowed}
                                 onChange={(e) => setIsBarterAllowed(e.target.checked)}
-                                className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
+                                className="rounded border-border text-pink-500 accent-pink-500 focus:ring-pink-500 h-3.5 w-3.5"
                               />
                               <span>Barter Allowed</span>
                             </label>
@@ -2275,7 +2275,7 @@ const [submittingVerification, setSubmittingVerification] =
                     <h3 className="font-display text-base font-bold flex items-center gap-2">
                       KYC Documents
                       {(profile?.gstCertificateUrl || profile?.verificationStatus === "verified") && (
-                        <Badge variant="secondary" className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10">
+                        <Badge variant="secondary" className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20">
                           Uploaded ✓
                         </Badge>
                       )}
@@ -2284,7 +2284,7 @@ const [submittingVerification, setSubmittingVerification] =
                       GST Number and Official Certificate for verified brand badge
                     </p>
                   </div>
-                  <ChevronRight className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openKycSection && "rotate-90 text-primary")} />
+                  <ChevronRight className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openKycSection && "rotate-90 text-pink-500")} />
                 </button>
 
                 {openKycSection && (
@@ -2332,7 +2332,7 @@ const [submittingVerification, setSubmittingVerification] =
               </div>
 
               {/* 3. SOCIAL PRESENCE ACCORDION */}
-              <div className="rounded-3xl border border-border/80 overflow-hidden bg-card/70 backdrop-blur-md shadow-sm transition-all mb-5 hover:border-primary/30">
+              <div className="rounded-3xl border border-border/80 overflow-hidden bg-card/70 backdrop-blur-md shadow-sm transition-all mb-5 hover:border-pink-500/30">
                 <button
                   type="button"
                   onClick={() => setOpenSocialSection(!openSocialSection)}
@@ -2344,7 +2344,7 @@ const [submittingVerification, setSubmittingVerification] =
                         <h3 className="font-display text-base font-bold text-foreground">
                           Social Presence & Handles
                         </h3>
-                        <Badge variant="secondary" className="text-[10px] font-semibold bg-primary/10 text-primary border-0 rounded-full px-2">
+                        <Badge variant="secondary" className="text-[10px] font-semibold bg-pink-500/10 text-pink-500 border border-pink-500/20 rounded-full px-2">
                           6 Platforms
                         </Badge>
                       </div>
@@ -2354,11 +2354,11 @@ const [submittingVerification, setSubmittingVerification] =
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-primary hidden sm:inline-block">
+                    <span className="text-xs font-semibold text-pink-500 hidden sm:inline-block">
                       {openSocialSection ? "Collapse" : "Manage"}
                     </span>
                     <div className="h-8 w-8 rounded-full bg-secondary/60 flex items-center justify-center">
-                      <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform duration-300", openSocialSection && "rotate-90 text-primary")} />
+                      <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform duration-300", openSocialSection && "rotate-90 text-pink-500")} />
                     </div>
                   </div>
                 </button>

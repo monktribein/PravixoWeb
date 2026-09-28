@@ -835,7 +835,7 @@ export default function Home() {
 
           <div className="flex items-center gap-4">
             <Link
-              to="/browse"
+              to="/categories"
               className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-5 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
             >
               <span>View all categories</span>
