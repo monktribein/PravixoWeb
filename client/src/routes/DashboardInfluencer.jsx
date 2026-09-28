@@ -2570,7 +2570,7 @@ const CAMPAIGNS_PER_PAGE = 6;
                     >
                       <div>
                         <h3 className="font-display text-base font-bold flex items-center gap-2">
-                          <ShieldCheck className="h-4 w-4 text-primary" /> KYC Documents
+                          KYC Documents
                           {(profile?.aadharUrl || profile?.panUrl) && (
                             <Badge variant="secondary" className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10">
                               Uploaded ✓
@@ -2648,9 +2648,6 @@ const CAMPAIGNS_PER_PAGE = 6;
                       className="w-full flex items-center justify-between p-5 text-left hover:bg-secondary/30 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3.5">
-                        <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-pink-500/20 via-primary/20 to-sky-500/20 flex items-center justify-center text-primary shadow-xs">
-                          <Sparkles className="h-5 w-5" />
-                        </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-display text-base font-bold text-foreground">
@@ -3049,9 +3046,6 @@ const CAMPAIGNS_PER_PAGE = 6;
                     >
                       <div>
                         <h3 className="font-display text-base font-bold flex items-center gap-2">
-                          <span className="p-1 rounded-md bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white shadow-xs">
-                            <Film className="h-3.5 w-3.5" />
-                          </span>
                           Live Social Feeds & Viral Reels Showcase
                           {customSocialFeeds?.length > 0 && (
                             <Badge variant="secondary" className="text-[10px] font-bold bg-pink-500/10 text-pink-500 border border-pink-500/20">
@@ -3174,9 +3168,6 @@ const CAMPAIGNS_PER_PAGE = 6;
                     >
                       <div>
                         <h3 className="font-display text-base font-bold flex items-center gap-2">
-                          <span className="p-1 rounded-md bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white shadow-xs">
-                            <ImageIcon className="h-3.5 w-3.5" />
-                          </span>
                           Creative Portfolio & Feed
                           {portfolioImages?.length > 0 && (
                             <Badge variant="secondary" className="text-[10px] font-bold bg-pink-500/10 text-pink-500 border border-pink-500/20">
@@ -3491,7 +3482,7 @@ const CAMPAIGNS_PER_PAGE = 6;
                     >
                       <div>
                         <h3 className="font-display text-base font-bold flex items-center gap-2">
-                          <IndianRupee className="h-4 w-4 text-primary" /> Pricing Tiers
+                          Pricing Tiers
                           {tiers?.length > 0 && (
                             <Badge variant="secondary" className="text-[10px] font-bold">
                               {tiers.length} tier{tiers.length > 1 ? "s" : ""}

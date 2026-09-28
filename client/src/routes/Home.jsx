@@ -405,15 +405,19 @@ export default function Home() {
 
   const [creatorsApi, setCreatorsApi] = useState(null);
   const [brandsApi, setBrandsApi] = useState(null);
+  const [categoriesApi, setCategoriesApi] = useState(null);
 
   const [creatorsHovered, setCreatorsHovered] = useState(false);
   const [brandsHovered, setBrandsHovered] = useState(false);
+  const [categoriesHovered, setCategoriesHovered] = useState(false);
 
   const [creatorsIndex, setCreatorsIndex] = useState(0);
   const [brandsIndex, setBrandsIndex] = useState(0);
+  const [categoriesIndex, setCategoriesIndex] = useState(0);
 
   const [creatorsSnaps, setCreatorsSnaps] = useState([]);
   const [brandsSnaps, setBrandsSnaps] = useState([]);
+  const [categoriesSnaps, setCategoriesSnaps] = useState([]);
 
   useEffect(() => {
     document.title = "Pravixo — Hire creators that move the needle";
@@ -559,6 +563,15 @@ export default function Home() {
     profile?.suspendedUntil &&
     new Date(profile.suspendedUntil) > new Date();
 
+  // Autoplay for categories
+  useEffect(() => {
+    if (!categoriesApi || categoriesHovered) return;
+    const interval = setInterval(() => {
+      categoriesApi.scrollNext();
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [categoriesApi, categoriesHovered]);
+
   // Autoplay for creators
   useEffect(() => {
     if (!creatorsApi || creatorsHovered) return;
@@ -576,6 +589,20 @@ export default function Home() {
     }, 4000);
     return () => clearInterval(interval);
   }, [brandsApi, brandsHovered]);
+
+  // Categories snaps & select listener
+  useEffect(() => {
+    if (!categoriesApi) return;
+    const updateCategories = () => {
+      setCategoriesSnaps(categoriesApi.scrollSnapList?.() || []);
+      setCategoriesIndex(categoriesApi.selectedScrollSnap?.() || 0);
+    };
+    updateCategories();
+    categoriesApi.on?.("select", updateCategories);
+    return () => {
+      categoriesApi.off?.("select", updateCategories);
+    };
+  }, [categoriesApi]);
 
   // Creators snaps & select listener
   useEffect(() => {
@@ -795,77 +822,136 @@ export default function Home() {
           BROWSE BY CATEGORY
       ========================= */}
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-  <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-    <div className="max-w-2xl">
-      <h2 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-        Find creators by category
-      </h2>
-      <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-        Every creator is verified and grouped by niche, so you can shortlist
-        the right audience for your campaign in minutes.
-      </p>
-    </div>
-    <Link
-      to="/browse"
-      className="group inline-flex items-center gap-2.5 self-start rounded-full gradient-sunset px-5 py-2.5 text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95 sm:self-auto"
-    >
-     
-      <span>View all creators</span>
-      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-    </Link>
-  </div>
+        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <h2 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Find creators by category
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+              Every creator is verified and grouped by niche, so you can shortlist
+              the right audience for your campaign in minutes.
+            </p>
+          </div>
 
-  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-    {categories.map((c, i) => {
-      const meta = CATEGORY_METADATA[c.name] || {};
-      const accent = ACCENTS[i % ACCENTS.length];
-      const IconComp = meta.icon || getCategoryIcon(c.name);
+          <div className="flex items-center gap-4">
+            <Link
+              to="/browse"
+              className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-5 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
+            >
+              <span>View all categories</span>
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Link>
 
-      const creatorCount = (liveCreators || []).filter((p) => {
-        if (isTestOrDummyProfile(p)) return false;
-        const cats = (p.category || "").toLowerCase();
-        return cats.includes(c.name.toLowerCase());
-      }).length;
-
-      return (
-        <Link
-          key={c.name}
-          to={`/browse?category=${encodeURIComponent(c.name)}`}
-          className={cn(
-            "group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-            accent.ring
-          )}
-        >
-          {/* Accent line along the top edge */}
-          <span className={cn("absolute inset-x-0 top-0 h-1 origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100", accent.bar)} />
-
-          <div className="flex items-start justify-between">
-            <div className={cn("flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105", accent.tile)}>
-              <IconComp className="h-7 w-7" strokeWidth={1.8} />
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
+                onClick={() => categoriesApi?.scrollPrev()}
+                aria-label="Previous categories slide"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
+                onClick={() => categoriesApi?.scrollNext()}
+                aria-label="Next categories slide"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              {creatorCount > 0
-                ? `${creatorCount} ${creatorCount === 1 ? "creator" : "creators"}`
-                : "Coming soon"}
-            </span>
           </div>
+        </div>
 
-          <h3 className="mt-5 font-display text-lg font-semibold leading-snug text-foreground">
-            {c.name}
-          </h3>
-          <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-            {meta.desc || "Top tier creators & influencers"}
-          </p>
+        <div
+          onMouseEnter={() => setCategoriesHovered(true)}
+          onMouseLeave={() => setCategoriesHovered(false)}
+        >
+          <Carousel
+            setApi={setCategoriesApi}
+            opts={{ loop: true, align: "start" }}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-3 sm:-ml-5">
+              {categories.map((c, i) => {
+                const meta = CATEGORY_METADATA[c.name] || {};
+                const accent = ACCENTS[i % ACCENTS.length];
+                const IconComp = meta.icon || getCategoryIcon(c.name);
 
-          <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-sm font-semibold text-foreground">
-            <span>Browse creators</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary" />
+                const creatorCount = (liveCreators || []).filter((p) => {
+                  if (isTestOrDummyProfile(p)) return false;
+                  const cats = (p.category || "").toLowerCase();
+                  return cats.includes(c.name.toLowerCase());
+                }).length;
+
+                return (
+                  <CarouselItem
+                    key={c.name}
+                    className="basis-full pl-3 sm:basis-1/2 sm:pl-5 lg:basis-1/3 xl:basis-1/4"
+                  >
+                    <Link
+                      to={`/browse?category=${encodeURIComponent(c.name)}`}
+                      className={cn(
+                        "group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                        accent.ring
+                      )}
+                    >
+                      {/* Accent line along the top edge */}
+                      <span className={cn("absolute inset-x-0 top-0 h-1 origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100", accent.bar)} />
+
+                      <div className="flex items-start justify-between">
+                        <div className={cn("flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105", accent.tile)}>
+                          <IconComp className="h-7 w-7" strokeWidth={1.8} />
+                        </div>
+                        <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                          {creatorCount > 0
+                            ? `${creatorCount} ${creatorCount === 1 ? "creator" : "creators"}`
+                            : "Coming soon"}
+                        </span>
+                      </div>
+
+                      <h3 className="mt-5 font-display text-lg font-semibold leading-snug text-foreground">
+                        {c.name}
+                      </h3>
+                      <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                        {meta.desc || "Top tier creators & influencers"}
+                      </p>
+
+                      <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-sm font-semibold text-foreground">
+                        <span>Browse creators</span>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary" />
+                      </div>
+                    </Link>
+                  </CarouselItem>
+                );
+              })}
+            </CarouselContent>
+          </Carousel>
+        </div>
+
+        {/* Category Dots */}
+        {categoriesSnaps.length > 1 && (
+          <div className="mt-6 flex justify-center gap-1.5">
+            {categoriesSnaps.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                  index === categoriesIndex
+                    ? "w-5 bg-primary"
+                    : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                )}
+                onClick={() => categoriesApi?.scrollTo(index)}
+                aria-label={`Go to category slide ${index + 1}`}
+              />
+            ))}
           </div>
-        </Link>
-      );
-    })}
-  </div>
-</section>
+        )}
+      </section>
+
       {/* =========================
           FEATURED CREATORS
       ========================= */}
@@ -883,9 +969,10 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <Link
               to="/browse?role=creator"
-              className="hidden text-sm font-medium text-primary hover:underline sm:block"
+              className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
             >
-              View all →
+              <span>View all creators</span>
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
 
             <div className="flex items-center gap-1.5">
@@ -975,9 +1062,10 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <Link
               to="/browse?role=brand"
-              className="hidden text-sm font-medium text-primary hover:underline sm:block"
+              className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
             >
-              View all →
+              <span>View all brands</span>
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
 
             <div className="flex items-center gap-1.5">

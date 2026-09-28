@@ -141,19 +141,26 @@ export default function Browse() {
   ========================= */
 
   useEffect(() => {
-    const categoryFromUrl =
-      searchParams.get("category");
+    const categoryFromUrl = searchParams.get("category");
+    const queryFromUrl = searchParams.get("q");
 
-    const queryFromUrl =
-      searchParams.get("q");
+    if (categoryFromUrl) {
+      setSelectedCategory(categoryFromUrl);
+    } else if (queryFromUrl) {
+      // If query matches a known category name (e.g. "fashion" -> "Fashion")
+      const matchedCat = categories.find(
+        (c) => c.name.toLowerCase() === queryFromUrl.trim().toLowerCase()
+      );
+      if (matchedCat) {
+        setSelectedCategory(matchedCat.name);
+      } else {
+        setSelectedCategory("All");
+      }
+    } else {
+      setSelectedCategory("All");
+    }
 
-    setSelectedCategory(
-      categoryFromUrl || "All"
-    );
-
-    setQuery(
-      queryFromUrl || ""
-    );
+    setQuery(queryFromUrl || "");
   }, [searchParams]);
 
   const resolveImageUrl = (url) => {
@@ -455,12 +462,14 @@ export default function Browse() {
       params.role = role;
     }
 
-    if (query.trim()) {
-      params.q = query.trim();
-    }
-
-    if (category !== "All") {
+    if (category === "All") {
+      // Clear query if user selects All
+      setQuery("");
+    } else {
       params.category = category;
+      // If previous query was category-related or free search, we can clear query or preserve it
+      // Clear free search query when explicitly selecting a category so there is no conflict
+      setQuery("");
     }
 
     setSearchParams(params);
@@ -481,11 +490,21 @@ export default function Browse() {
 
     if (value.trim()) {
       params.q = value.trim();
+      // Check if search value matches a category
+      const matchedCat = categories.find(
+        (c) => c.name.toLowerCase() === value.trim().toLowerCase()
+      );
+      if (matchedCat) {
+        setSelectedCategory(matchedCat.name);
+      }
+    } else {
+      // When search input is cleared, keep or reset category
     }
 
     if (
       selectedCategory &&
-      selectedCategory !== "All"
+      selectedCategory !== "All" &&
+      !value.trim()
     ) {
       params.category = selectedCategory;
     }
@@ -569,7 +588,7 @@ export default function Browse() {
 
         <button
           onClick={resetFilters}
-          className="text-xs font-semibold text-primary hover:underline"
+          className="text-xs font-bold text-gradient-sunset hover:opacity-80 transition-opacity cursor-pointer"
         >
           Reset all
         </button>
@@ -594,7 +613,7 @@ export default function Browse() {
             size="sm"
             className={
               role === "creator"
-                ? "rounded-xl gradient-sunset border-0 text-white font-semibold"
+                ? "rounded-xl gradient-sunset border-0 text-white font-semibold shadow-glow"
                 : "rounded-xl"
             }
             onClick={() =>
@@ -614,7 +633,7 @@ export default function Browse() {
             size="sm"
             className={
               role === "brand"
-                ? "rounded-xl gradient-sunset border-0 text-white font-semibold"
+                ? "rounded-xl gradient-sunset border-0 text-white font-semibold shadow-glow"
                 : "rounded-xl"
             }
             onClick={() =>
@@ -639,12 +658,13 @@ export default function Browse() {
           {/* ALL */}
 
           <Badge
-            variant={
+            variant="outline"
+            className={cn(
+              "cursor-pointer text-xs transition-all duration-200",
               selectedCategory === "All"
-                ? "default"
-                : "outline"
-            }
-            className="cursor-pointer text-xs"
+                ? "gradient-sunset text-white border-0 shadow-glow font-bold scale-105"
+                : "hover:bg-muted"
+            )}
             onClick={() =>
               handleCategoryChange("All")
             }
@@ -654,29 +674,35 @@ export default function Browse() {
 
           {/* CATEGORIES */}
 
-          {categories.map((cat) => (
-            <Badge
-              key={cat.id}
-              variant={
-                selectedCategory
-                  .toLowerCase()
-                  .trim() ===
-                cat.name
-                  .toLowerCase()
-                  .trim()
-                  ? "default"
-                  : "outline"
-              }
-              className="cursor-pointer text-xs transition-all hover:scale-105"
-              onClick={() =>
-                handleCategoryChange(
-                  cat.name
-                )
-              }
-            >
-              {cat.name}
-            </Badge>
-          ))}
+          {categories.map((cat) => {
+            const isSelected =
+              selectedCategory
+                .toLowerCase()
+                .trim() ===
+              cat.name
+                .toLowerCase()
+                .trim();
+
+            return (
+              <Badge
+                key={cat.id}
+                variant="outline"
+                className={cn(
+                  "cursor-pointer text-xs transition-all duration-200 hover:scale-105",
+                  isSelected
+                    ? "gradient-sunset text-white border-0 shadow-glow font-bold scale-105"
+                    : "hover:bg-muted"
+                )}
+                onClick={() =>
+                  handleCategoryChange(
+                    cat.name
+                  )
+                }
+              >
+                {cat.name}
+              </Badge>
+            );
+          })}
 
         </div>
       </div>
@@ -727,10 +753,10 @@ export default function Browse() {
                 type="button"
                 onClick={() => setMinFollowers(count)}
                 className={cn(
-                  "rounded-md border px-1.5 py-0.5 text-[10px] font-semibold transition-all",
+                  "rounded-md border px-1.5 py-0.5 text-[10px] font-semibold transition-all cursor-pointer",
                   minFollowers === count
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card/60 text-muted-foreground hover:text-foreground"
+                    ? "gradient-sunset border-0 text-white shadow-glow scale-105"
+                    : "border-border bg-card/60 text-muted-foreground hover:text-foreground hover:bg-muted"
                 )}
               >
                 {count === 0 ? "Any" : `${formatFollowers(count)}+`}
@@ -748,7 +774,7 @@ export default function Browse() {
             Max. Budget / Starting Price
           </span>
 
-          <span className="font-semibold text-foreground">
+          <span className="font-bold text-gradient-sunset">
             {formatINR(maxPrice)}
           </span>
         </div>
@@ -859,8 +885,8 @@ export default function Browse() {
               </span>
 
               <Badge
-                variant="default"
-                className="rounded-full"
+                variant="outline"
+                className="rounded-full gradient-sunset text-white border-0 shadow-glow font-bold pl-3 pr-2 py-1 text-xs"
               >
                 {selectedCategory}
 
@@ -871,9 +897,9 @@ export default function Browse() {
                       "All"
                     )
                   }
-                  className="ml-1"
+                  className="ml-1.5 hover:opacity-75 transition-opacity cursor-pointer"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </Badge>
             </div>

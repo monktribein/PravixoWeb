@@ -5,26 +5,27 @@ import {
   FaFacebook,
   FaLinkedin,
 } from "react-icons/fa";
+import logoImg from "@/assets/log.png";
 
 export function SiteFooter() {
   return (
     <footer className="border-t border-border bg-card">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 md:grid-cols-6 lg:gap-8">
-          {/* Brand Column (takes 2 cols on md+) */}
-          <div className="col-span-2">
-            <Link to="/" className="flex items-center gap-2 group">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl gradient-sunset shadow-md transition-transform duration-300 group-hover:scale-105">
-                <span className="font-display text-lg font-bold text-white">
-                  P
-                </span>
-              </div>
-              <span className="font-display text-xl font-bold tracking-tight">
+      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
+          {/* Brand Column */}
+          <div className="max-w-xs shrink-0">
+            <Link to="/" className="flex items-center gap-2.5 group">
+              <img
+                src={logoImg}
+                alt="Pravixo"
+                className="h-8 w-auto object-contain transition-transform duration-300 group-hover:scale-105 dark:bg-white/90 dark:p-0.5 dark:rounded-md"
+              />
+              <span className="font-display text-xl font-bold tracking-tight text-foreground dark:text-white">
                 Pravixo
               </span>
             </Link>
 
-            <p className="mt-4 max-w-sm text-sm leading-6 text-muted-foreground font-medium">
+            <p className="mt-4 text-sm leading-6 text-muted-foreground font-medium">
               Connecting creators and brands for meaningful, authentic
               collaborations.
             </p>
@@ -64,158 +65,161 @@ export function SiteFooter() {
             </div>
           </div>
 
-          {/* Platform */}
-          <div>
-            <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
-              Platform
-            </h3>
+          {/* Nav Links columns aligned across remaining width */}
+          <div className="grid flex-1 grid-cols-2 gap-8 sm:grid-cols-4 md:gap-8 lg:gap-12 text-left sm:justify-items-end">
+            {/* Platform */}
+            <div className="sm:justify-self-start">
+              <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
+                Platform
+              </h3>
 
-            <div className="mt-4 flex flex-col gap-3">
-              <Link
-                to="/browse"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Browse Creators
-              </Link>
+              <div className="mt-4 flex flex-col gap-3">
+                <Link
+                  to="/browse"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Browse Creators
+                </Link>
 
-              <Link
-                to="/browse?role=brand"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Featured Brands
-              </Link>
+                <Link
+                  to="/browse?role=brand"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Featured Brands
+                </Link>
 
-              <Link
-                to="/addons"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Addons
-              </Link>
+                <Link
+                  to="/addons"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Addons
+                </Link>
 
-              <Link
-                to="/referrals"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Referrals
-              </Link>
+                <Link
+                  to="/referrals"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Referrals
+                </Link>
+              </div>
             </div>
-          </div>
 
-          {/* Discover */}
-          <div>
-            <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
-              Discover
-            </h3>
+            {/* Discover */}
+            <div className="sm:justify-self-center">
+              <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
+                Discover
+              </h3>
 
-            <div className="mt-4 flex flex-col gap-3">
-              <Link
-                to="/reviews"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Reviews
-              </Link>
+              <div className="mt-4 flex flex-col gap-3">
+                <Link
+                  to="/reviews"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Reviews
+                </Link>
 
-              <Link
-                to="/tips"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Creator Tips
-              </Link>
+                <Link
+                  to="/tips"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Creator Tips
+                </Link>
 
-              <Link
-                to="/blog"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Guides & Articles
-              </Link>
+                <Link
+                  to="/blog"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Guides & Articles
+                </Link>
 
-              <Link
-                to="/collaborations"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Collaborations
-              </Link>
+                <Link
+                  to="/collaborations"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Collaborations
+                </Link>
+              </div>
             </div>
-          </div>
 
-          {/* Company */}
-          <div>
-            <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
-              Company
-            </h3>
+            {/* Company */}
+            <div className="sm:justify-self-center">
+              <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
+                Company
+              </h3>
 
-            <div className="mt-4 flex flex-col gap-3">
-              <Link
-                to="/about"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                About
-              </Link>
+              <div className="mt-4 flex flex-col gap-3">
+                <Link
+                  to="/about"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  About
+                </Link>
 
-              <Link
-                to="/careers"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Careers
-              </Link>
+                <Link
+                  to="/careers"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Careers
+                </Link>
 
-              <Link
-                to="/blog"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Blog
-              </Link>
+                <Link
+                  to="/blog"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Blog
+                </Link>
 
-              <Link
-                to="/contact"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Contact
-              </Link>
+                <Link
+                  to="/contact"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Contact
+                </Link>
+              </div>
             </div>
-          </div>
 
-          {/* Support */}
-          <div>
-            <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
-              Support
-            </h3>
+            {/* Support */}
+            <div className="sm:justify-self-end">
+              <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
+                Support
+              </h3>
 
-            <div className="mt-4 flex flex-col gap-3">
-              <Link
-                to="/help"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Help Center
-              </Link>
+              <div className="mt-4 flex flex-col gap-3">
+                <Link
+                  to="/help"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Help Center
+                </Link>
 
-              <Link
-                to="/faq"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                FAQ
-              </Link>
+                <Link
+                  to="/faq"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  FAQ
+                </Link>
 
-              <Link
-                to="/privacy"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Privacy Policy
-              </Link>
+                <Link
+                  to="/privacy"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Privacy Policy
+                </Link>
 
-              <Link
-                to="/terms"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Terms & Conditions
-              </Link>
+                <Link
+                  to="/terms"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Terms & Conditions
+                </Link>
 
-              <Link
-                to="/protection-info"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
-              >
-                Protection Info
-              </Link>
+                <Link
+                  to="/protection-info"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary hover:translate-x-1 duration-150 inline-block"
+                >
+                  Protection Info
+                </Link>
+              </div>
             </div>
           </div>
         </div>
