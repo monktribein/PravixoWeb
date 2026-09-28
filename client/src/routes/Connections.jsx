@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Clock,
   Trash2,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -306,175 +307,184 @@ export default function Connections() {
           )}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredConnections.map((connection) => {
-            const partner = connection.otherProfile;
+        <div className="max-h-[680px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="grid gap-4 md:grid-cols-2">
+            {filteredConnections.map((connection) => {
+              const partner = connection.otherProfile;
 
-            if (!partner) return null;
+              if (!partner) return null;
 
-            const isActionLoading =
-              actionLoading === connection._id;
+              const isActionLoading =
+                actionLoading === connection._id;
 
-            return (
-              <div
-                key={connection._id}
-                className="flex flex-col justify-between rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-elevated"
-              >
-                {/* PROFILE */}
+              const isPartnerVerified =
+                partner.verificationStatus === "verified" ||
+                partner.isVerified === true;
 
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <img src={
-                          resolveImageUrl(partner.avatarUrl) ||
-                          `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(
-                            partner.fullName || "User"
-                          )}`
-                        }
-                        alt={partner.fullName || "User"}
-                        className="h-12 w-12 flex-shrink-0 rounded-2xl border border-border/50 object-cover shadow-sm"
-                       onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }} />
+              return (
+                <div
+                  key={connection._id}
+                  className="flex flex-col justify-between rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-elevated"
+                >
+                  {/* PROFILE */}
 
-                      <div className="min-w-0">
-                        <Link
-                          to={`/influencer/${partner._id}`}
-                          className="block truncate font-display text-sm font-bold hover:text-primary"
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <img src={
+                            resolveImageUrl(partner.avatarUrl) ||
+                            `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(
+                              partner.fullName || "User"
+                            )}`
+                          }
+                          alt={partner.fullName || "User"}
+                          className="h-12 w-12 flex-shrink-0 rounded-2xl border border-border/50 object-cover shadow-sm"
+                         onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }} />
+
+                        <div className="min-w-0">
+                          <Link
+                            to={`/influencer/${partner._id}`}
+                            className="flex items-center gap-1 font-display text-sm font-bold hover:text-primary truncate"
+                          >
+                            <span className="truncate">{partner.fullName}</span>
+                            {isPartnerVerified && (
+                              <ShieldCheck className="h-4 w-4 text-blue-500 shrink-0 inline-block fill-blue-500/15" title="Verified Profile" />
+                            )}
+                          </Link>
+
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {partner.category || "General"} ·{" "}
+                            {partner.location || "India"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* STATUS & DELETE */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge
+                          className={`rounded-full border-0 px-2 py-0.5 text-[9px] font-medium tracking-wide capitalize ${
+                            connection.status === "accepted"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              : connection.status === "rejected"
+                              ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                              : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                          }`}
                         >
-                          {partner.fullName}
-                        </Link>
+                          {connection.status}
+                        </Badge>
 
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {partner.category || "General"} ·{" "}
-                          {partner.location || "India"}
-                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={isActionLoading}
+                          onClick={() => handleDeleteConnection(connection._id)}
+                          className="h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-red-600 hover:bg-red-500/10 transition"
+                          title="Delete connection request"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
 
-                    {/* STATUS & DELETE */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge
-                        className={`rounded-full border-0 px-2 py-0.5 text-[9px] font-medium tracking-wide capitalize ${
-                          connection.status === "accepted"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            : connection.status === "rejected"
-                            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                        }`}
-                      >
-                        {connection.status}
-                      </Badge>
+                    {/* PITCH */}
 
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={isActionLoading}
-                        onClick={() => handleDeleteConnection(connection._id)}
-                        className="h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-red-600 hover:bg-red-500/10 transition"
-                        title="Delete connection request"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                    <div className="mt-4 rounded-2xl border border-border/40 bg-secondary/40 p-3.5 text-xs italic leading-relaxed text-muted-foreground/95">
+                      "{connection.pitch || "No pitch provided."}"
                     </div>
                   </div>
 
-                  {/* PITCH */}
+                  {/* FOOTER */}
 
-                  <div className="mt-4 rounded-2xl border border-border/40 bg-secondary/40 p-3.5 text-xs italic leading-relaxed text-muted-foreground/95">
-                    "{connection.pitch || "No pitch provided."}"
-                  </div>
-                </div>
+                  <div className="mt-5 flex flex-col justify-between gap-3 border-t border-border/50 pt-4 sm:flex-row sm:items-center">
+                    <span className="text-[10px] text-muted-foreground">
+                      Sent on{" "}
+                      {connection.createdAt
+                        ? new Date(
+                            connection.createdAt
+                          ).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "Unknown date"}
+                    </span>
 
-                {/* FOOTER */}
+                    <div className="flex gap-2 self-stretch sm:self-auto">
+                      {/* BRAND PENDING */}
 
-                <div className="mt-5 flex flex-col justify-between gap-3 border-t border-border/50 pt-4 sm:flex-row sm:items-center">
-                  <span className="text-[10px] text-muted-foreground">
-                    Sent on{" "}
-                    {connection.createdAt
-                      ? new Date(
-                          connection.createdAt
-                        ).toLocaleDateString(undefined, {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })
-                      : "Unknown date"}
-                  </span>
+                      {connection.status === "pending" &&
+                        profile.role === "brand" && (
+                          <>
+                            <Button
+                              size="sm"
+                              disabled={isActionLoading}
+                              className="h-8 flex-1 rounded-full border-0 bg-emerald-600 px-4 text-xs font-semibold text-white hover:bg-emerald-700 sm:flex-none"
+                              onClick={() =>
+                                handleAccept(
+                                  connection._id,
+                                  partner.fullName
+                                )
+                              }
+                            >
+                              <Check className="mr-1.5 h-3.5 w-3.5" />
 
-                  <div className="flex gap-2 self-stretch sm:self-auto">
-                    {/* BRAND PENDING */}
+                              {isActionLoading
+                                ? "Processing..."
+                                : "Accept"}
+                            </Button>
 
-                    {connection.status === "pending" &&
-                      profile.role === "brand" && (
-                        <>
-                          <Button
-                            size="sm"
-                            disabled={isActionLoading}
-                            className="h-8 flex-1 rounded-full border-0 bg-emerald-600 px-4 text-xs font-semibold text-white hover:bg-emerald-700 sm:flex-none"
-                            onClick={() =>
-                              handleAccept(
-                                connection._id,
-                                partner.fullName
-                              )
-                            }
-                          >
-                            <Check className="mr-1.5 h-3.5 w-3.5" />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isActionLoading}
+                              className="h-8 flex-1 rounded-full border-border px-4 text-xs font-semibold hover:border-destructive/20 hover:bg-destructive/10 hover:text-destructive sm:flex-none"
+                              onClick={() =>
+                                handleReject(connection._id)
+                              }
+                            >
+                              <X className="mr-1.5 h-3.5 w-3.5" />
+                              Decline
+                            </Button>
+                          </>
+                        )}
 
-                            {isActionLoading
-                              ? "Processing..."
-                              : "Accept"}
-                          </Button>
+                      {/* ACCEPTED */}
 
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={isActionLoading}
-                            className="h-8 flex-1 rounded-full border-border px-4 text-xs font-semibold hover:border-destructive/20 hover:bg-destructive/10 hover:text-destructive sm:flex-none"
-                            onClick={() =>
-                              handleReject(connection._id)
-                            }
-                          >
-                            <X className="mr-1.5 h-3.5 w-3.5" />
-                            Decline
-                          </Button>
-                        </>
+                      {connection.status === "accepted" && (
+                        <Button
+                          size="sm"
+                          className="h-8 w-full rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground hover:opacity-95 sm:w-auto"
+                          onClick={() => navigate("/messages")}
+                        >
+                          <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                          Chat
+                        </Button>
                       )}
 
-                    {/* ACCEPTED */}
+                      {/* CREATOR PENDING */}
 
-                    {connection.status === "accepted" && (
-                      <Button
-                        size="sm"
-                        className="h-8 w-full rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground hover:opacity-95 sm:w-auto"
-                        onClick={() => navigate("/messages")}
-                      >
-                        <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
-                        Chat
-                      </Button>
-                    )}
+                      {connection.status === "pending" &&
+                        profile.role === "creator" && (
+                          <span className="flex items-center gap-1.5 py-1 text-xs font-medium text-amber">
+                            <Clock className="h-3.5 w-3.5" />
+                            Awaiting Brand Review
+                          </span>
+                        )}
 
-                    {/* CREATOR PENDING */}
+                      {/* REJECTED */}
 
-                    {connection.status === "pending" &&
-                      profile.role === "creator" && (
-                        <span className="flex items-center gap-1.5 py-1 text-xs font-medium text-amber">
-                          <Clock className="h-3.5 w-3.5" />
-                          Awaiting Brand Review
+                      {connection.status === "rejected" && (
+                        <span className="py-1 text-xs font-medium text-destructive">
+                          Declined
                         </span>
                       )}
-
-                    {/* REJECTED */}
-
-                    {connection.status === "rejected" && (
-                      <span className="py-1 text-xs font-medium text-destructive">
-                        Declined
-                      </span>
-                    )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

@@ -8,6 +8,8 @@ import {
   MapPin,
   Check,
   Sparkles,
+  Handshake,
+  ShieldCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -188,6 +190,15 @@ export default function Browse() {
           Number(p.quoraFollowers || 0) +
           Number(p.twitterFollowers || 0);
 
+        const createdTimestamp = p.createdAt ? new Date(p.createdAt).getTime() : 0;
+        const now = Date.now();
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+        const isRecent = createdTimestamp > 0 && (now - createdTimestamp) <= threeDaysMs;
+
+        const isVerified =
+          p.verificationStatus === "verified" ||
+          p.isVerified === true;
+
         return {
           id: p._id || p.id,
           name,
@@ -214,7 +225,7 @@ export default function Browse() {
           available: true,
           gender: p.gender || "",
           createdAt: p.createdAt,
-          isRecentlyJoined: true,
+          isRecentlyJoined: isRecent,
           avatar:
             resolveImageUrl(p.avatarUrl || p.avatar || p.profileImage) ||
             getGenderAvatar(name, p.gender, p.role || role),
@@ -223,9 +234,7 @@ export default function Browse() {
             DEFAULT_BANNER,
           bio:
             p.bio || "",
-          verificationStatus:
-            p.verificationStatus ||
-            "unverified",
+          verificationStatus: isVerified ? "verified" : "unverified",
           role:
             p.role ||
             role,
@@ -955,16 +964,6 @@ export default function Browse() {
                   <Link
                     key={item.id}
                     to={targetUrl}
-                    onClick={(e) => {
-                      if (!user) {
-                        e.preventDefault();
-
-                        handleCardClick(
-                          item.id,
-                          itemRole
-                        );
-                      }
-                    }}
                     className="group flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-elevated"
                   >
 
@@ -984,20 +983,15 @@ export default function Browse() {
                         }}
                       />
 
-                      {item.isRecentlyJoined ? (
-                        <Badge className="absolute left-3 top-3 rounded-full border-0 gradient-sunset px-2.5 py-0.5 text-[11px] font-bold text-white shadow-glow flex items-center gap-1">
+                      {item.isRecentlyJoined && (
+                        <Badge className="absolute left-3 top-3 rounded-full border-0 gradient-sunset px-2.5 py-0.5 text-[11px] font-bold text-white shadow-glow flex items-center gap-1 z-10">
                           <Sparkles className="h-3 w-3" /> Recent Joined
                         </Badge>
-                      ) : item.verificationStatus === "verified" ? (
-                        <Badge className="absolute left-3 top-3 rounded-full border-0 bg-primary px-2.5 py-0.5 text-xs text-white shadow-sm">
-                          <Check className="mr-1 h-3 w-3" />
-                          Verified
-                        </Badge>
-                      ) : null}
+                      )}
 
                       <Badge
                         variant="secondary"
-                        className="absolute right-3 top-3 border-0 bg-background/90 text-xs font-semibold backdrop-blur"
+                        className="absolute right-3 top-3 border-0 bg-background/90 text-xs font-semibold backdrop-blur z-10"
                       >
                         {item.category}
                       </Badge>
@@ -1019,8 +1013,11 @@ export default function Browse() {
 
                         <div className="min-w-0">
 
-                          <h3 className="truncate font-display font-semibold text-foreground">
-                            {item.name}
+                          <h3 className="truncate font-display font-semibold text-foreground flex items-center gap-1">
+                            <span>{item.name}</span>
+                            {item.verificationStatus === "verified" && (
+                              <ShieldCheck className="h-4 w-4 text-blue-500 shrink-0 inline-block fill-blue-500/15" title="Verified Profile" />
+                            )}
                           </h3>
 
                           <p className="truncate text-xs text-muted-foreground">
@@ -1075,7 +1072,7 @@ export default function Browse() {
 
                           {item.isBarterAllowed && (!item.startingPrice || item.startingPrice === 0) ? (
                             <span className="inline-flex items-center gap-1 font-display text-xs font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shadow-xs">
-                              <span>🤝</span> Barter Available
+                              <Handshake className="h-3.5 w-3.5" /> Barter Available
                             </span>
                           ) : (
                             <div className="flex items-center gap-1.5">
@@ -1084,7 +1081,7 @@ export default function Browse() {
                               </span>
                               {item.isBarterAllowed && (
                                 <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-md">
-                                  🤝 Barter
+                                  <Handshake className="h-2.5 w-2.5" /> Barter
                                 </span>
                               )}
                             </div>

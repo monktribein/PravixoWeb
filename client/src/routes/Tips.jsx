@@ -68,6 +68,21 @@ export default function Tips() {
     Award: Award,
   };
 
+  const tipIconStyles = {
+    Lightbulb: {
+      icon: Lightbulb,
+      bg: "bg-gradient-to-tr from-amber-500 to-orange-600 text-white shadow-amber-500/25",
+    },
+    Compass: {
+      icon: Compass,
+      bg: "bg-gradient-to-tr from-sky-500 to-cyan-600 text-white shadow-sky-500/25",
+    },
+    Award: {
+      icon: Award,
+      bg: "bg-gradient-to-tr from-purple-500 to-pink-600 text-white shadow-purple-500/25",
+    },
+  };
+
   const handleOpenCreate = () => {
     setFormTitle("");
     setFormDesc("");
@@ -212,18 +227,21 @@ export default function Tips() {
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {visibleTips.map((tip) => {
-              const IconComponent =
-                iconsMap[tip.iconName] || Lightbulb;
+              const meta = tipIconStyles[tip.iconName] || {
+                icon: Lightbulb,
+                bg: "bg-gradient-to-tr from-primary to-pink-600 text-white shadow-primary/25",
+              };
+              const IconComponent = meta.icon || Lightbulb;
 
               return (
                 <div
                   key={tip._id}
                   onClick={() => setSelectedTip(tip)}
-                  className="group flex flex-col justify-between space-y-4 rounded-3xl border border-border bg-card p-6 transition-all duration-200 hover:border-primary/50 hover:shadow-glow/10 cursor-pointer"
+                  className="group flex flex-col justify-between space-y-4 rounded-3xl border border-border/80 bg-gradient-to-b from-card to-card/70 backdrop-blur-md p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:border-primary/50 cursor-pointer shadow-sm"
                 >
                   <div className="space-y-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:scale-105 transition-transform">
-                      <IconComponent className="h-5 w-5" />
+                    <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-md shrink-0", meta.bg)}>
+                      <IconComponent className="h-6 w-6 stroke-[2.2]" />
                     </div>
 
                     <h4 className="font-display text-base font-bold text-foreground group-hover:text-primary transition-colors">
@@ -235,7 +253,7 @@ export default function Tips() {
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50">
                     <button
                       type="button"
                       onClick={(e) => {
@@ -378,12 +396,18 @@ export default function Tips() {
             <>
               <DialogHeader>
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                    {(() => {
-                      const IconComp = iconsMap[selectedTip.iconName] || Lightbulb;
-                      return <IconComp className="h-6 w-6" />;
-                    })()}
-                  </div>
+                  {(() => {
+                    const meta = tipIconStyles[selectedTip.iconName] || {
+                      icon: Lightbulb,
+                      bg: "bg-gradient-to-tr from-primary to-pink-600 text-white shadow-primary/25",
+                    };
+                    const IconComp = meta.icon || Lightbulb;
+                    return (
+                      <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center shadow-md shrink-0", meta.bg)}>
+                        <IconComp className="h-6 w-6 stroke-[2.2]" />
+                      </div>
+                    );
+                  })()}
                   <div>
                     <div className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                       {selectedTip.category === "brand" ? "Tip for Brands" : "Tip for Creators"}

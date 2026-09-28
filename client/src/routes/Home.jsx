@@ -25,6 +25,10 @@ import {
   Music2,
   Trophy,
   Compass,
+  Handshake,
+  ShieldCheck,
+  Shield,
+  Wallet,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -198,6 +202,45 @@ const CATEGORY_METADATA = {
   }
 };
 
+const ACCENTS = [
+  {
+    ring: "hover:border-pink-500/50 hover:shadow-pink-500/10",
+    bar: "bg-gradient-to-r from-pink-500 to-rose-500",
+    tile: "bg-pink-500/10 text-pink-500",
+  },
+  {
+    ring: "hover:border-purple-500/50 hover:shadow-purple-500/10",
+    bar: "bg-gradient-to-r from-purple-500 to-indigo-500",
+    tile: "bg-purple-500/10 text-purple-500",
+  },
+  {
+    ring: "hover:border-amber-500/50 hover:shadow-amber-500/10",
+    bar: "bg-gradient-to-r from-amber-500 to-orange-500",
+    tile: "bg-amber-500/10 text-amber-500",
+  },
+  {
+    ring: "hover:border-emerald-500/50 hover:shadow-emerald-500/10",
+    bar: "bg-gradient-to-r from-emerald-500 to-teal-500",
+    tile: "bg-emerald-500/10 text-emerald-500",
+  },
+  {
+    ring: "hover:border-sky-500/50 hover:shadow-sky-500/10",
+    bar: "bg-gradient-to-r from-sky-500 to-blue-500",
+    tile: "bg-sky-500/10 text-sky-500",
+  },
+  {
+    ring: "hover:border-rose-500/50 hover:shadow-rose-500/10",
+    bar: "bg-gradient-to-r from-rose-500 to-red-500",
+    tile: "bg-rose-500/10 text-rose-500",
+  },
+];
+
+const getCategoryIcon = (name) => {
+  const meta = CATEGORY_METADATA[name];
+  if (meta && meta.icon) return meta.icon;
+  return Compass;
+};
+
 const resolveImageUrl = (url) => {
   if (!url || url === "undefined" || url === "null" || typeof url !== "string") return "";
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
@@ -214,13 +257,6 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
   const isBrand = inf.role === "brand";
   const targetUrl = isBrand ? `/brand/${inf.id}` : `/influencer/${inf.id}`;
 
-  const handleClick = (e) => {
-    if (!user) {
-      e.preventDefault();
-      handleCardClick(inf.id, isBrand ? "brand" : "creator");
-    }
-  };
-
   const bannerImg = resolveImageUrl(inf.cover || inf.coverUrl || inf.bannerUrl) || DEFAULT_BANNER;
   const avatarImg = resolveImageUrl(inf.avatar || inf.avatarUrl) || getGenderAvatar(inf.name || "User", inf.gender, inf.role || (isBrand ? "brand" : "creator"));
 
@@ -231,7 +267,6 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
   return (
     <Link
       to={targetUrl}
-      onClick={handleClick}
       className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-border/80 bg-card shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-primary/40 hover:shadow-primary/10 card-3d"
     >
       {/* Light sweep hover effect */}
@@ -274,7 +309,7 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
         {hasBarter && (
           <div className="absolute left-2 top-2 z-10">
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 text-white backdrop-blur-md px-2.5 py-0.5 text-[10px] font-bold shadow-md animate-pulse">
-              <span>🤝</span> Barter
+              <Handshake className="h-3 w-3" /> Barter
             </span>
           </div>
         )}
@@ -298,8 +333,11 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
 
         <div className="mt-2.5 flex items-start justify-between gap-2 sm:mt-3">
           <div className="min-w-0">
-            <h3 className="truncate font-display text-xs font-bold sm:text-base text-foreground group-hover:text-primary transition-colors">
-              {inf.name}
+            <h3 className="truncate font-display text-xs font-bold sm:text-base text-foreground group-hover:text-primary transition-colors flex items-center gap-1">
+              <span className="truncate">{inf.name}</span>
+              {(inf.verificationStatus === "verified" || inf.isVerified) && (
+                <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500 shrink-0 inline-block fill-blue-500/15" title="Verified Profile" />
+              )}
             </h3>
             <p className="truncate text-[10px] text-muted-foreground sm:text-xs font-medium">
               {inf.handle}
@@ -332,7 +370,7 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
 
             {isPureBarter ? (
               <span className="inline-flex items-center gap-1 font-display text-xs font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full shadow-xs transition-transform duration-300 group-hover:scale-105">
-                <span>🤝</span> Barter Deal
+                <Handshake className="h-3.5 w-3.5" /> Barter Deal
               </span>
             ) : (
               <div className="flex items-center gap-1.5">
@@ -341,7 +379,7 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
                 </span>
                 {hasBarter && (
                   <span className="inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-md">
-                    🤝 Barter
+                    <Handshake className="h-2.5 w-2.5" /> Barter
                   </span>
                 )}
               </div>
@@ -452,6 +490,7 @@ export default function Home() {
         cover: resolveImageUrl(p.coverUrl || p.cover || p.bannerUrl) ||
           DEFAULT_BANNER,
         bio: p.bio || "",
+        verificationStatus: p.verificationStatus || (p.isVerified ? "verified" : "unverified"),
         role: p.role || "creator",
       }));
 
@@ -491,6 +530,7 @@ export default function Home() {
         cover: resolveImageUrl(p.coverUrl || p.cover || p.bannerUrl) ||
           DEFAULT_BANNER,
         bio: p.bio || "",
+        verificationStatus: p.verificationStatus || (p.isVerified ? "verified" : "unverified"),
         role: p.role || "brand",
       }));
 
@@ -653,21 +693,22 @@ export default function Home() {
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
               <span className="text-[11px] font-bold text-muted-foreground mr-1 uppercase tracking-wider">Popular:</span>
               {[
-                { label: "🤝 Barter Deals", query: "barter" },
-                { label: "👗 Fashion & Style", query: "fashion" },
-                { label: "💻 Tech & Gadgets", query: "tech" },
-                { label: "🍕 Food & Beverage", query: "food" },
-                { label: "💪 Health & Fitness", query: "fitness" },
-                { label: "✈️ Travel & Living", query: "travel" },
-                { label: "✨ Beauty & Makeup", query: "beauty" },
+                { label: "Barter Deals", query: "barter", icon: Handshake, iconColor: "text-emerald-500" },
+                { label: "Fashion & Style", query: "fashion", icon: Shirt, iconColor: "text-pink-500" },
+                { label: "Tech & Gadgets", query: "tech", icon: Laptop, iconColor: "text-blue-500" },
+                { label: "Food & Beverage", query: "food", icon: UtensilsCrossed, iconColor: "text-amber-500" },
+                { label: "Health & Fitness", query: "fitness", icon: Dumbbell, iconColor: "text-rose-500" },
+                { label: "Travel & Living", query: "travel", icon: Plane, iconColor: "text-sky-500" },
+                { label: "Beauty & Makeup", query: "beauty", icon: Sparkles, iconColor: "text-purple-500" },
               ].map((pill) => (
                 <button
                   key={pill.label}
                   type="button"
                   onClick={() => navigate(`/browse?q=${encodeURIComponent(pill.query)}`)}
-                  className="rounded-full border border-border/80 bg-card/80 px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all duration-200 shadow-xs cursor-pointer hover:scale-105 active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/80 px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all duration-200 shadow-xs cursor-pointer hover:scale-105 active:scale-95"
                 >
-                  {pill.label}
+                  <pill.icon className={cn("h-3.5 w-3.5", pill.iconColor || "text-primary")} />
+                  <span>{pill.label}</span>
                 </button>
               ))}
             </div>
@@ -697,26 +738,28 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs"
+                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5"
                 onClick={() =>
                   navigate("/protection-info", {
                     state: { type: "creator" },
                   })
                 }
               >
-                💰 How do I get paid? (Creators)
+                <Wallet className="h-3.5 w-3.5 text-amber-500" />
+                How do I get paid? (Creators)
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs"
+                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5"
                 onClick={() =>
                   navigate("/protection-info", {
                     state: { type: "brand" },
                   })
                 }
               >
-                🛡️ How is my money protected? (Brands)
+                <Shield className="h-3.5 w-3.5 text-blue-500" />
+                How is my money protected? (Brands)
               </Button>
             </div>
 
@@ -750,109 +793,77 @@ export default function Home() {
       {/* =========================
           BROWSE BY CATEGORY
       ========================= */}
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 relative">
-        {/* Subtle decorative background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-gradient-to-tr from-pink-500/10 via-purple-500/5 to-sky-500/10 blur-3xl pointer-events-none -z-10" />
+      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+  <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="max-w-2xl">
+      <h2 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+        Find creators by category
+      </h2>
+      <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+        Every creator is verified and grouped by niche, so you can shortlist
+        the right audience for your campaign in minutes.
+      </p>
+    </div>
+    <Link
+      to="/browse"
+      className="group inline-flex items-center gap-2 self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 sm:self-auto"
+    >
+      View all creators
+      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  </div>
 
-        <div className="mb-12 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider mb-3 shadow-xs">
-              <Sparkles className="h-3.5 w-3.5" /> Curated Creator Niches
+  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    {categories.map((c, i) => {
+      const meta = CATEGORY_METADATA[c.name] || {};
+      const accent = ACCENTS[i % ACCENTS.length];
+      const IconComp = meta.icon || getCategoryIcon(c.name);
+
+      const creatorCount = (liveCreators || []).filter((p) => {
+        if (isTestOrDummyProfile(p)) return false;
+        const cats = (p.category || "").toLowerCase();
+        return cats.includes(c.name.toLowerCase());
+      }).length;
+
+      return (
+        <Link
+          key={c.name}
+          to={`/browse?category=${encodeURIComponent(c.name)}`}
+          className={cn(
+            "group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+            accent.ring
+          )}
+        >
+          {/* Accent line along the top edge */}
+          <span className={cn("absolute inset-x-0 top-0 h-1 origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100", accent.bar)} />
+
+          <div className="flex items-start justify-between">
+            <div className={cn("flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105", accent.tile)}>
+              <IconComp className="h-7 w-7" strokeWidth={1.8} />
             </div>
-            <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl text-foreground">
-              Browse by <span className="text-gradient-primary">Category</span>
-            </h2>
-            <p className="mt-2 text-sm sm:text-base text-muted-foreground max-w-2xl">
-              Connect with high-impact creators across top performing industries tailored for your brand campaigns.
-            </p>
+            <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              {creatorCount > 0
+                ? `${creatorCount} ${creatorCount === 1 ? "creator" : "creators"}`
+                : "Coming soon"}
+            </span>
           </div>
-          <Link
-            to="/browse"
-            className="group inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-primary/80 transition-all self-start sm:self-auto bg-primary/5 hover:bg-primary/10 border border-primary/20 px-4 py-2 rounded-full"
-          >
-            <span>Explore all categories</span>
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </Link>
-        </div>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {categories.map((c) => {
-            const meta = CATEGORY_METADATA[c.name] || {
-              gradient: "from-primary/15 via-pink-500/10 to-transparent",
-              borderGlow: "hover:border-primary/50 hover:shadow-primary/15",
-              iconBg: "bg-gradient-to-tr from-primary to-rose-600 text-white",
-              badge: "Popular",
-              tagColor: "text-primary bg-primary/10 border-primary/20",
-              desc: "Top tier creators & influencers"
-            };
+          <h3 className="mt-5 font-display text-lg font-semibold leading-snug text-foreground">
+            {c.name}
+          </h3>
+          <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+            {meta.desc || "Top tier creators & influencers"}
+          </p>
 
-            const creatorCount = (liveCreators || []).filter((p) => {
-              if (isTestOrDummyProfile(p)) return false;
-              const cats = (p.category || "").toLowerCase();
-              return cats.includes(c.name.toLowerCase());
-            }).length;
-
-            return (
-              <Link
-                key={c.name}
-                to={`/browse?category=${encodeURIComponent(c.name)}`}
-                className={cn(
-                  "group relative overflow-hidden rounded-3xl border border-border/80 bg-gradient-to-b from-card to-card/70 backdrop-blur-md p-5 sm:p-6 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl flex flex-col justify-between",
-                  meta.borderGlow
-                )}
-              >
-                {/* Background Ambient Brand Glow */}
-                <div className={cn("absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none", meta.gradient)} />
-
-                {/* Top Corner Light Streak */}
-                <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-transparent via-primary/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                <div className="relative z-10">
-                  <div className="flex items-start justify-between mb-4">
-                    {/* Natural Lucide Icon Badge */}
-                    <div className={cn(
-                      "h-12 w-12 sm:h-13 sm:w-13 rounded-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-md shrink-0",
-                      meta.iconBg
-                    )}>
-                      {(() => {
-                        const IconComp = meta.icon || Sparkles;
-                        return <IconComp className="h-6 w-6 stroke-[2.2]" />;
-                      })()}
-                    </div>
-
-                    {/* Category Tag / Metric */}
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs uppercase tracking-wider", meta.tagColor)}>
-                        {meta.badge}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Title & Description */}
-                  <h3 className="font-display text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors tracking-tight leading-snug">
-                    {c.name}
-                  </h3>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-1 leading-relaxed">
-                    {meta.desc}
-                  </p>
-                </div>
-
-                {/* Bottom Footer Info */}
-                <div className="relative z-10 mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground font-medium">
-                  <span className="flex items-center gap-1.5 font-semibold text-foreground/85">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    {creatorCount > 0 ? `${creatorCount} Verified` : "Active Rosters"}
-                  </span>
-                  <span className="text-primary font-bold group-hover:translate-x-1 transition-transform inline-flex items-center gap-0.5">
-                    View →
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
+          <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-sm font-semibold text-foreground">
+            <span>Browse creators</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary" />
+          </div>
+        </Link>
+      );
+    })}
+  </div>
+</section>
       {/* =========================
           FEATURED CREATORS
       ========================= */}

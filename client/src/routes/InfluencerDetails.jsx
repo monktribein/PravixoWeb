@@ -24,6 +24,7 @@ import {
   Play,
   Eye,
   Trash2,
+  Handshake,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -1887,16 +1888,12 @@ export default function InfluencerDetails() {
 
                 <div className="flex items-center justify-center sm:justify-start gap-2.5">
 
-                  <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-                    {inf.name}
-                  </h1>
-
-                  {inf.verificationStatus ===
-                    "verified" && (
-                      <span className="flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded-full gradient-sunset shadow-md">
-                        <Check className="h-3.5 w-3.5 text-white" />
-                      </span>
+                  <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
+                    <span>{inf.name}</span>
+                    {(inf.verificationStatus === "verified" || inf.isVerified) && (
+                      <ShieldCheck className="h-6 w-6 text-blue-500 fill-blue-500/15 shrink-0" title="Verified Profile" />
                     )}
+                  </h1>
 
                 </div>
 
@@ -1947,7 +1944,7 @@ export default function InfluencerDetails() {
                         )}
                         {inf.isBarterAllowed && (
                           <span className="font-bold text-xs text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            🤝 Barter Allowed
+                            <Handshake className="h-3 w-3" /> Barter Allowed
                           </span>
                         )}
                       </div>
@@ -2110,11 +2107,11 @@ export default function InfluencerDetails() {
 
         {/* MAIN */}
 
-        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_360px]">
+        <div className={`mt-10 ${isBrand ? "space-y-8" : "grid gap-8 lg:grid-cols-[1fr_360px]"}`}>
 
           {/* LEFT */}
 
-          <div className="space-y-10">
+          <div className={isBrand ? "space-y-8" : "space-y-10"}>
 
             {/* STATS */}
 
@@ -2143,21 +2140,21 @@ export default function InfluencerDetails() {
 
             {isBrand &&
               brandDetails ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
                 <div className="flex h-24 items-center gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
 
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
                     <Users className="h-6 w-6" />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">
                       Company Size
                     </div>
 
-                    <div className="font-display text-base font-bold mt-0.5">
-                      {brandDetails.companySize}
+                    <div className="font-display text-base font-bold mt-0.5 truncate">
+                      {brandDetails.companySize || "1 - 10 employees"}
                     </div>
                   </div>
 
@@ -2165,30 +2162,59 @@ export default function InfluencerDetails() {
 
                 <div className="flex h-24 items-center gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
 
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
                     <Globe className="h-6 w-6" />
                   </div>
 
-                  <div>
-
+                  <div className="min-w-0">
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">
                       Website
                     </div>
 
                     <a
-                      href={
-                        brandDetails.website
-                      }
+                      href={brandDetails.website}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-display text-sm font-bold text-primary hover:underline block truncate max-w-[200px]"
+                      className="font-display text-sm font-bold text-primary hover:underline block truncate"
                     >
-                      {brandDetails.website.replace(
-                        /^https?:\/\//,
-                        ""
-                      )}
+                      {brandDetails.website ? brandDetails.website.replace(/^https?:\/\//, "") : "Not specified"}
                     </a>
+                  </div>
 
+                </div>
+
+                <div className="flex h-24 items-center gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-pink-500/10 text-pink-500 shrink-0">
+                    <Sparkles className="h-6 w-6" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">
+                      Target Niches & Reach
+                    </div>
+
+                    <div className="font-display text-sm font-bold mt-0.5 truncate">
+                      {brandDetails.preferences?.niches || "All Niches"} ({brandDetails.preferences?.reach || "Any"})
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="flex h-24 items-center gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 shrink-0">
+                    <Handshake className="h-6 w-6" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">
+                      Budget & Region
+                    </div>
+
+                    <div className="font-display text-sm font-bold text-gradient-sunset mt-0.5 truncate">
+                      {brandDetails.preferences?.budgetRange || "Negotiable"} · {brandDetails.preferences?.region || "India"}
+                    </div>
                   </div>
 
                 </div>
@@ -2297,12 +2323,12 @@ export default function InfluencerDetails() {
                     )}
                   </div>
 
-                  {/* View All Button */}
+                  {/* View All Button (Direct Page Route) */}
                   {portfolio?.length > 0 && (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setShowAllPortfolioModal(true)}
+                      onClick={() => navigate(`${isBrand ? `/brand/${inf.id}/portfolio` : `/influencer/${inf.id}/portfolio`}`)}
                       className="h-7.5 rounded-full text-xs font-semibold border-border hover:bg-secondary flex items-center gap-1 self-start sm:self-auto shrink-0"
                     >
                       <Eye className="h-3.5 w-3.5 text-primary" /> View All ({portfolio.length})
@@ -2473,119 +2499,109 @@ export default function InfluencerDetails() {
                   );
                 })()}
               </div>
-
             </div>
 
-            {/* OPEN CAMPAIGNS */}
+            {/* OPEN CAMPAIGNS (FULL WIDTH FOR BRAND) */}
+            {isBrand && brandDetails && (
+              <div
+                id="open-campaigns"
+                className="rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-sm space-y-6"
+              >
+                <div>
+                  <h2 className="font-display text-xl sm:text-2xl font-bold">
+                    Open Campaigns
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                    Explore active collaboration opportunities and send proposals directly.
+                  </p>
+                </div>
 
-            {isBrand &&
-              brandDetails && (
-                <div
-                  id="open-campaigns"
-                  className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-6"
-                >
+                <div className="space-y-4">
+                  {brandDetails.campaigns.length === 0 ? (
+                    <div className="text-sm text-muted-foreground text-center py-8">
+                      No active campaigns.
+                    </div>
+                  ) : (
+                    brandDetails.campaigns.map((campaign) => (
+                      <div
+                        key={campaign.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-border p-5 bg-secondary/20 hover:border-primary/40 transition-all"
+                      >
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <h3 className="font-display text-base font-bold">
+                            {campaign.title}
+                          </h3>
 
-                  <div>
-
-                    <h2 className="font-display text-xl font-semibold">
-                      Open Campaigns
-                    </h2>
-
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Explore active collaboration opportunities and send proposals directly.
-                    </p>
-
-                  </div>
-
-                  <div className="space-y-4">
-
-                    {brandDetails.campaigns.length === 0 ? (
-                      <div className="text-sm text-muted-foreground text-center py-6">
-                        No active campaigns.
-                      </div>
-                    ) : (
-                      brandDetails.campaigns.map((campaign) => (
-                        <div
-                          key={campaign.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-border p-4 bg-secondary/20 hover:border-primary/40 transition-all"
-                        >
-                          <div className="space-y-1.5 flex-1 min-w-0">
-                            <h3 className="font-display text-sm font-bold">
-                              {campaign.title}
-                            </h3>
-
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                              <span className="font-medium text-gradient-sunset">
-                                {campaign.budget}
-                              </span>
-                              <span>·</span>
-                              <span>{campaign.category}</span>
-                              <span>·</span>
-                              <span>{campaign.duration}</span>
-                            </div>
-
-                            {/* Condition-Based Tiers / Options preview */}
-                            {Array.isArray(campaign.tiers) && campaign.tiers.length > 0 ? (
-                              <div className="flex flex-wrap gap-1.5 pt-1">
-                                {campaign.tiers.map((t, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center gap-1 text-[10px] font-semibold bg-secondary/60 text-foreground px-2 py-0.5 rounded-md border border-border/50"
-                                  >
-                                    🎯 {t.minFollowers >= 1000 ? `${(t.minFollowers / 1000).toFixed(0)}k+` : t.minFollowers}: {t.reward || ''}{t.cashAmount ? ` + ₹${t.cashAmount}` : ''}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : campaign.minFollowers > 0 ? (
-                              <div className="pt-0.5">
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                  Min {campaign.minFollowers >= 1000 ? `${(campaign.minFollowers / 1000).toFixed(0)}k+` : campaign.minFollowers} Followers
-                                </span>
-                              </div>
-                            ) : null}
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium">
+                            <span className="font-bold text-gradient-sunset text-sm">
+                              {campaign.budget}
+                            </span>
+                            <span>·</span>
+                            <span>{campaign.category}</span>
+                            <span>·</span>
+                            <span>{campaign.duration}</span>
                           </div>
 
-                          {isOwnProfile ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-full text-xs font-semibold shrink-0 border-border"
-                              onClick={() => navigate("/dashboard/customer")}
-                            >
-                              Manage Campaign
-                            </Button>
-                          ) : myProfile?.role === "brand" ? (
-                            <span className="text-[11px] text-muted-foreground italic px-2">
-                              Creator Opportunity
-                            </span>
-                          ) : (
-                            <Button
-                              size="sm"
-                              className="rounded-full gradient-sunset border-0 text-white px-4 text-xs font-semibold shrink-0 shadow-sm"
-                              onClick={() => {
-                                if (!user) {
-                                  toast.error("Please login as a creator to apply for campaigns");
-                                  navigate("/login");
-                                  return;
-                                }
-                                setSelectedCampaign(campaign);
-                                setIsConnectionModalOpen(true);
-                              }}
-                            >
-                              Apply to Connect
-                            </Button>
-                          )}
+                          {/* Condition-Based Tiers / Options preview */}
+                          {Array.isArray(campaign.tiers) && campaign.tiers.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {campaign.tiers.map((t, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold bg-secondary/60 text-foreground px-2 py-0.5 rounded-md border border-border/50"
+                                >
+                                  🎯 {t.minFollowers >= 1000 ? `${(t.minFollowers / 1000).toFixed(0)}k+` : t.minFollowers}: {t.reward || ''}{t.cashAmount ? ` + ₹${t.cashAmount}` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          ) : campaign.minFollowers > 0 ? (
+                            <div className="pt-0.5">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                Min {campaign.minFollowers >= 1000 ? `${(campaign.minFollowers / 1000).toFixed(0)}k+` : campaign.minFollowers} Followers
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
-                      ))
-                    )}
 
-                  </div>
+                        {isOwnProfile ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full text-xs font-semibold shrink-0 border-border"
+                            onClick={() => navigate("/dashboard/customer")}
+                          >
+                            Manage Campaign
+                          </Button>
+                        ) : myProfile?.role === "brand" ? (
+                          <span className="text-[11px] text-muted-foreground italic px-2">
+                            Creator Opportunity
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="rounded-full gradient-sunset border-0 text-white px-5 h-9 text-xs font-semibold shrink-0 shadow-sm"
+                            onClick={() => {
+                              if (!user) {
+                                toast.error("Please login as a creator to apply for campaigns");
+                                navigate("/login");
+                                return;
+                              }
+                              setSelectedCampaign(campaign);
+                              setIsConnectionModalOpen(true);
+                            }}
+                          >
+                            Apply to Connect
+                          </Button>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
-              )}
+              </div>
+            )}
 
             {/* REVIEWS */}
-
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-sm">
 
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 
@@ -2782,93 +2798,16 @@ export default function InfluencerDetails() {
 
           </div>
 
-          {/* SIDEBAR */}
+          {/* SIDEBAR (Creator Only) */}
 
-          <aside className="space-y-4">
-
-            {isBrand &&
-              brandDetails ? (
+          {!isBrand && (
+            <aside className="space-y-4">
               <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-
-                <h3 className="font-display text-lg font-bold mb-4">
-                  Hiring Preferences
-                </h3>
-
-                <div className="space-y-4">
-
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">
-                      Preferred Niches
-                    </div>
-
-                    <div className="text-sm font-semibold mt-0.5">
-                      {
-                        brandDetails
-                          .preferences
-                          .niches
-                      }
-                    </div>
-                  </div>
-
-                  <hr />
-
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">
-                      Target Creator Reach
-                    </div>
-
-                    <div className="text-sm font-semibold mt-0.5">
-                      {
-                        brandDetails
-                          .preferences
-                          .reach
-                      }
-                    </div>
-                  </div>
-
-                  <hr />
-
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">
-                      Preferred Region
-                    </div>
-
-                    <div className="text-sm font-semibold mt-0.5">
-                      {
-                        brandDetails
-                          .preferences
-                          .region
-                      }
-                    </div>
-                  </div>
-
-                  <hr />
-
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">
-                      Campaign Budget Range
-                    </div>
-
-                    <div className="text-sm font-semibold text-gradient-sunset mt-0.5">
-                      {
-                        brandDetails
-                          .preferences
-                          .budgetRange
-                      }
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-
                 <h3 className="font-display text-lg font-bold mb-4">
                   Pricing Packages
                 </h3>
 
                 <div className="space-y-4">
-
                   {displayTiers.map(
                     (tier) => (
                       <div
@@ -2939,9 +2878,8 @@ export default function InfluencerDetails() {
 
                 </div>
               </div>
-            )}
-
-          </aside>
+            </aside>
+          )}
 
         </div>
 

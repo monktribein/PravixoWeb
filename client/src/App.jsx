@@ -19,6 +19,7 @@ import Contact from "./routes/Contact";
 import Faq from "./routes/FAQ";
 import Help from "./routes/Help";
 import InfluencerDetails from "./routes/InfluencerDetails";
+import PortfolioPage from "./routes/PortfolioPage";
 import Login from "./routes/Login";
 import Messages from "./routes/Messages";
 import Privacy from "./routes/Privacy";
@@ -95,8 +96,18 @@ function Layout() {
           />
 
           <Route
+            path="/influencer/:id/portfolio"
+            element={<PortfolioPage />}
+          />
+
+          <Route
             path="/brand/:id"
             element={<InfluencerDetails />}
+          />
+
+          <Route
+            path="/brand/:id/portfolio"
+            element={<PortfolioPage />}
           />
 
           <Route
