@@ -401,16 +401,6 @@ export function SiteNavbar() {
                     </div>
                   </div>
                 )}
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 rounded-full"
-                  onClick={handleSignOut}
-                  aria-label="Sign out"
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
               </div>
             ) : (
               <>

@@ -1283,7 +1283,13 @@ export default function Home() {
 
           <div className="flex items-center gap-4">
             <Link
-              to="/browse?role=brand"
+              to={
+                user
+                  ? (profile?.role === "creator"
+                    ? "/dashboard/creator?tab=campaigns"
+                    : "/dashboard/brand?tab=campaigns")
+                  : "/dashboard/creator?tab=campaigns"
+              }
               className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
             >
               <span>Explore all campaigns</span>
@@ -1787,12 +1793,12 @@ export default function Home() {
                     setSelectedCampaignModal(null);
                     if (!user) {
                       navigate("/login", {
-                        state: { from: `/browse?campaign=${campId}` },
+                        state: { from: `/dashboard/creator?tab=campaigns` },
                       });
                     } else if (profile?.role === "creator") {
-                      navigate("/dashboard/influencer?tab=discover");
+                      navigate("/dashboard/creator?tab=campaigns");
                     } else {
-                      navigate("/browse?role=brand");
+                      navigate("/dashboard/brand?tab=campaigns");
                     }
                   }}
                   className="flex-1 rounded-full gradient-sunset border-0 text-white shadow-glow font-bold text-xs h-10 hover:scale-105 active:scale-95 transition-all cursor-pointer"

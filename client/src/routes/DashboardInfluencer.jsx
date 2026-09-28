@@ -2034,15 +2034,6 @@ const CAMPAIGNS_PER_PAGE = 6;
                 </Button>
               </Link>
             )}
-            <Link to={`/influencer/${profile?._id}`} className="shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-full text-xs font-semibold px-3.5 flex items-center gap-1.5 border-border/80 hover:bg-secondary shrink-0 whitespace-nowrap h-9"
-              >
-                <ExternalLink className="h-3.5 w-3.5 text-primary" /> View Profile
-              </Button>
-            </Link>
             {/* COMBINED FOLLOWERS & FOLLOWING IN ONE UNIFIED PILL */}
             <div className="inline-flex items-center rounded-full border border-border/80 bg-card text-xs font-semibold overflow-hidden shadow-xs shrink-0 whitespace-nowrap h-9">
               <button
