@@ -1973,7 +1973,7 @@ export default function InfluencerDetails() {
 
             {/* ACTIONS (Single Clean Unified Row) */}
 
-            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 pb-1">
+            <div className="flex items-center justify-center sm:justify-end gap-2 pb-1 flex-wrap sm:flex-nowrap shrink-0">
 
               {myProfile?.role === "brand" && (
                 <Button
@@ -1991,7 +1991,7 @@ export default function InfluencerDetails() {
               )}
 
               {inf.role !== "brand" && inf.handle && (
-                <Link to={`/c/${inf.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer">
+                <Link to={`/c/${inf.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
                   <Button
                     variant="outline"
                     className="rounded-full h-9 px-3.5 flex items-center gap-1.5 text-xs font-bold bg-amber-500/10 border-amber-500/30 text-amber-600 hover:text-amber-700 hover:bg-amber-500/20 shrink-0"
@@ -2019,7 +2019,7 @@ export default function InfluencerDetails() {
                 size="sm"
                 onClick={handleToggleFollow}
                 disabled={followingLoading}
-                className={`rounded-full px-4 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 ${
+                className={`rounded-full px-3.5 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap ${
                   isFollowing
                     ? "border-primary/50 text-primary hover:bg-primary/10"
                     : "gradient-sunset border-0 text-white shadow-glow"
@@ -2037,7 +2037,7 @@ export default function InfluencerDetails() {
               {/* HIRE BUTTON (When logged in as brand) */}
               {myProfile?.role === "brand" && (
                 <Button
-                  className="rounded-full gradient-sunset border-0 text-white shadow-glow px-5 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0"
+                  className="rounded-full gradient-sunset border-0 text-white shadow-glow px-4 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap"
                   onClick={handleHire}
                 >
                   <MessageCircle className="h-4 w-4" />
@@ -2049,7 +2049,7 @@ export default function InfluencerDetails() {
               {myProfile?.role === "creator" && inf.role === "brand" && (
                 <>
                   <Button
-                    className="rounded-full gradient-sunset border-0 text-white shadow-glow px-5 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0"
+                    className="rounded-full gradient-sunset border-0 text-white shadow-glow px-4 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap"
                     onClick={() => {
                       setSelectedCampaign(null);
                       setIsConnectionModalOpen(true);
@@ -2061,7 +2061,7 @@ export default function InfluencerDetails() {
 
                   <Button
                     variant="outline"
-                    className="rounded-full px-4 h-9 text-xs font-semibold shrink-0"
+                    className="rounded-full px-3.5 h-9 text-xs font-semibold shrink-0 whitespace-nowrap"
                     onClick={() => {
                       document.getElementById("open-campaigns")?.scrollIntoView({
                         behavior: "smooth",
@@ -2076,7 +2076,7 @@ export default function InfluencerDetails() {
               {/* SIGN IN TO CONNECT (When guest / not logged in) */}
               {!user && (
                 <Button
-                  className="rounded-full gradient-sunset border-0 text-white shadow-glow px-5 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0"
+                  className="rounded-full gradient-sunset border-0 text-white shadow-glow px-4 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap"
                   onClick={() =>
                     navigate("/login", {
                       state: { from: `/influencer/${inf?.id || profileId}` },
@@ -2553,7 +2553,78 @@ export default function InfluencerDetails() {
               </div>
             )}
 
-            {/* REVIEWS */}
+            {/* CREATOR PRICING PACKAGES (FULL WIDTH CARD MATCHING BANNER) */}
+            {!isBrand && displayTiers?.length > 0 && (
+              <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-sm space-y-6">
+                <div>
+                  <h3 className="font-display text-xl sm:text-2xl font-bold">
+                    Pricing Packages & Deliverables
+                  </h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                    Choose a collaboration tier or send custom deliverables proposals.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {displayTiers.map((tier) => (
+                    <div
+                      key={tier.name}
+                      onClick={() => {
+                        if (!checkConnectionRoleEligibility()) return;
+                        setIsConnectionModalOpen(true);
+                      }}
+                      className={`rounded-2xl border p-5 relative cursor-pointer hover:border-primary/50 transition-all flex flex-col justify-between ${
+                        tier.popular
+                          ? "border-primary/50 bg-primary/5 shadow-sm"
+                          : "border-border bg-background"
+                      }`}
+                    >
+                      {tier.popular && (
+                        <span className="absolute -top-2.5 right-4 rounded-full gradient-sunset px-2.5 py-0.5 text-[9px] font-bold text-white shadow-xs">
+                          Popular
+                        </span>
+                      )}
+
+                      <div>
+                        <div className="flex items-center justify-between pb-3 border-b border-border/40">
+                          <h4 className="font-display text-base font-bold">
+                            {tier.name}
+                          </h4>
+
+                          <span className="font-display text-lg font-bold text-gradient-sunset">
+                            {formatINR(tier.price)}
+                          </span>
+                        </div>
+
+                        <ul className="mt-4 space-y-2">
+                          {tier.perks.map((perk, index) => (
+                            <li
+                              key={index}
+                              className="flex items-start gap-2 text-xs text-muted-foreground"
+                            >
+                              <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                              <span>{perk}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant={tier.popular ? "default" : "outline"}
+                        className={`mt-6 w-full rounded-full text-xs font-semibold ${
+                          tier.popular ? "gradient-sunset text-white border-0" : ""
+                        }`}
+                      >
+                        Select Package
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* REVIEWS (RENDERED AT LAST) */}
             <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-sm">
 
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -2748,77 +2819,6 @@ export default function InfluencerDetails() {
               )}
 
             </div>
-
-            {/* CREATOR PRICING PACKAGES (FULL WIDTH CARD MATCHING BANNER) */}
-            {!isBrand && displayTiers?.length > 0 && (
-              <div className="rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-sm space-y-6">
-                <div>
-                  <h3 className="font-display text-xl sm:text-2xl font-bold">
-                    Pricing Packages & Deliverables
-                  </h3>
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                    Choose a collaboration tier or send custom deliverables proposals.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {displayTiers.map((tier) => (
-                    <div
-                      key={tier.name}
-                      onClick={() => {
-                        if (!checkConnectionRoleEligibility()) return;
-                        setIsConnectionModalOpen(true);
-                      }}
-                      className={`rounded-2xl border p-5 relative cursor-pointer hover:border-primary/50 transition-all flex flex-col justify-between ${
-                        tier.popular
-                          ? "border-primary/50 bg-primary/5 shadow-sm"
-                          : "border-border bg-background"
-                      }`}
-                    >
-                      {tier.popular && (
-                        <span className="absolute -top-2.5 right-4 rounded-full gradient-sunset px-2.5 py-0.5 text-[9px] font-bold text-white shadow-xs">
-                          Popular
-                        </span>
-                      )}
-
-                      <div>
-                        <div className="flex items-center justify-between pb-3 border-b border-border/40">
-                          <h4 className="font-display text-base font-bold">
-                            {tier.name}
-                          </h4>
-
-                          <span className="font-display text-lg font-bold text-gradient-sunset">
-                            {formatINR(tier.price)}
-                          </span>
-                        </div>
-
-                        <ul className="mt-4 space-y-2">
-                          {tier.perks.map((perk, index) => (
-                            <li
-                              key={index}
-                              className="flex items-start gap-2 text-xs text-muted-foreground"
-                            >
-                              <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
-                              <span>{perk}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <Button
-                        size="sm"
-                        variant={tier.popular ? "default" : "outline"}
-                        className={`mt-6 w-full rounded-full text-xs font-semibold ${
-                          tier.popular ? "gradient-sunset text-white border-0" : ""
-                        }`}
-                      >
-                        Select Package
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
         </div>
 
