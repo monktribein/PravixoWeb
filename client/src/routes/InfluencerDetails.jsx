@@ -828,6 +828,17 @@ export default function InfluencerDetails() {
       toast.error("You cannot follow your own profile.");
       return;
     }
+    const currentRole = myProfile.role;
+    const targetRole = inf?.role || (isBrand ? "brand" : "creator");
+    if (currentRole === "creator" && targetRole === "creator") {
+      toast.error("A creator cannot follow another creator. Creators can only follow Brands.");
+      return;
+    }
+    if (currentRole === "brand" && targetRole === "brand") {
+      toast.error("A brand cannot follow another brand. Brands can only follow Creators.");
+      return;
+    }
+
     try {
       setFollowingLoading(true);
       const res = await api.post("/follows/toggle", {
@@ -2013,26 +2024,36 @@ export default function InfluencerDetails() {
                 <Share2 className="h-4 w-4" />
               </Button>
 
-              {/* FOLLOW BUTTON */}
-              <Button
-                variant={isFollowing ? "outline" : "default"}
-                size="sm"
-                onClick={handleToggleFollow}
-                disabled={followingLoading}
-                className={`rounded-full px-3.5 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap ${
-                  isFollowing
-                    ? "border-primary/50 text-primary hover:bg-primary/10"
-                    : "gradient-sunset border-0 text-white shadow-glow"
-                }`}
-              >
-                <Users className="h-4 w-4" />
-                <span>{isFollowing ? "Following" : "Follow"}</span>
-                {followFollowersCount > 0 && (
-                  <span className="ml-0.5 rounded-full bg-black/20 px-1.5 py-0.2 text-[10px] font-bold">
-                    {followFollowersCount}
-                  </span>
-                )}
-              </Button>
+              {/* FOLLOW BUTTON (Only shown across roles: Brand to Creator or Creator to Brand, or Guest) */}
+              {(() => {
+                const myRole = myProfile?.role;
+                const targetRole = inf.role || (isBrand ? "brand" : "creator");
+                const isSameRole = myRole && targetRole && myRole === targetRole;
+
+                if (isSameRole) return null;
+
+                return (
+                  <Button
+                    variant={isFollowing ? "outline" : "default"}
+                    size="sm"
+                    onClick={handleToggleFollow}
+                    disabled={followingLoading}
+                    className={`rounded-full px-3.5 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap ${
+                      isFollowing
+                        ? "border-primary/50 text-primary hover:bg-primary/10"
+                        : "gradient-sunset border-0 text-white shadow-glow"
+                    }`}
+                  >
+                    <Users className="h-4 w-4" />
+                    <span>{isFollowing ? "Following" : "Follow"}</span>
+                    {followFollowersCount > 0 && (
+                      <span className="ml-0.5 rounded-full bg-black/20 px-1.5 py-0.2 text-[10px] font-bold">
+                        {followFollowersCount}
+                      </span>
+                    )}
+                  </Button>
+                );
+              })()}
 
               {/* HIRE BUTTON (When logged in as brand) */}
               {myProfile?.role === "brand" && (

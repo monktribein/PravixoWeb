@@ -17,6 +17,29 @@ export const toggleFollow = async (req, res) => {
       return res.status(400).json({ success: false, message: "You cannot follow yourself." });
     }
 
+    // Role check: Only Brand can follow Creator and Creator can follow Brand
+    if (mongoose.Types.ObjectId.isValid(followerId) && mongoose.Types.ObjectId.isValid(targetProfileId)) {
+      const [followerProfile, targetProfile] = await Promise.all([
+        Profile.findById(followerId).select("role"),
+        Profile.findById(targetProfileId).select("role"),
+      ]);
+
+      if (followerProfile && targetProfile) {
+        if (followerProfile.role === "creator" && targetProfile.role === "creator") {
+          return res.status(400).json({
+            success: false,
+            message: "A creator cannot follow another creator. Creators can only follow Brands.",
+          });
+        }
+        if (followerProfile.role === "brand" && targetProfile.role === "brand") {
+          return res.status(400).json({
+            success: false,
+            message: "A brand cannot follow another brand. Brands can only follow Creators.",
+          });
+        }
+      }
+    }
+
     const existingFollow = await Follow.findOne({
       followerId,
       followingId: targetProfileId,
