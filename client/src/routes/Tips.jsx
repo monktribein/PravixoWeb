@@ -21,6 +21,7 @@ import {
   DialogDescription,
 } from "@/components/ui/Dialog";
 import api from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 
 export default function Tips() {

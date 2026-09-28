@@ -2081,33 +2081,26 @@ export default function InfluencerDetails() {
 
         <div className="mt-8 space-y-6">
 
-            {/* STATS */}
-
+            {/* 4 PRIMARY HIGHLIGHT STATS */}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-
-              {statCards.map(
-                (stat) => (
-                  <div
-                    key={stat.label}
-                    className="flex h-28 flex-col items-center justify-center rounded-2xl border border-border bg-card p-4 text-center shadow-sm"
-                  >
-                    <div className="font-display text-xl font-bold">
-                      {stat.value}
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      {stat.label}
-                    </div>
+              {statCards.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="flex h-24 flex-col items-center justify-center rounded-2xl border border-border bg-card p-4 text-center shadow-sm"
+                >
+                  <div className="font-display text-xl sm:text-2xl font-bold">
+                    {stat.value}
                   </div>
-                )
-              )}
 
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {stat.label}
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {/* BRAND INFO / SOCIAL */}
-
-            {isBrand &&
-              brandDetails ? (
+            {/* BRAND INFO OR CONNECTED CHANNELS */}
+            {isBrand && brandDetails ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
                 <div className="flex h-24 items-center gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -2189,62 +2182,58 @@ export default function InfluencerDetails() {
 
               </div>
             ) : (
-              socialCards.length > 0 && (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div className="space-y-4">
+                {/* 4 PRIMARY HIGHLIGHT STATS */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {statCards.map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="flex h-24 flex-col items-center justify-center rounded-2xl border border-border bg-card p-4 text-center shadow-sm"
+                    >
+                      <div className="font-display text-xl sm:text-2xl font-bold">
+                        {stat.value}
+                      </div>
 
-                  {socialCards.map(
-                    (social) => (
+                      <div className="text-[11px] font-medium text-muted-foreground mt-0.5">
+                        {stat.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* CONNECTED CHANNELS ROW */}
+                {socialCards.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider pl-1">
+                      Channels:
+                    </span>
+                    {socialCards.map((social) => (
                       <a
-                        key={
-                          social.label
-                        }
-                        href={
-                          social.href
-                        }
+                        key={social.label}
+                        href={social.href}
                         target="_blank"
                         rel="noreferrer"
-                        className={`flex min-h-[7.5rem] flex-col items-center justify-center rounded-2xl border border-border bg-card p-3.5 text-center shadow-sm transition-all group ${social.hoverClass}`}
+                        className={cn(
+                          "inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-semibold shadow-xs transition-all hover:scale-105 hover:border-primary/40",
+                          social.hoverClass
+                        )}
                       >
-
-                        <div className="flex items-center gap-1.5 justify-center mb-1">
-
-                          <SocialIcon
-                            platform={
-                              social.label
-                            }
-                            className={`h-5 w-5 group-hover:scale-110 transition-transform ${social.iconClass}`}
-                          />
-
-                          {social.isVerified && (
-                            <span title="Verified & Audited Live Metrics" className="inline-flex items-center text-sky-500">
-                              <ShieldCheck className="h-4 w-4" />
-                            </span>
-                          )}
-
-                        </div>
-
-                        <div className="font-display text-xl font-bold">
-                          {formatFollowers(
-                            social.followers ||
-                            0
-                          )}
-                        </div>
-
-                        <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-0.5">
-                          <span>{social.label}</span>
-                          {social.isVerified && social.engagementRate && (
-                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-1 rounded">
-                              {social.engagementRate}% ER
-                            </span>
-                          )}
-                        </div>
-
+                        <SocialIcon
+                          platform={social.label}
+                          className={cn("h-4 w-4", social.iconClass)}
+                        />
+                        <span className="text-foreground">{social.label}</span>
+                        <span className="font-bold text-primary">
+                          {formatFollowers(social.followers || 0)}
+                        </span>
+                        {social.isVerified && (
+                          <ShieldCheck className="h-3.5 w-3.5 text-sky-500" title="Verified Live Metric" />
+                        )}
                       </a>
-                    )
-                  )}
-
-                </div>
-              )
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ABOUT + PORTFOLIO */}
