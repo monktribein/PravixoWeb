@@ -526,7 +526,7 @@ const FALLBACK_CAMPAIGNS = [
   },
 ];
 
-function HomeCampaignCard({ camp, onSelect }) {
+function HomeCampaignCard({ camp, onNavigate }) {
   const brandName = camp.brand?.fullName || camp.brand?.name || "Brand Partner";
   const brandAvatar = resolveImageUrl(camp.brand?.avatarUrl || camp.brand?.avatar) || getGenderAvatar(brandName, "male", "brand");
   const isBarter = Boolean(camp.isBarterAllowed);
@@ -536,7 +536,7 @@ function HomeCampaignCard({ camp, onSelect }) {
 
   return (
     <div
-      onClick={() => onSelect(camp)}
+      onClick={onNavigate}
       className="group relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border/80 bg-card p-5 sm:p-6 shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-pink-500/40 hover:shadow-pink-500/10 cursor-pointer card-3d"
     >
       {/* Background soft ambient gradient */}
@@ -647,7 +647,7 @@ function HomeCampaignCard({ camp, onSelect }) {
           type="button"
           className="w-full inline-flex items-center justify-center gap-1.5 rounded-full gradient-sunset py-2 text-xs font-bold text-white shadow-glow transition-all hover:scale-[1.02] active:scale-95 group-hover:opacity-95"
         >
-          <span>View Campaign Details</span>
+          <span>Find Campaigns</span>
           <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
         </button>
       </div>
@@ -686,8 +686,6 @@ export default function Home() {
   const [brandsSnaps, setBrandsSnaps] = useState([]);
   const [campaignsSnaps, setCampaignsSnaps] = useState([]);
   const [categoriesSnaps, setCategoriesSnaps] = useState([]);
-
-  const [selectedCampaignModal, setSelectedCampaignModal] = useState(null);
 
   useEffect(() => {
     document.title = "Pravixo — Hire creators that move the needle";
@@ -1336,7 +1334,17 @@ export default function Home() {
                 >
                   <HomeCampaignCard
                     camp={camp}
-                    onSelect={(selected) => setSelectedCampaignModal(selected)}
+                    onNavigate={() => {
+                      if (!user) {
+                        navigate("/login", {
+                          state: { from: "/dashboard/creator?tab=campaigns" },
+                        });
+                      } else if (profile?.role === "brand") {
+                        navigate("/dashboard/brand?tab=campaigns");
+                      } else {
+                        navigate("/dashboard/creator?tab=campaigns");
+                      }
+                    }}
                   />
                 </CarouselItem>
               ))}
@@ -1637,184 +1645,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* =========================
-          CAMPAIGN DETAILS MODAL
-      ========================= */}
-      {selectedCampaignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div
-            className="absolute inset-0"
-            onClick={() => setSelectedCampaignModal(null)}
-          />
-          <div className="relative w-full max-w-lg rounded-3xl border border-border bg-card p-6 sm:p-7 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-            {/* Close button */}
-            <button
-              onClick={() => setSelectedCampaignModal(null)}
-              className="absolute top-4 right-4 h-8 w-8 rounded-full bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
 
-            {/* Brand Header */}
-            <div className="flex items-center gap-3.5 pb-4 border-b border-border/80">
-              <img
-                src={
-                  resolveImageUrl(selectedCampaignModal.brand?.avatarUrl || selectedCampaignModal.brand?.avatar) ||
-                  getGenderAvatar(selectedCampaignModal.brand?.fullName || "Brand", "male", "brand")
-                }
-                alt=""
-                className="h-14 w-14 rounded-2xl border border-border object-cover bg-muted shrink-0 shadow-sm"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = getGenderAvatar("Brand", "male", "brand");
-                }}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <h3 className="font-display text-base sm:text-lg font-bold text-foreground">
-                    {selectedCampaignModal.brand?.fullName || selectedCampaignModal.brand?.name || "Brand Partner"}
-                  </h3>
-                  <Badge className="rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20 text-[10px] font-bold">
-                    {selectedCampaignModal.category || "Campaign"}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3 text-pink-500" />
-                    {selectedCampaignModal.location || selectedCampaignModal.brand?.location || "Pan India"}
-                  </span>
-                  <span>•</span>
-                  <span className="text-emerald-500 font-semibold flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Active Campaign
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Campaign Info */}
-            <div className="mt-5 space-y-4">
-              <div>
-                <h2 className="font-display text-xl font-bold text-foreground">
-                  {selectedCampaignModal.title}
-                </h2>
-                <p className="mt-2 text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  {selectedCampaignModal.description}
-                </p>
-              </div>
-
-              {/* Budget and Compensation Box */}
-              <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground font-medium">Estimated Creator Payout:</span>
-                  <span className="font-display text-base font-black text-gradient-sunset">
-                    {Number(selectedCampaignModal.creatorMinBudget || selectedCampaignModal.budgetPerCreator || 0) > 0
-                      ? Number(selectedCampaignModal.creatorMaxBudget || 0) > Number(selectedCampaignModal.creatorMinBudget || 0)
-                        ? `₹${Number(selectedCampaignModal.creatorMinBudget).toLocaleString()} - ₹${Number(selectedCampaignModal.creatorMaxBudget).toLocaleString()}`
-                        : `₹${Number(selectedCampaignModal.creatorMinBudget || selectedCampaignModal.budgetPerCreator).toLocaleString()}`
-                      : selectedCampaignModal.isBarterAllowed
-                      ? "Product Perks / Barter Exchange"
-                      : `₹${Number(selectedCampaignModal.totalBudget || 0).toLocaleString()}`}
-                  </span>
-                </div>
-                {Number(selectedCampaignModal.totalBudget || 0) > 0 && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground font-medium">Total Campaign Budget:</span>
-                    <span className="font-semibold text-foreground">
-                      ₹{Number(selectedCampaignModal.totalBudget).toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                {selectedCampaignModal.isBarterAllowed && (
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold pt-1 border-t border-border/40">
-                    <Handshake className="h-3.5 w-3.5" />
-                    <span>Open to product perks, gifting, or service exchange (Barter deals).</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Requirements & Deliverables */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Campaign Requirements
-                </h4>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-xl border border-border/70 p-3 bg-card space-y-0.5">
-                    <span className="text-[10px] text-muted-foreground block">Audience Requirement</span>
-                    <span className="font-bold text-foreground flex items-center gap-1">
-                      <Users className="h-3.5 w-3.5 text-pink-500" />
-                      {Number(selectedCampaignModal.minFollowers || 0) > 0
-                        ? `${Number(selectedCampaignModal.minFollowers) >= 1000 ? `${(Number(selectedCampaignModal.minFollowers)/1000).toFixed(0)}k+` : selectedCampaignModal.minFollowers} Followers`
-                        : "All Creator Sizes"}
-                    </span>
-                  </div>
-                  <div className="rounded-xl border border-border/70 p-3 bg-card space-y-0.5">
-                    <span className="text-[10px] text-muted-foreground block">Timeline / Window</span>
-                    <span className="font-bold text-foreground flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5 text-pink-500" />
-                      {selectedCampaignModal.startDate
-                        ? `${new Date(selectedCampaignModal.startDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })} - ${selectedCampaignModal.endDate ? new Date(selectedCampaignModal.endDate).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Open"}`
-                        : "Immediate / Ongoing"}
-                    </span>
-                  </div>
-                </div>
-
-                {selectedCampaignModal.deliverables && selectedCampaignModal.deliverables.length > 0 && (
-                  <div className="space-y-1.5">
-                    <span className="text-[11px] font-semibold text-muted-foreground">Required Deliverables:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedCampaignModal.deliverables.map((deliv, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-pink-500/10 text-pink-500 border border-pink-500/20 px-2.5 py-1 text-xs font-semibold"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 text-pink-500" />
-                          {deliv}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Button */}
-              <div className="pt-3 flex gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSelectedCampaignModal(null)}
-                  className="flex-1 rounded-full font-bold text-xs h-10 cursor-pointer"
-                >
-                  Close
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const campId = selectedCampaignModal._id;
-                    setSelectedCampaignModal(null);
-                    if (!user) {
-                      navigate("/login", {
-                        state: { from: `/dashboard/creator?tab=campaigns` },
-                      });
-                    } else if (profile?.role === "creator") {
-                      navigate("/dashboard/creator?tab=campaigns");
-                    } else {
-                      navigate("/dashboard/brand?tab=campaigns");
-                    }
-                  }}
-                  className="flex-1 rounded-full gradient-sunset border-0 text-white shadow-glow font-bold text-xs h-10 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                >
-                  {!user
-                    ? "Sign In to Apply"
-                    : profile?.role === "creator"
-                    ? "Apply on Dashboard"
-                    : "Explore on Platform"}
-                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
