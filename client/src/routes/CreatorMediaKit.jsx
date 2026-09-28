@@ -149,9 +149,15 @@ export default function CreatorMediaKit() {
   const handleHireAction = (targetUrl) => {
     if (!user) {
       setShowBrandPromptModal(true);
-    } else {
-      navigate(targetUrl);
+      return;
     }
+
+    if (profile?.role === "creator") {
+      toast.error("A creator cannot book or connect with another creator. Creators can only collaborate with Brands.");
+      return;
+    }
+
+    navigate(targetUrl);
   };
 
   if (loading) {

@@ -49,6 +49,6 @@ export function resolveFrontendUrl(path = "") {
   }
 
   // Fallback to production url
-  return `https://pravixo-web.vercel.app${path.startsWith("/") ? path : `/${path}`}`;
+  return `https://www.pravixo.com${path.startsWith("/") ? path : `/${path}`}`;
 }
 
