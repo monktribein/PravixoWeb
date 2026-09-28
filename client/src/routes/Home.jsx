@@ -53,6 +53,7 @@ import { cn } from "@/lib/utils";
 
 import heroBanner from "@/assets/hero-banner.jpg";
 import pravixoFlow from "@/assets/pravixo-flow.jpeg";
+import logoImg from "@/assets/log.png";
 
 
 const CATEGORY_METADATA = {
@@ -806,10 +807,11 @@ export default function Home() {
     </div>
     <Link
       to="/browse"
-      className="group inline-flex items-center gap-2 self-start rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 sm:self-auto"
+      className="group inline-flex items-center gap-2.5 self-start rounded-full gradient-sunset px-5 py-2.5 text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95 sm:self-auto"
     >
-      View all creators
-      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+     
+      <span>View all creators</span>
+      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
     </Link>
   </div>
 
