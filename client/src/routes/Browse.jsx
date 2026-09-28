@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Slider } from "@/components/ui/Slider";
+import { cn } from "@/lib/utils";
 
 import { useAuth } from "@/components/auth/AuthProvider";
 
