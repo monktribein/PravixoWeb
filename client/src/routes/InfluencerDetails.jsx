@@ -2081,24 +2081,6 @@ export default function InfluencerDetails() {
 
         <div className="mt-8 space-y-6">
 
-            {/* 4 PRIMARY HIGHLIGHT STATS */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {statCards.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="flex h-24 flex-col items-center justify-center rounded-2xl border border-border bg-card p-4 text-center shadow-sm"
-                >
-                  <div className="font-display text-xl sm:text-2xl font-bold">
-                    {stat.value}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {stat.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-
             {/* BRAND INFO OR CONNECTED CHANNELS */}
             {isBrand && brandDetails ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
