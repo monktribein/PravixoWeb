@@ -847,6 +847,10 @@ export default function CollaborationsPage() {
             >
               {reviewingSubmissionId === rejectingSubmission?._id ? "Sending..." : "Submit Rework Request"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* CREATOR SUBMIT DELIVERABLE DIALOG */}
       <Dialog
         open={Boolean(selectedCollabForUpload)}
