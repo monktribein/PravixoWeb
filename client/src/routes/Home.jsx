@@ -34,6 +34,7 @@ import {
   X,
   Users,
   Megaphone,
+  Clock,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
