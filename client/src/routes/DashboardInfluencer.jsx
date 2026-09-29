@@ -503,8 +503,9 @@ export function DashboardInfluencer() {
     apiPatch(`/tasks/${taskId}/submit`, { submissionLink, notes, attachmentLink });
   const saveBankDetails = (data) =>
     apiPost(`/payments/bank-details`, { ...data, creatorId: mongoProfileId });
+  const [bankRefreshKey, setBankRefreshKey] = useState(0);
   const bankDetails = useRestQuery(
-    `bank-${profileKey}`,
+    `bank-${profileKey}-${bankRefreshKey}`,
     () => apiGet(`/payments/bank-details/${mongoProfileId}`),
     hasValidMongoProfileId
   );
@@ -561,6 +562,15 @@ export function DashboardInfluencer() {
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
   const [requestingWithdrawal, setRequestingWithdrawal] = useState(false);
+  const [isEditingBankInWithdraw, setIsEditingBankInWithdraw] = useState(false);
+  const [bankFormInWithdraw, setBankFormInWithdraw] = useState({
+    accountHolderName: "",
+    bankName: "",
+    accountNumber: "",
+    ifsc: "",
+    upiId: "",
+  });
+  const [isSavingBankInWithdraw, setIsSavingBankInWithdraw] = useState(false);
 
   const [discoverRefreshKey, setDiscoverRefreshKey] = useState(0);
   const [isRefreshingDiscover, setIsRefreshingDiscover] = useState(false);
@@ -6755,21 +6765,208 @@ const CAMPAIGNS_PER_PAGE = 6;
               </Button>
             </div>
 
-            {/* Destination Bank Snapshot */}
-            <div className="rounded-2xl border border-border bg-secondary/20 p-3.5 space-y-1 text-[11px]">
+            {/* Destination Bank Snapshot & Inline Setup Form */}
+            <div className="rounded-2xl border border-border bg-secondary/20 p-3.5 space-y-2.5 text-[11px]">
               <div className="flex justify-between items-center font-semibold text-foreground">
-                <span>Destination Bank:</span>
-                <span>{bankDetails?.bankName || "Bank Account Not Found"}</span>
+                <span className="flex items-center gap-1.5">
+                  <CreditCard className="h-4 w-4 text-primary" /> Destination Bank Account:
+                </span>
+                {bankDetails?.accountNumber && !isEditingBankInWithdraw && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px] text-primary font-bold hover:bg-primary/10 rounded-full"
+                    onClick={() => {
+                      setBankFormInWithdraw({
+                        accountHolderName: bankDetails.accountHolderName || bankDetails.fullName || profile?.fullName || "",
+                        bankName: bankDetails.bankName || "",
+                        accountNumber: bankDetails.accountNumber || "",
+                        ifsc: bankDetails.ifsc || "",
+                        upiId: bankDetails.upiId || "",
+                      });
+                      setIsEditingBankInWithdraw(true);
+                    }}
+                  >
+                    Edit Details
+                  </Button>
+                )}
               </div>
-              {bankDetails?.accountNumber ? (
-                <div className="text-muted-foreground text-[10px] space-y-0.5">
-                  <p>A/C Holder: <strong className="text-foreground">{bankDetails.accountHolderName || bankDetails.fullName}</strong></p>
-                  <p>A/C Number: ••••••••{bankDetails.accountNumber.slice(-4)} | IFSC: {bankDetails.ifsc}</p>
+
+              {/* If bank exists and not currently editing */}
+              {bankDetails?.accountNumber && !isEditingBankInWithdraw ? (
+                <div className="bg-background/80 rounded-xl p-2.5 border border-border/60 space-y-1 text-[11px]">
+                  <div className="flex justify-between text-foreground">
+                    <span className="text-muted-foreground text-[10px]">Bank:</span>
+                    <strong className="font-semibold">{bankDetails.bankName || "Bank"}</strong>
+                  </div>
+                  <div className="flex justify-between text-foreground">
+                    <span className="text-muted-foreground text-[10px]">A/C Holder:</span>
+                    <strong className="font-semibold">{bankDetails.accountHolderName || bankDetails.fullName || "Account Holder"}</strong>
+                  </div>
+                  <div className="flex justify-between text-foreground">
+                    <span className="text-muted-foreground text-[10px]">A/C Number:</span>
+                    <span className="font-mono">••••••••{bankDetails.accountNumber.slice(-4)}</span>
+                  </div>
+                  <div className="flex justify-between text-foreground">
+                    <span className="text-muted-foreground text-[10px]">IFSC Code:</span>
+                    <span className="font-mono font-semibold uppercase">{bankDetails.ifsc}</span>
+                  </div>
+                  {bankDetails.upiId && (
+                    <div className="flex justify-between text-foreground">
+                      <span className="text-muted-foreground text-[10px]">UPI ID:</span>
+                      <span className="font-mono text-[10px]">{bankDetails.upiId}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <p className="text-amber-600 text-[10px] font-medium pt-1">
-                  ⚠️ No bank details found. Please save your bank details in the Payment Settings section below first.
-                </p>
+                /* Inline Bank Details Form */
+                <div className="space-y-2 pt-1">
+                  {!bankDetails?.accountNumber && (
+                    <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-2 text-amber-700 dark:text-amber-400 text-[10px] leading-relaxed">
+                      💡 <strong>Add your payout bank details below</strong> to receive withdrawal disbursements directly into your account.
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5 bg-background/90 p-3 rounded-xl border border-border/80">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold text-foreground">
+                          Account Holder Name <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          placeholder="e.g. Rahul Sharma"
+                          value={bankFormInWithdraw.accountHolderName}
+                          onChange={(e) =>
+                            setBankFormInWithdraw((prev) => ({ ...prev, accountHolderName: e.target.value }))
+                          }
+                          className="h-8 text-xs rounded-lg"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold text-foreground">
+                          Bank Name <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          placeholder="e.g. HDFC Bank, SBI, ICICI"
+                          value={bankFormInWithdraw.bankName}
+                          onChange={(e) =>
+                            setBankFormInWithdraw((prev) => ({ ...prev, bankName: e.target.value }))
+                          }
+                          className="h-8 text-xs rounded-lg"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold text-foreground">
+                          Account Number <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="password"
+                          placeholder="Enter Account Number"
+                          value={bankFormInWithdraw.accountNumber}
+                          onChange={(e) =>
+                            setBankFormInWithdraw((prev) => ({ ...prev, accountNumber: e.target.value }))
+                          }
+                          className="h-8 text-xs rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold text-foreground">
+                          IFSC Code <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          placeholder="e.g. HDFC0001234"
+                          value={bankFormInWithdraw.ifsc}
+                          onChange={(e) =>
+                            setBankFormInWithdraw((prev) => ({ ...prev, ifsc: e.target.value.toUpperCase() }))
+                          }
+                          className="h-8 text-xs rounded-lg font-mono uppercase"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-[10px] font-semibold text-foreground">
+                        UPI ID (Optional)
+                      </Label>
+                      <Input
+                        placeholder="e.g. user@okhdfcbank"
+                        value={bankFormInWithdraw.upiId}
+                        onChange={(e) =>
+                          setBankFormInWithdraw((prev) => ({ ...prev, upiId: e.target.value }))
+                        }
+                        className="h-8 text-xs rounded-lg"
+                      />
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-end gap-2">
+                      {bankDetails?.accountNumber && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[10px] px-2.5 rounded-full"
+                          onClick={() => setIsEditingBankInWithdraw(false)}
+                          disabled={isSavingBankInWithdraw}
+                        >
+                          Cancel Edit
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 text-[10px] font-bold rounded-full gradient-sunset text-white border-0 shadow-sm px-4"
+                        disabled={
+                          isSavingBankInWithdraw ||
+                          !bankFormInWithdraw.accountHolderName.trim() ||
+                          !bankFormInWithdraw.bankName.trim() ||
+                          !bankFormInWithdraw.accountNumber.trim() ||
+                          !bankFormInWithdraw.ifsc.trim()
+                        }
+                        onClick={async () => {
+                          if (
+                            !bankFormInWithdraw.accountHolderName.trim() ||
+                            !bankFormInWithdraw.bankName.trim() ||
+                            !bankFormInWithdraw.accountNumber.trim() ||
+                            !bankFormInWithdraw.ifsc.trim()
+                          ) {
+                            toast.error("Please fill in all mandatory bank details.");
+                            return;
+                          }
+
+                          setIsSavingBankInWithdraw(true);
+                          try {
+                            const res = await api.post("/api/payments/bank-details", {
+                              creatorId: mongoProfileId,
+                              fullName: bankFormInWithdraw.accountHolderName.trim(),
+                              accountHolderName: bankFormInWithdraw.accountHolderName.trim(),
+                              bankName: bankFormInWithdraw.bankName.trim(),
+                              accountNumber: bankFormInWithdraw.accountNumber.trim(),
+                              ifsc: bankFormInWithdraw.ifsc.trim().toUpperCase(),
+                              upiId: bankFormInWithdraw.upiId.trim(),
+                            });
+
+                            if (res.data?.success || res.status === 200 || res.status === 201) {
+                              toast.success("Bank details saved successfully!");
+                              setIsEditingBankInWithdraw(false);
+                              setBankRefreshKey((k) => k + 1);
+                            }
+                          } catch (err) {
+                            console.error("Save bank details error:", err);
+                            toast.error(err?.response?.data?.message || err.message || "Failed to save bank details.");
+                          } finally {
+                            setIsSavingBankInWithdraw(false);
+                          }
+                        }}
+                      >
+                        {isSavingBankInWithdraw ? "Saving..." : "Save Bank Details"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -6809,7 +7006,7 @@ const CAMPAIGNS_PER_PAGE = 6;
                 type="submit"
                 size="sm"
                 className="rounded-full gradient-sunset text-white font-bold text-xs px-6 shadow-glow"
-                disabled={requestingWithdrawal || !bankDetails?.accountNumber || Number(creatorWallet.availableBalance || 0) <= 0}
+                disabled={requestingWithdrawal || isEditingBankInWithdraw || !bankDetails?.accountNumber || Number(creatorWallet.availableBalance || 0) <= 0}
               >
                 {requestingWithdrawal ? "Submitting..." : "Confirm & Submit Withdrawal"}
               </Button>
