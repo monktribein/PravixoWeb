@@ -291,12 +291,9 @@ export const getDiscoverableCampaigns = async (req, res) => {
       })
     );
 
-    // Filter out campaigns where remaining budget cannot afford even 1 creator
-    const discoverable = data.filter((camp) => !camp.isBudgetExhausted);
-
     return res.status(200).json({
       success: true,
-      data: discoverable,
+      data,
     });
   } catch (error) {
     console.error("Get discoverable campaigns error:", error);
