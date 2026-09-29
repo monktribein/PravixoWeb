@@ -9,6 +9,7 @@ import Connection from "../models/Connection.js";
 import Campaign from "../models/Campaign.js";
 import Profile from "../models/Profile.js";
 import Conversation from "../models/Conversation.js";
+import Message from "../models/Message.js";
 
 import {
   createOrder,
