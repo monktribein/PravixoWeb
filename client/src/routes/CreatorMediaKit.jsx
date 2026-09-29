@@ -370,7 +370,12 @@ export default function CreatorMediaKit() {
     );
   }
 
-  const avatarUrl = resolveImageUrl(creator.avatarUrl) || getGenderAvatar(creator.fullName || "Creator", creator.gender || "male", "creator");
+  const creatorRole = creator.role || "creator";
+  const creatorGender = creator.gender || "male";
+  const avatarUrl =
+    resolveImageUrl(creator.avatarUrl) ||
+    resolveImageUrl(creator.avatar) ||
+    getGenderAvatar(creator.fullName || "Creator", creatorGender, creatorRole);
   const coverUrl = resolveImageUrl(creator.coverUrl) || DEFAULT_BANNER;
   const rawHandle = creator.handle?.replace(/^@/, "") || handle?.replace(/^@/, "");
 
@@ -579,8 +584,12 @@ export default function CreatorMediaKit() {
               <div className="relative group">
                 <img
                   src={avatarUrl}
-                  alt={creator.fullName}
+                  alt={creator.fullName || "Profile"}
                   className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl sm:rounded-3xl border-4 border-card object-cover shadow-2xl bg-secondary"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = getGenderAvatar(creator.fullName || "User", creatorGender, creatorRole);
+                  }}
                 />
                 {creator.verificationStatus === "verified" && (
                   <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-1.5 rounded-full border-2 border-card shadow-lg" title="Verified Creator">
