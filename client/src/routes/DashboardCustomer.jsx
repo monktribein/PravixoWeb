@@ -1857,6 +1857,20 @@ const [submittingVerification, setSubmittingVerification] =
                     </div>
                   </div>
                   <div className="flex sm:flex-col gap-2 flex-shrink-0 self-stretch sm:justify-center">
+                    <Link
+                      to={`/c/${(req.creatorProfile?.handle || req.creatorId || req.creatorProfile?._id || "creator").replace("@", "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 sm:flex-initial"
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full rounded-full border-border hover:border-primary/50 hover:bg-primary/10 hover:text-primary px-4 h-9 flex items-center justify-center gap-1.5 text-xs font-semibold"
+                      >
+                        <Eye className="h-4 w-4 text-primary" /> View Profile
+                      </Button>
+                    </Link>
                     <Button
                       size="sm"
                       className="flex-1 sm:flex-initial rounded-full bg-emerald-600 hover:bg-emerald-700 text-white border-0 px-4 h-9 flex items-center justify-center gap-1.5"
