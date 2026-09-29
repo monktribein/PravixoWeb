@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/Dialog";
 import { formatINR } from "@/lib/format";
 import { AgreementModal } from "@/components/collaboration/AgreementModal";
+import { getGenderAvatar } from "../utils/avatar";
 
 import { useAuth } from "@/components/auth/AuthProvider";
 import api from "@/lib/api";
@@ -70,6 +71,12 @@ const resolveImageUrl = (url) => {
   let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
   if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
   return `${apiUrl}${url}`;
+};
+
+const getConversationAvatar = (other, convType) => {
+  const isSupport = other?.role === "admin" || convType === "admin_creator" || convType === "admin_brand";
+  if (isSupport) return logoImg;
+  return resolveImageUrl(other?.avatarUrl) || getGenderAvatar(other?.fullName || "User", "male", other?.role || "creator");
 };
 
 export default function Messages() {
@@ -1453,31 +1460,28 @@ export default function Messages() {
 
                       {/* AVATAR */}
                       <div className="relative shrink-0">
-
-                        <img src={
-                            (other?.role === "admin" || conversation.conversationType?.startsWith("admin_"))
-                              ? logoImg
-                              : (resolveImageUrl(other?.avatarUrl) ||
-                                `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(
-                                  other?.fullName ||
-                                    "User"
-                                )}`)
-                          }
+                        <img
+                          src={getConversationAvatar(other, conversation.conversationType)}
                           alt={
-                            (other?.role === "admin" || conversation.conversationType?.startsWith("admin_"))
+                            other?.role === "admin" || conversation.conversationType === "admin_creator" || conversation.conversationType === "admin_brand"
                               ? "Pravixo Admin"
                               : (other?.fullName || "User")
                           }
-                          className="h-12 w-12 rounded-2xl object-contain bg-white/95 p-1 border border-border/50 shadow-soft"
-                         onError={(e) => { e.target.onerror = null; e.target.src = logoImg; }} />
+                          className="h-12 w-12 rounded-2xl object-cover bg-muted border border-border/60 shadow-soft"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            const isSupport = other?.role === "admin" || conversation.conversationType === "admin_creator" || conversation.conversationType === "admin_brand";
+                            e.target.src = isSupport
+                              ? logoImg
+                              : getGenderAvatar(other?.fullName || "User", "male", other?.role || "creator");
+                          }}
+                        />
 
-                        {conversation.unreadCount >
-                          0 && (
+                        {conversation.unreadCount > 0 && (
                           <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white ring-2 ring-card">
                             {conversation.unreadCount}
                           </span>
                         )}
-
                       </div>
 
                       {/* INFO */}
@@ -1586,22 +1590,21 @@ export default function Messages() {
                   </button>
 
                   {/* AVATAR */}
-                  <img src={
-                      isOtherAdmin
-                        ? logoImg
-                        : (resolveImageUrl(otherProfile?.avatarUrl) ||
-                          `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(
-                            otherProfile?.fullName ||
-                              "User"
-                          )}`)
-                    }
+                  <img
+                    src={getConversationAvatar(otherProfile, activeConversation.conversationType)}
                     alt={
                       isOtherAdmin
                         ? "Pravixo Admin"
                         : (otherProfile?.fullName || "User")
                     }
-                    className="h-11 w-11 rounded-2xl object-contain bg-white/95 p-1 border border-border/50"
-                   onError={(e) => { e.target.onerror = null; e.target.src = logoImg; }} />
+                    className="h-11 w-11 rounded-2xl object-cover bg-muted border border-border/60"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = isOtherAdmin
+                        ? logoImg
+                        : getGenderAvatar(otherProfile?.fullName || "User", "male", otherProfile?.role || "creator");
+                    }}
+                  />
 
                   {/* NAME */}
                   <div className="min-w-0 flex-1">
