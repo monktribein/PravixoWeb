@@ -4,13 +4,48 @@ import Otp from "../models/Otp.js";
 import ResetToken from "../models/ResetToken.js";
 import Profile from "../models/Profile.js";
 
+import nodemailer from "nodemailer";
+
 // =====================================
-// VERCEL PROXY MAILER (BYPASS RENDER RESTRICTIONS)
+// BASE EMAIL SENDER (Direct SMTP with Vercel Proxy Fallback)
 // =====================================
 const sendEmail = async ({ to, subject, html, text, origin }) => {
-  // Use the exact origin of the frontend that made the request to guarantee we hit the correct Vercel deployment (preview or production)
-  const baseOrigin = origin || process.env.VERCEL_EMAIL_API_URL || "https://pravixo-kashish.vercel.app";
-  // Remove trailing slash if present
+  // 1. Direct SMTP if environment variables exist
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const port = Number(process.env.SMTP_PORT) || 465;
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || "smtp.gmail.com",
+        port,
+        secure: port === 465,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        connectionTimeout: 10000,
+        socketTimeout: 10000,
+      });
+
+      const info = await transporter.sendMail({
+        from: `"${process.env.EMAIL_FROM_NAME || "Pravixo"}" <${process.env.SMTP_USER}>`,
+        to,
+        subject,
+        html,
+        text,
+      });
+
+      return { success: true, messageId: info.messageId };
+    } catch (err) {
+      console.warn("[OTP Mailer] Direct SMTP attempt failed:", err.message);
+      // If no proxy fallback possible, throw clear error
+      if (!origin && !process.env.VERCEL_EMAIL_API_URL && !process.env.FRONTEND_URL) {
+        throw err;
+      }
+    }
+  }
+
+  // 2. Vercel Proxy Mailer Fallback
+  const baseOrigin = origin || process.env.VERCEL_EMAIL_API_URL || process.env.FRONTEND_URL || "https://pravixo.com";
   const cleanOrigin = baseOrigin.replace(/\/$/, "");
   const vercelApiUrl = `${cleanOrigin}/api/send-email`;
   const authSecret = process.env.VERCEL_API_SECRET || "fallback-secret-key-123";
@@ -27,12 +62,12 @@ const sendEmail = async ({ to, subject, html, text, origin }) => {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Vercel API Error: ${response.status} ${JSON.stringify(errorData)}`);
+      throw new Error(`Email Proxy Error (${response.status}): ${JSON.stringify(errorData)}`);
     }
 
     return await response.json();
   } catch (error) {
-    console.error("Vercel proxy failed:", error);
+    console.error("[OTP Mailer] Vercel proxy failed:", error.message);
     throw error;
   }
 };

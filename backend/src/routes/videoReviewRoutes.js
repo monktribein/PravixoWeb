@@ -6,6 +6,7 @@ import {
   createVideoReview,
   updateVideoReview,
   deleteVideoReview,
+  checkReviewEligibility,
 } from "../controllers/videoReviewController.js";
 
 const router = express.Router();
@@ -15,7 +16,10 @@ const videoUploadMiddleware = upload.fields([
   { name: "thumbnail", maxCount: 1 },
 ]);
 
-// Get all video reviews
+// Check if user is eligible to review (must be collaborated)
+router.get("/check-eligibility", checkReviewEligibility);
+
+// Get all video/text reviews
 router.get("/", getVideoReviews);
 
 // Get single video review

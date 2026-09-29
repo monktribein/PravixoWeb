@@ -20,7 +20,7 @@ export const sendOtpController = async (req, res) => {
       });
     }
 
-    const origin = req.headers.origin || process.env.FRONTEND_URL || "https://pravixo-kashish.vercel.app";
+    const origin = req.headers.origin || process.env.FRONTEND_URL || "https://pravixo.com";
     const result = await sendOtp(email, origin);
 
     return res.status(200).json({

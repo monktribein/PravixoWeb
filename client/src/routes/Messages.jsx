@@ -843,7 +843,18 @@ export default function Messages() {
 
     const text = message.trim();
 
-    if ((!text && !attachedMedia) || sending || !activeConversation || !profile?._id) {
+    // Check for prohibited contact details (Phone, Email, Off-platform)
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i;
+    const phoneRegex = /(\+?\d{1,4}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}|\b\d{10}\b|\b\d{5}[-\s]?\d{5}\b/g;
+    const digitsOnly = text.replace(/\D/g, "");
+    const hasSuspiciousPhoneNumber = digitsOnly.length >= 10 && digitsOnly.length <= 13;
+    const hasEmail = emailRegex.test(text);
+
+    if (hasEmail || hasSuspiciousPhoneNumber || phoneRegex.test(text)) {
+      toast.error(
+        "⚠️ Prohibited Contact Info: Sharing phone numbers or email addresses in chat is strictly prohibited. Communication must stay on Pravixo to avoid account suspension.",
+        { duration: 6000 }
+      );
       return;
     }
 
@@ -2695,6 +2706,15 @@ export default function Messages() {
                       </button>
                     </>
                   )}
+                </div>
+                <div className="flex items-center justify-between px-2 pt-0.5 text-[10px] text-muted-foreground/80 select-none">
+                  <span className="flex items-center gap-1">
+                    <Lock className="h-3 w-3 text-amber-500 shrink-0" />
+                    <strong>Pravixo Safety:</strong> Sharing phone numbers, emails, or personal contacts in chat is prohibited.
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/60 hidden sm:inline">
+                    Protected by Escrow & Terms
+                  </span>
                 </div>
               </form>
             </>

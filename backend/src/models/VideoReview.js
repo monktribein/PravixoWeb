@@ -8,13 +8,41 @@ const videoReviewSchema = new mongoose.Schema(
 
     videoUrl: {
       type: String,
-      required: true,
+      required: false,
     },
 
     reviewerName: {
       type: String,
       required: true,
       trim: true,
+    },
+
+    reviewerAvatar: {
+      type: String,
+      default: "",
+    },
+
+    reviewerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Profile",
+      required: false,
+    },
+
+    targetId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Profile",
+      required: false,
+    },
+
+    campaignName: {
+      type: String,
+      default: "",
+    },
+
+    reviewType: {
+      type: String,
+      enum: ["video", "text"],
+      default: "video",
     },
 
     reviewText: {
@@ -26,6 +54,7 @@ const videoReviewSchema = new mongoose.Schema(
     rating: {
       type: Number,
       required: true,
+      default: 5,
     },
 
     targetRole: {

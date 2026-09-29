@@ -156,17 +156,37 @@ export default function CreatorMediaKit() {
   useEffect(() => {
     async function checkEligibility() {
       if (!creator?._id || !profile?._id) {
-        setReviewEligibility({ canReview: false, campaigns: [], reason: "Log in as a collaborating Brand to review" });
-        return;
-      }
-      if (profile.role === "creator") {
+        const expectedRoleName = creator?.role === "brand" ? "Creator" : "Brand";
         setReviewEligibility({
           canReview: false,
           campaigns: [],
-          reason: "Only verified brands who have collaborated on a campaign can review this creator.",
+          reason: `Log in as a collaborating ${expectedRoleName} to review`,
         });
         return;
       }
+
+      const isTargetBrand = creator.role === "brand";
+
+      // If viewing a Brand profile: reviewer must be a Creator
+      // If viewing a Creator profile: reviewer must be a Brand
+      if (isTargetBrand && profile.role !== "creator") {
+        setReviewEligibility({
+          canReview: false,
+          campaigns: [],
+          reason: "Only verified creators who have completed collaborations with this brand can submit a review.",
+        });
+        return;
+      }
+
+      if (!isTargetBrand && profile.role !== "brand") {
+        setReviewEligibility({
+          canReview: false,
+          campaigns: [],
+          reason: "Only verified brands who have completed campaigns with this creator can submit a review.",
+        });
+        return;
+      }
+
       if (String(profile._id) === String(creator._id)) {
         setReviewEligibility({
           canReview: false,
@@ -203,21 +223,31 @@ export default function CreatorMediaKit() {
     }
 
     checkEligibility();
-  }, [creator?._id, profile?._id, profile?.role]);
+  }, [creator?._id, creator?.role, profile?._id, profile?.role]);
 
   const handleOpenReviewModal = () => {
     if (!user) {
       setShowBrandPromptModal(true);
       return;
     }
-    if (profile?.role === "creator") {
+
+    const isTargetBrand = creator?.role === "brand";
+
+    if (isTargetBrand && profile?.role !== "creator") {
+      toast.error("Only creators that have collaborated with this brand can submit a review.");
+      return;
+    }
+
+    if (!isTargetBrand && profile?.role !== "brand") {
       toast.error("Only brands that have collaborated with this creator on a campaign can submit a review.");
       return;
     }
+
     if (reviewEligibility.alreadyReviewed) {
-      toast.info("You have already submitted a verified review for this creator.");
+      toast.info(`You have already submitted a verified review for this ${isTargetBrand ? "brand" : "creator"}.`);
       return;
     }
+
     if (!reviewEligibility.canReview) {
       toast.error(
         reviewEligibility.reason || "You can only write a review if you have worked together on an accepted campaign!"
@@ -1268,10 +1298,13 @@ export default function CreatorMediaKit() {
                 </span>
               </div>
               <h2 className="text-xl font-bold font-display text-foreground mt-2 flex items-center gap-2">
-                <Star className="w-5 h-5 text-amber-400 fill-amber-400" /> Verified Brand Reviews
+                <Star className="w-5 h-5 text-amber-400 fill-amber-400" />{" "}
+                {creator?.role === "brand" ? "Verified Creator Reviews" : "Verified Brand Reviews"}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                Authentic feedback from verified brand partners who completed campaigns with @{rawHandle}
+                {creator?.role === "brand"
+                  ? `Authentic feedback from verified creators who completed campaigns with @${rawHandle}`
+                  : `Authentic feedback from verified brand partners who completed campaigns with @${rawHandle}`}
               </p>
             </div>
 
@@ -1307,7 +1340,9 @@ export default function CreatorMediaKit() {
             <div className="sm:col-span-2 text-xs text-muted-foreground space-y-1.5">
               <p className="flex items-center gap-2 text-foreground/90 font-medium">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                Only brands who have partnered in accepted campaigns with this creator can leave a review.
+                {creator?.role === "brand"
+                  ? "Only creators who have completed collaborations with this brand can leave a review."
+                  : "Only brands who have partnered in accepted campaigns with this creator can leave a review."}
               </p>
               <p className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
@@ -1329,14 +1364,16 @@ export default function CreatorMediaKit() {
               </div>
               <h3 className="text-base font-bold text-foreground">No Reviews Yet</h3>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Be the first brand partner to work with @{rawHandle} and leave a verified collaboration review!
+                {creator?.role === "brand"
+                  ? `Be the first creator partner to work with @${rawHandle} and leave a verified collaboration review!`
+                  : `Be the first brand partner to work with @${rawHandle} and leave a verified collaboration review!`}
               </p>
               <Button
                 onClick={() => handleHireAction(`/influencer/${creator._id}`)}
                 variant="outline"
                 className="rounded-full text-xs font-semibold px-4 cursor-pointer mt-2"
               >
-                Start Collaboration
+                {creator?.role === "brand" ? "Explore Brand Campaigns" : "Start Collaboration"}
               </Button>
             </div>
           ) : (
@@ -1528,7 +1565,11 @@ export default function CreatorMediaKit() {
 
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2.5 text-[11px] text-amber-600 dark:text-amber-400">
               <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>Verified review submission is only granted to brands with completed/accepted campaign milestones.</span>
+              <span>
+                {creator?.role === "brand"
+                  ? "Verified review submission is only granted to creators who have completed collaborations with this brand."
+                  : "Verified review submission is only granted to brands who have completed/accepted campaign milestones with this creator."}
+              </span>
             </div>
 
             <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-2">

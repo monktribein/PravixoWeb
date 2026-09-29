@@ -1,19 +1,115 @@
 import mongoose from "mongoose";
 import VideoReview from "../models/VideoReview.js";
+import Profile from "../models/Profile.js";
+import Connection from "../models/Connection.js";
 
 // =====================================
-// GET ALL VIDEO REVIEWS
+// CHECK IF USER CAN POST REVIEW (MUST BE COLLABORATED)
+// GET /api/video-reviews/check-eligibility
+// =====================================
+export const checkReviewEligibility = async (req, res) => {
+  try {
+    const { reviewerId } = req.query;
+
+    if (!reviewerId || !mongoose.Types.ObjectId.isValid(reviewerId)) {
+      return res.status(200).json({
+        success: true,
+        canReview: false,
+        reason: "Please log in with an active account to post a review.",
+        collaborations: [],
+      });
+    }
+
+    const reviewer = await Profile.findById(reviewerId);
+    if (!reviewer) {
+      return res.status(200).json({
+        success: true,
+        canReview: false,
+        reason: "Profile not found.",
+        collaborations: [],
+      });
+    }
+
+    // Admins always have access
+    if (reviewer.role === "brand" && (reviewer.fullName === "Admin" || reviewer.userId === "admin")) {
+      return res.status(200).json({
+        success: true,
+        canReview: true,
+        isAdmin: true,
+        collaborations: [],
+      });
+    }
+
+    // Find all accepted/active collaborations for this reviewer
+    const connections = await Connection.find({
+      $or: [{ brandId: reviewer._id }, { creatorId: reviewer._id }],
+      $or: [
+        { status: "accepted" },
+        { collaborationStatus: "AMOUNT_AGREED" },
+        { paymentStatus: { $in: ["PAID", "PAYMENT_INITIATED", "ESCROW_PAID", "RELEASED"] } },
+      ],
+    })
+      .populate("brandId", "fullName avatar name companyName")
+      .populate("creatorId", "fullName avatar name")
+      .populate("campaignId", "title")
+      .lean();
+
+    if (connections.length === 0) {
+      return res.status(200).json({
+        success: true,
+        canReview: false,
+        reason: "Only brands and creators who have collaborated together on Pravixo can post reviews.",
+        collaborations: [],
+      });
+    }
+
+    // Map list of collaborated partners
+    const collabs = connections.map((c) => {
+      const isReviewerBrand = c.brandId?._id?.toString() === reviewer._id.toString();
+      const partner = isReviewerBrand ? c.creatorId : c.brandId;
+      return {
+        connectionId: c._id,
+        partnerId: partner?._id,
+        partnerName: partner?.fullName || partner?.name || partner?.companyName || "Collab Partner",
+        partnerAvatar: partner?.avatar,
+        campaignTitle: c.campaignId?.title || "Direct Collaboration",
+        targetRole: isReviewerBrand ? "creator" : "brand",
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      canReview: true,
+      role: reviewer.role,
+      reviewerName: reviewer.fullName || reviewer.name,
+      reviewerAvatar: reviewer.avatar,
+      collaborations: collabs,
+    });
+  } catch (error) {
+    console.error("Check review eligibility error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify review eligibility.",
+    });
+  }
+};
+
+// =====================================
+// GET ALL VIDEO/TEXT REVIEWS
 // GET /api/video-reviews
 // =====================================
 
 export const getVideoReviews = async (req, res) => {
   try {
-    const { targetRole } = req.query;
+    const { targetRole, reviewType } = req.query;
 
     const filter = {};
 
     if (targetRole) {
       filter.targetRole = targetRole;
+    }
+    if (reviewType) {
+      filter.reviewType = reviewType;
     }
 
     const reviews = await VideoReview.find(filter)
@@ -29,7 +125,7 @@ export const getVideoReviews = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch video reviews.",
+      message: "Failed to fetch reviews.",
     });
   }
 };
@@ -46,7 +142,7 @@ export const getVideoReviewById = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid video review ID.",
+        message: "Invalid review ID.",
       });
     }
 
@@ -55,7 +151,7 @@ export const getVideoReviewById = async (req, res) => {
     if (!review) {
       return res.status(404).json({
         success: false,
-        message: "Video review not found.",
+        message: "Review not found.",
       });
     }
 
@@ -64,11 +160,11 @@ export const getVideoReviewById = async (req, res) => {
       data: review,
     });
   } catch (error) {
-    console.error("Get video review by ID error:", error);
+    console.error("Get review by ID error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch video review.",
+      message: "Failed to fetch review.",
     });
   }
 };
@@ -82,7 +178,7 @@ const getFileUrl = (file) => {
 };
 
 // =====================================
-// CREATE VIDEO REVIEW
+// CREATE VIDEO / TEXT REVIEW
 // POST /api/video-reviews
 // =====================================
 
@@ -101,10 +197,16 @@ export const createVideoReview = async (req, res) => {
       payload.rating = Number(payload.rating);
     }
 
-    if (!payload.videoUrl) {
+    // Default reviewType if not passed
+    if (!payload.reviewType) {
+      payload.reviewType = payload.videoUrl ? "video" : "text";
+    }
+
+    // If reviewType is video, require videoUrl
+    if (payload.reviewType === "video" && !payload.videoUrl) {
       return res.status(400).json({
         success: false,
-        message: "A video file or video link is required.",
+        message: "A video file or video link is required for video reviews.",
       });
     }
 
@@ -115,6 +217,30 @@ export const createVideoReview = async (req, res) => {
       });
     }
 
+    // Validate collaboration if reviewerId is provided and not admin
+    if (payload.reviewerId && mongoose.Types.ObjectId.isValid(payload.reviewerId)) {
+      const reviewer = await Profile.findById(payload.reviewerId);
+      const isAdmin = reviewer?.role === "brand" && (reviewer?.fullName === "Admin" || reviewer?.userId === "admin");
+
+      if (!isAdmin) {
+        const hasCollab = await Connection.findOne({
+          $or: [{ brandId: payload.reviewerId }, { creatorId: payload.reviewerId }],
+          $or: [
+            { status: "accepted" },
+            { collaborationStatus: "AMOUNT_AGREED" },
+            { paymentStatus: { $in: ["PAID", "PAYMENT_INITIATED", "ESCROW_PAID", "RELEASED"] } },
+          ],
+        });
+
+        if (!hasCollab) {
+          return res.status(403).json({
+            success: false,
+            message: "Only partners who have completed collaborations together can post reviews.",
+          });
+        }
+      }
+    }
+
     const review = await VideoReview.create(payload);
 
     return res.status(201).json({
@@ -122,11 +248,11 @@ export const createVideoReview = async (req, res) => {
       data: review,
     });
   } catch (error) {
-    console.error("Create video review error:", error);
+    console.error("Create review error:", error);
 
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to create video review.",
+      message: error.message || "Failed to create review.",
     });
   }
 };

@@ -65,6 +65,30 @@ export const sendMessage = async (req, res) => {
       });
     }
 
+    // =========================================================================
+    // PROHIBITED CONTENT DETECTION (PHONE, EMAIL, EXTERNAL CONTACT SHARING)
+    // =========================================================================
+    if (text && typeof text === "string") {
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i;
+      const phoneRegex = /(\+?\d{1,4}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}|\b\d{10}\b|\b\d{5}[-\s]?\d{5}\b/g;
+      const disguisedPhoneRegex = /\b(\d\s*){10,}\b/;
+      const obfuscatedContactKeywords = /\b(whatsapp|wa\.me|call\s*me|phone\s*no|contact\s*no|mobile\s*no|gmail|telegram|t\.me|instagram\s*dm|direct\s*dm|pay\s*outside)\b/i;
+
+      // Extract cleaned digits to detect sneaky phone number patterns
+      const digitsOnly = text.replace(/\D/g, "");
+      const hasSuspiciousPhoneNumber = (digitsOnly.length >= 10 && digitsOnly.length <= 13) || phoneRegex.test(text) || disguisedPhoneRegex.test(text);
+      const hasEmail = emailRegex.test(text);
+
+      if (hasEmail || hasSuspiciousPhoneNumber) {
+        return res.status(400).json({
+          success: false,
+          isProhibited: true,
+          message:
+            "⚠️ Sharing personal contact details (phone numbers, email addresses, or off-platform contact) is strictly prohibited. All communication must stay on Pravixo. Repeated violations will result in immediate account suspension.",
+        });
+      }
+    }
+
     let fileUrl = null;
     let fileType = null;
     if (hasFile) {

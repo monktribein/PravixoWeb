@@ -19,20 +19,33 @@ export default async function handler(req, res) {
   }
 
   try {
+    const rawUser = process.env.SMTP_USER || "";
+    const rawPass = process.env.SMTP_PASS || "";
+
+    // Sanitize user and pass (strip quotes, whitespace, spaces inside app password)
+    const user = rawUser.trim().replace(/^['"]|['"]$/g, "");
+    const pass = rawPass.replace(/\s+/g, "").replace(/^['"]|['"]$/g, "");
+
+    if (!user || !pass) {
+      return res.status(500).json({
+        error: "SMTP credentials not configured on Vercel (SMTP_USER or SMTP_PASS missing)",
+      });
+    }
+
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
       port: 465, // Vercel can safely use 465 without blocking
       secure: true,
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user,
+        pass,
       },
       connectionTimeout: 15000,
       socketTimeout: 15000,
     });
 
     const info = await transporter.sendMail({
-      from: `"Pravixo" <${process.env.SMTP_USER}>`,
+      from: `"Pravixo" <${user}>`,
       to,
       subject,
       html,
@@ -42,6 +55,15 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, messageId: info.messageId });
   } catch (error) {
     console.error("Vercel Email Sending Error:", error);
-    return res.status(500).json({ error: error.message });
+    const configuredUser = process.env.SMTP_USER ? `${process.env.SMTP_USER.slice(0, 3)}***@${process.env.SMTP_USER.split("@")[1] || ""}` : "MISSING";
+    const passLength = process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, "").length : 0;
+    return res.status(500).json({
+      error: error.message,
+      diagnostic: {
+        userConfigured: configuredUser,
+        passLengthConfigured: passLength,
+        hint: passLength !== 16 ? "Google App Password must be exactly 16 letters." : "Google rejected this username/password combination.",
+      },
+    });
   }
 }
