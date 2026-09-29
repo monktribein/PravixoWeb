@@ -298,11 +298,28 @@ export function SiteNavbar() {
                     <div className="space-y-0.5 text-xs font-medium">
                       <Link
                         to={dashboardBaseUrl}
-                        onClick={() => setIsUserDropdownOpen(false)}
+                        onClick={() => {
+                          setIsUserDropdownOpen(false);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
                         className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
                       >
                         <LayoutDashboard className="h-4 w-4 text-primary" />
                         <span>Overview Dashboard</span>
+                      </Link>
+
+                      <Link
+                        to={`${dashboardBaseUrl}?tab=dashboard`}
+                        onClick={() => {
+                          setIsUserDropdownOpen(false);
+                          setTimeout(() => {
+                            window.scrollTo({ top: 400, behavior: "smooth" });
+                          }, 100);
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                      >
+                        <User className="h-4 w-4 text-purple-500" />
+                        <span>Edit Profile</span>
                       </Link>
 
                       <Link

@@ -690,9 +690,7 @@ export function DashboardInfluencer() {
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam) {
-      setActiveTab(tabParam);
-    }
+    setActiveTab(tabParam || "dashboard");
     const sectionParam = searchParams.get("section");
     if (sectionParam) {
       setCreatorSubSection(sectionParam);
@@ -2061,17 +2059,35 @@ const CAMPAIGNS_PER_PAGE = 6;
 
           {/* Action Buttons Row - Shifted Inward & Protected from Clipping */}
           <div className="flex items-center flex-nowrap gap-2 py-1 shrink-0 overflow-x-auto no-scrollbar max-w-full lg:max-w-none pr-1">
-            {profile?.handle && (
-              <Link to={`/c/${profile.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="rounded-full text-xs font-bold px-3.5 flex items-center gap-1.5 gradient-sunset text-white shadow-glow hover:opacity-90 cursor-pointer border-0 shrink-0 whitespace-nowrap h-9"
-                >
-                  <Sparkles className="h-3.5 w-3.5" /> Media Kit
-                </Button>
-              </Link>
-            )}
+            <Link
+              to={`/c/${(profile?.handle || profile?._id || "creator").replace("@", "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0"
+            >
+              <Button
+                variant="default"
+                size="sm"
+                className="rounded-full text-xs font-bold px-3.5 flex items-center gap-1.5 gradient-sunset text-white shadow-glow hover:opacity-90 cursor-pointer border-0 shrink-0 whitespace-nowrap h-9"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> Media Kit
+              </Button>
+            </Link>
+
+            <Link
+              to={`/c/${(profile?.handle || profile?._id || "creator").replace("@", "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0"
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full text-xs font-semibold px-3.5 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-9"
+              >
+                <Eye className="h-3.5 w-3.5 text-primary" /> View Profile
+              </Button>
+            </Link>
             {/* COMBINED FOLLOWERS & FOLLOWING IN ONE UNIFIED PILL */}
             <div className="inline-flex items-center rounded-full border border-border/80 bg-card text-xs font-semibold overflow-hidden shadow-xs shrink-0 whitespace-nowrap h-9">
               <button
