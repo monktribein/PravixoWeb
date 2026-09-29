@@ -1736,21 +1736,7 @@ export default function Messages() {
                               </Button>
                             )}
 
-                            {/* Creator Share Work Quick Button in Header */}
-                            {profile.role === "creator" && conn.paymentStatus === "PAID" && (
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  setDeliverableFile(null);
-                                  setDeliverableFilePreview(null);
-                                  setDeliverableCaption("");
-                                  setShareWorkModalOpen(true);
-                                }}
-                                className="h-7 rounded-full gradient-sunset border-0 text-white text-[11px] font-bold px-3 shadow-glow flex items-center gap-1 cursor-pointer"
-                              >
-                                <Upload className="h-3 w-3" /> Share Work
-                              </Button>
-                            )}
+
 
                             {/* Quick Barter Shipping Action Button in Top Header */}
                             {(conn.barterDetails?.isBarter || conn.appliedTier?.reward?.toLowerCase().includes("barter") || conn.appliedTier?.perks?.toLowerCase().includes("product") || conn.appliedTier?.cashAmount === 0 || camp?.isBarterAllowed) && (

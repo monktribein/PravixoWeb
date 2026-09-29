@@ -477,45 +477,86 @@ export default function CollaborationsPage() {
                     </div>
                   </div>
 
-                  {/* Campaign & Budget Box */}
-                  {campaign && (
-                    <div className="rounded-2xl bg-secondary/30 border border-border/60 p-3 space-y-1 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-foreground truncate max-w-[190px]">
-                          {campaign.title}
+                  {/* Campaign, Budget & Timeline Info */}
+                  <div className="rounded-2xl bg-secondary/30 border border-border/60 p-3.5 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-primary block">
+                          Campaign
                         </span>
-                        <span className="font-extrabold text-primary font-display whitespace-nowrap">
-                          ₹{Number(collab.agreedAmount || collab.creatorAmount || campaign.totalBudget || 0).toLocaleString("en-IN")}
-                        </span>
+                        <h5 className="font-bold text-sm text-foreground truncate">
+                          {campaign?.title || collab.task?.title || "Custom Collaboration"}
+                        </h5>
                       </div>
-                      {campaign.category && (
-                        <span className="text-[10px] text-muted-foreground block capitalize">
-                          Category: {campaign.category}
+                      <span className="font-extrabold text-sm text-primary font-display whitespace-nowrap bg-primary/10 px-2.5 py-1 rounded-xl border border-primary/20">
+                        ₹{Number(collab.agreedAmount || collab.creatorAmount || campaign?.totalBudget || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                      {campaign?.category && (
+                        <span className="capitalize font-medium text-foreground">
+                          📁 {campaign.category}
+                        </span>
+                      )}
+                      {(campaign?.timeline || campaign?.startDate || campaign?.endDate) && (
+                        <span>
+                          📅 Timeline: <strong className="text-foreground">{campaign.timeline || `${new Date(campaign.startDate).toLocaleDateString()} - ${new Date(campaign.endDate).toLocaleDateString()}`}</strong>
                         </span>
                       )}
                     </div>
-                  )}
+                  </div>
 
-                  {/* Deliverables Scope Box */}
-                  <div className="rounded-2xl bg-primary/5 border border-primary/10 p-3 space-y-2">
+                  {/* Deliverables Scope & Live Review Status Box */}
+                  <div className="rounded-2xl bg-primary/5 border border-primary/10 p-3.5 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-primary flex items-center gap-1.5">
-                        <Film className="h-3.5 w-3.5" /> Deliverable Scope
+                        <Film className="h-3.5 w-3.5" /> Deliverables Scope & Status
                       </span>
-                      <Badge
-                        variant="outline"
-                        className={`text-[9px] uppercase px-2 py-0 border ${
-                          collab.allDeliverablesCompleted
-                            ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30 font-bold"
-                            : "bg-primary/10 text-primary border-primary/20 font-semibold"
-                        }`}
-                      >
-                        {collab.allDeliverablesCompleted ? "✓ All Approved" : "In Progress"}
-                      </Badge>
+
+                      {/* Dynamic Review Status Badge */}
+                      {collab.allDeliverablesCompleted ? (
+                        <Badge variant="outline" className="text-[9px] uppercase px-2 py-0.5 bg-emerald-500/15 text-emerald-600 border-emerald-500/30 font-bold">
+                          ✓ All Approved
+                        </Badge>
+                      ) : collab.pendingSubmissionsCount > 0 ? (
+                        <Badge variant="outline" className="text-[9px] uppercase px-2 py-0.5 bg-amber-500/15 text-amber-600 border-amber-500/30 font-bold animate-pulse">
+                          ⏳ Brand Review Pending ({collab.pendingSubmissionsCount})
+                        </Badge>
+                      ) : collab.rejectedSubmissionsCount > 0 ? (
+                        <Badge variant="outline" className="text-[9px] uppercase px-2 py-0.5 bg-red-500/15 text-red-600 border-red-500/30 font-bold">
+                          ⚠️ Rework Requested
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[9px] uppercase px-2 py-0.5 bg-primary/10 text-primary border-primary/20 font-semibold">
+                          In Progress
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      {deliverables && (
+                      {collab.deliverablesTracking && collab.deliverablesTracking.length > 0 ? (
+                        collab.deliverablesTracking.map((deliv) => {
+                          const isFulfilled = (deliv.completedQuantity || 0) >= deliv.requiredQuantity;
+                          return (
+                            <span
+                              key={deliv.type}
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-semibold border",
+                                isFulfilled
+                                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                                  : "bg-background border-border text-foreground"
+                              )}
+                            >
+                              <span>{deliv.type}</span>
+                              <span className="text-[10px] opacity-80">
+                                ({deliv.completedQuantity || 0}/{deliv.requiredQuantity})
+                              </span>
+                              {isFulfilled && <span>✓</span>}
+                            </span>
+                          );
+                        })
+                      ) : deliverables ? (
                         <>
                           {Number(deliverables.reels || 0) > 0 && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-purple-500/10 text-purple-600 text-[10px] font-bold">
@@ -538,11 +579,9 @@ export default function CollaborationsPage() {
                             </span>
                           )}
                         </>
-                      )}
-
-                      {!deliverables && collab.task && (
+                      ) : (
                         <span className="text-[11px] text-muted-foreground">
-                          {collab.task.title || "Custom collaboration deliverables"}
+                          {collab.task?.title || "Custom deliverables scope"}
                         </span>
                       )}
                     </div>

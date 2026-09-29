@@ -7,6 +7,8 @@ import Message from "../models/Message.js";
 import SocialConnection from "../models/SocialConnection.js";
 import Notification from "../models/Notification.js";
 import Review from "../models/Review.js";
+import Payment from "../models/Payment.js";
+import Submission from "../models/Submission.js";
 import { sendPushToUser } from "../utils/webPush.js";
 
 // 1. Send connection request
@@ -601,11 +603,28 @@ export const getRequestsForCreator = async (req, res) => {
           conversationId = conv?._id || null;
         }
 
+        // Retrieve payment details if not already populated
+        let payment = request.paymentId && typeof request.paymentId === "object" ? request.paymentId : null;
+        if (!payment) {
+          payment = await Payment.findOne({ connectionId: request._id }).lean();
+        }
+
+        // Check submissions count & review status
+        const submissions = await Submission.find({ connectionId: request._id }).lean();
+        const pendingCount = submissions.filter((s) => s.status === "SUBMITTED" || s.status === "RESUBMITTED").length;
+        const approvedCount = submissions.filter((s) => s.status === "APPROVED").length;
+        const rejectedCount = submissions.filter((s) => s.status === "REJECTED").length;
+
         return {
           ...request,
           brandProfile,
           campaign,
           conversationId,
+          payment,
+          submissionsCount: submissions.length,
+          pendingSubmissionsCount: pendingCount,
+          approvedSubmissionsCount: approvedCount,
+          rejectedSubmissionsCount: rejectedCount,
         };
       })
     );
@@ -810,12 +829,27 @@ export const getApprovedCollaborationsForBrand = async (req, res) => {
 
         const conversation = await Conversation.findOne(filter).lean();
 
+        let payment = connection.paymentId && typeof connection.paymentId === "object" ? connection.paymentId : null;
+        if (!payment) {
+          payment = await Payment.findOne({ connectionId: connection._id }).lean();
+        }
+
+        const submissions = await Submission.find({ connectionId: connection._id }).lean();
+        const pendingCount = submissions.filter((s) => s.status === "SUBMITTED" || s.status === "RESUBMITTED").length;
+        const approvedCount = submissions.filter((s) => s.status === "APPROVED").length;
+        const rejectedCount = submissions.filter((s) => s.status === "REJECTED").length;
+
         return {
           ...connection,
           creatorProfile,
           campaign,
           conversationId: conversation?._id || null,
           conversationStatus: conversation?.status || "inactive",
+          payment,
+          submissionsCount: submissions.length,
+          pendingSubmissionsCount: pendingCount,
+          approvedSubmissionsCount: approvedCount,
+          rejectedSubmissionsCount: rejectedCount,
         };
       })
     );
