@@ -580,6 +580,37 @@ export function DashboardInfluencer() {
     );
   }, [profile]);
 
+  // Track campaign IDs applied by creator from connections / requests
+  const { userRequestedCampaignIds, userApprovedCampaignIds } = useMemo(() => {
+    const requested = new Set();
+    const approved = new Set();
+
+    if (Array.isArray(myRequests)) {
+      myRequests.forEach((req) => {
+        const campId = req.campaign?._id || req.campaignId || req.campaign;
+        if (campId) {
+          if (req.status === "accepted") {
+            approved.add(String(campId));
+          } else {
+            requested.add(String(campId));
+          }
+        }
+      });
+    }
+
+    if (Array.isArray(discoverableCampaigns)) {
+      discoverableCampaigns.forEach((camp) => {
+        if (camp.isParticipating || camp.requestStatus === "accepted") {
+          approved.add(String(camp._id));
+        } else if (camp.isRequested || camp.requestStatus === "pending") {
+          requested.add(String(camp._id));
+        }
+      });
+    }
+
+    return { userRequestedCampaignIds: requested, userApprovedCampaignIds: approved };
+  }, [myRequests, discoverableCampaigns]);
+
   const handleRefreshDiscover = async () => {
     setIsRefreshingDiscover(true);
     try {
@@ -951,12 +982,6 @@ const CAMPAIGNS_PER_PAGE = 6;
 
   // ===== FIND CAMPAIGNS tab states =====
   const [selectedCampaignDetail, setSelectedCampaignDetail] = useState(null);
-
-  // Compute set of campaign IDs that the current creator has already requested to join
-  const userRequestedCampaignIds = useMemo(() => {
-    if (!myRequests || !Array.isArray(myRequests)) return new Set();
-    return new Set(myRequests.map((r) => r.campaignId?._id || r.campaignId).filter(Boolean));
-  }, [myRequests]);
 
   // Helper: human-readable time remaining from a dueDate timestamp/string
   const getTimeRemaining = (dueDate) => {
@@ -4315,11 +4340,19 @@ const CAMPAIGNS_PER_PAGE = 6;
                                   >
                                     View Details
                                   </Button>
-                                  {userRequestedCampaignIds.has(camp._id) ? (
+                                  {userApprovedCampaignIds.has(String(camp._id)) ? (
                                     <Button
                                       size="sm"
                                       disabled
-                                      className="flex-1 rounded-full text-xs h-8 bg-secondary text-muted-foreground"
+                                      className="flex-1 rounded-full text-xs h-8 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-bold"
+                                    >
+                                      Approved ✓
+                                    </Button>
+                                  ) : userRequestedCampaignIds.has(String(camp._id)) ? (
+                                    <Button
+                                      size="sm"
+                                      disabled
+                                      className="flex-1 rounded-full text-xs h-8 bg-secondary text-muted-foreground font-semibold"
                                     >
                                       Applied ✓
                                     </Button>
@@ -5825,13 +5858,13 @@ const CAMPAIGNS_PER_PAGE = 6;
                   Close
                 </Button>
 
-                {selectedCampaignForDiscovery.isParticipating ? (
+                {selectedCampaignForDiscovery.isParticipating || userApprovedCampaignIds.has(String(selectedCampaignForDiscovery._id)) ? (
                   <Button disabled className="rounded-full flex-1 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs font-semibold">
-                    Already Participating
+                    Approved ✓ Participating
                   </Button>
-                ) : selectedCampaignForDiscovery.isRequested ? (
+                ) : selectedCampaignForDiscovery.isRequested || userRequestedCampaignIds.has(String(selectedCampaignForDiscovery._id)) ? (
                   <Button disabled className="rounded-full flex-1 bg-amber/10 text-amber border border-amber/20 text-xs font-semibold">
-                    Application Pending
+                    Application Pending (Applied ✓)
                   </Button>
                 ) : (
                   <Button
@@ -5851,6 +5884,10 @@ const CAMPAIGNS_PER_PAGE = 6;
                         setRequestsRefreshKey((k) => k + 1);
                       } catch (err) {
                         toast.error(err.response?.data?.message || err.message || "Failed to submit application");
+                        if (err.response?.status === 409) {
+                          setDiscoverRefreshKey((k) => k + 1);
+                          setRequestsRefreshKey((k) => k + 1);
+                        }
                       } finally {
                         setJoiningCampaign(false);
                       }
@@ -7144,8 +7181,10 @@ const CAMPAIGNS_PER_PAGE = 6;
                   <Button variant="outline" className="flex-1 rounded-full text-xs" onClick={() => setSelectedCampaignDetail(null)}>
                     Close
                   </Button>
-                  {userRequestedCampaignIds.has(selectedCampaignDetail._id) ? (
-                    <Button disabled className="flex-1 rounded-full bg-secondary text-muted-foreground text-xs">Applied ✓</Button>
+                  {userApprovedCampaignIds.has(String(selectedCampaignDetail._id)) ? (
+                    <Button disabled className="flex-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs font-bold">Approved ✓</Button>
+                  ) : userRequestedCampaignIds.has(String(selectedCampaignDetail._id)) ? (
+                    <Button disabled className="flex-1 rounded-full bg-secondary text-muted-foreground text-xs font-semibold">Applied ✓</Button>
                   ) : !meetsFollowerCriteria ? (
                     <Button
                       className="flex-1 rounded-full gradient-sunset text-white border-0 shadow-glow font-semibold text-xs flex items-center justify-center gap-1.5"
@@ -7162,6 +7201,7 @@ const CAMPAIGNS_PER_PAGE = 6;
                       onClick={() => {
                         setSelectedCampaignForDiscovery(selectedCampaignDetail);
                         setSelectedTierForJoin(matchedTier || null);
+                        setJoinProposedRate(matchedTier?.cashAmount ? String(matchedTier.cashAmount) : selectedCampaignDetail.minBudgetPerCreator ? String(selectedCampaignDetail.minBudgetPerCreator) : "");
                         setJoinPitch(`Hi ${selectedCampaignDetail.brand?.fullName || "there"}! I'm excited to collaborate on your "${selectedCampaignDetail.title}" campaign.`);
                         setSelectedCampaignDetail(null);
                       }}

@@ -448,90 +448,6 @@ const FALLBACK_CAMPAIGNS = [
     startDate: "2026-10-05",
     endDate: "2026-10-30",
   },
-  {
-    _id: "camp_3",
-    title: "Next-Gen Noise Cancelling Earbuds Launch",
-    description: "Unboxing, sound-test and daily commute reel review for our flagship wireless earbuds featuring spatial audio.",
-    category: "Technology",
-    location: "Delhi NCR, India",
-    brand: {
-      fullName: "boAt Audio Labs",
-      avatarUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=150&auto=format&fit=crop&q=80",
-      location: "Delhi NCR, India",
-      verificationStatus: "verified",
-    },
-    totalBudget: 150000,
-    creatorMinBudget: 15000,
-    creatorMaxBudget: 35000,
-    isBarterAllowed: false,
-    minFollowers: 25000,
-    deliverables: ["1 Dedicated Tech Reel", "1 Story Set"],
-    startDate: "2026-10-10",
-    endDate: "2026-11-05",
-  },
-  {
-    _id: "camp_4",
-    title: "Artisanal Cold Brew Coffee Tasting Experience",
-    description: "Calling all food and coffee lovers to showcase our gourmet Arabica cold brew blends, cafe vibes, and morning coffee recipes.",
-    category: "Food & Dining",
-    location: "Delhi, India",
-    brand: {
-      fullName: "Blue Tokai Roasters",
-      avatarUrl: "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=150&auto=format&fit=crop&q=80",
-      location: "Delhi, India",
-      verificationStatus: "verified",
-    },
-    totalBudget: 45000,
-    creatorMinBudget: 5000,
-    creatorMaxBudget: 10000,
-    isBarterAllowed: true,
-    minFollowers: 5000,
-    deliverables: ["1 Aesthetic Reel", "Product Tasting Review"],
-    startDate: "2026-10-02",
-    endDate: "2026-10-20",
-  },
-  {
-    _id: "camp_5",
-    title: "Luxury Resort Weekend Getaway Showcase",
-    description: "Complimentary luxury stay + paid coverage for travel creators to highlight our cliffside villas, infinity pool, and sunset dining.",
-    category: "Travel",
-    location: "Goa, India",
-    brand: {
-      fullName: "Taj Exotica Goa",
-      avatarUrl: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=150&auto=format&fit=crop&q=80",
-      location: "Goa, India",
-      verificationStatus: "verified",
-    },
-    totalBudget: 200000,
-    creatorMinBudget: 25000,
-    creatorMaxBudget: 50000,
-    isBarterAllowed: true,
-    minFollowers: 40000,
-    deliverables: ["2 Travel Reels", "3 Stories", "High-Res Photos"],
-    startDate: "2026-10-15",
-    endDate: "2026-11-15",
-  },
-  {
-    _id: "camp_6",
-    title: "Hydra-Glow Vitamin C Serum Campaign",
-    description: "Authentic skincare routines and before/after glow transformations using our dermatologically tested 10% Vitamin C serum.",
-    category: "Beauty",
-    location: "Kolkata, India",
-    brand: {
-      fullName: "Dot & Key Skincare",
-      avatarUrl: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=150&auto=format&fit=crop&q=80",
-      location: "Kolkata, India",
-      verificationStatus: "verified",
-    },
-    totalBudget: 90000,
-    creatorMinBudget: 10000,
-    creatorMaxBudget: 20000,
-    isBarterAllowed: true,
-    minFollowers: 12000,
-    deliverables: ["1 GRWM Skincare Reel", "1 Product Review Post"],
-    startDate: "2026-10-08",
-    endDate: "2026-10-31",
-  },
 ];
 
 function HomeCampaignCard({ camp, onCardClick, onApplyClick }) {
@@ -752,9 +668,9 @@ export default function Home() {
 
   const featuredCampaigns = useMemo(() => {
     if (liveCampaigns && liveCampaigns.length > 0) {
-      return liveCampaigns;
+      return liveCampaigns.slice(0, 2);
     }
-    return FALLBACK_CAMPAIGNS;
+    return FALLBACK_CAMPAIGNS.slice(0, 2);
   }, [liveCampaigns]);
 
   const isTestOrDummyProfile = (p) => {
