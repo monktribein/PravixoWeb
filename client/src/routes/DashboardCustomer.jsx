@@ -39,10 +39,12 @@ import {
   ChevronRight,
   ChevronLeft,
   ArrowRight,
-  Play,
   ShieldCheck,
+  Shield,
   IndianRupee,
   Loader2,
+  HelpCircle,
+  AlertCircle,
 } from "lucide-react";
 
 
@@ -747,6 +749,11 @@ const openCollaborationPayment = async (connectionId, userProfile) => {
   const [aiMatchedCreators, setAiMatchedCreators] = useState([]);
   const [loadingAiMatches, setLoadingAiMatches] = useState(false);
   
+  // Accept & Payment Dialog State (Escrow Protection)
+  const [acceptPaymentModalReq, setAcceptPaymentModalReq] = useState(null);
+  const [acceptingAndOpeningPayment, setAcceptingAndOpeningPayment] = useState(false);
+  const [openingSupportChat, setOpeningSupportChat] = useState(false);
+
   const [showVerificationDialog, setShowVerificationDialog] =
   useState(false);
 
@@ -1873,17 +1880,9 @@ const [submittingVerification, setSubmittingVerification] =
                     </Link>
                     <Button
                       size="sm"
-                      className="flex-1 sm:flex-initial rounded-full bg-emerald-600 hover:bg-emerald-700 text-white border-0 px-4 h-9 flex items-center justify-center gap-1.5"
-                      onClick={async () => {
-                        try {
-                          await acceptConnection({ connectionId: req._id });
-                          toast.success(
-                            `Connected with ${req.creatorProfile?.fullName}!`,
-                          );
-                          setRequestsRefreshKey((k) => k + 1);
-                        } catch (err) {
-                          toast.error(err?.response?.data?.message || err.message || "Failed to accept request");
-                        }
+                      className="flex-1 sm:flex-initial rounded-full bg-emerald-600 hover:bg-emerald-700 text-white border-0 px-4 h-9 flex items-center justify-center gap-1.5 font-bold shadow-sm cursor-pointer"
+                      onClick={() => {
+                        setAcceptPaymentModalReq(req);
                       }}
                     >
                       <Check className="h-4 w-4" /> Accept
@@ -7010,6 +7009,163 @@ const [submittingVerification, setSubmittingVerification] =
               Send Rework Request
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Brand Escrow Acceptance & Payment Required Dialog */}
+      <Dialog
+        open={Boolean(acceptPaymentModalReq)}
+        onOpenChange={(open) => !open && !acceptingAndOpeningPayment && setAcceptPaymentModalReq(null)}
+      >
+        <DialogContent className="sm:max-w-lg rounded-3xl p-6 bg-card border-border shadow-2xl">
+          <DialogHeader className="text-left space-y-2">
+            <div className="flex items-center gap-2.5">
+              <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center text-primary">
+                <ShieldCheck className="h-5 w-5 text-pink-500" />
+              </div>
+              <div>
+                <DialogTitle className="font-display text-lg font-bold text-foreground">
+                  Secure Collaboration with Pravixo Escrow
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  100% Buyer Protection & Milestones Guarantee
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {acceptPaymentModalReq && (
+            <div className="space-y-4 py-2">
+              {/* Creator & Campaign Card Summary */}
+              <div className="rounded-2xl border border-border/80 bg-secondary/20 p-3.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <img
+                    src={
+                      acceptPaymentModalReq.creatorProfile?.avatarUrl ||
+                      `https://api.dicebear.com/9.x/avataaars/svg?seed=${acceptPaymentModalReq.creatorProfile?.fullName}`
+                    }
+                    alt=""
+                    className="h-11 w-11 rounded-xl object-cover border border-border shrink-0"
+                    onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }}
+                  />
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-bold text-foreground truncate">
+                      {acceptPaymentModalReq.creatorProfile?.fullName}
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      Campaign: <span className="font-semibold text-foreground">{acceptPaymentModalReq.campaign?.title || "Campaign Collaboration"}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Deal Budget</span>
+                  <span className="font-display text-sm font-black text-gradient-sunset">
+                    ₹{Number(acceptPaymentModalReq.proposedAmount || acceptPaymentModalReq.brandTotal || acceptPaymentModalReq.campaign?.budget || acceptPaymentModalReq.campaign?.minBudgetPerCreator || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Escrow Notice Box */}
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs leading-relaxed text-foreground">
+                    <strong className="block font-bold text-amber-700 dark:text-amber-400 mb-0.5">
+                      Pravixo Escrow Payment Required Before Work Starts
+                    </strong>
+                    Brand ko pehle payment <strong>Pravixo Escrow</strong> me deposit karna hoga. Payment safe rahega aur creator ko release tabhi hoga jab aap unke uploaded deliverables ko review karke approve karenge.
+                  </div>
+                </div>
+                <div className="text-[11px] text-muted-foreground bg-background/60 rounded-xl p-2.5 border border-border/50 flex items-center justify-between">
+                  <span>🔒 100% Refundable if deliverables are not delivered.</span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">Razorpay Verified</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2.5 pt-2">
+                {/* Pay Button */}
+                <Button
+                  className="w-full h-11 rounded-2xl gradient-sunset hover:opacity-95 text-white font-bold text-sm shadow-glow flex items-center justify-center gap-2 border-0 cursor-pointer"
+                  disabled={acceptingAndOpeningPayment}
+                  onClick={async () => {
+                    const req = acceptPaymentModalReq;
+                    if (!req?._id) return;
+                    setAcceptingAndOpeningPayment(true);
+                    try {
+                      // 1. Accept the connection request first if still pending
+                      if (req.status === "pending") {
+                        await acceptConnection({ connectionId: req._id });
+                      }
+                      setRequestsRefreshKey((k) => k + 1);
+
+                      // 2. Open Razorpay Escrow payment gateway
+                      toast.info("Opening Razorpay payment gateway...");
+                      await openCollaborationPayment(req._id, profile || user);
+                      setAcceptPaymentModalReq(null);
+                      setRequestsRefreshKey((k) => k + 1);
+                    } catch (err) {
+                      console.error("Accept & Pay error:", err);
+                      toast.error(err?.response?.data?.message || err?.message || "Failed to process payment");
+                    } finally {
+                      setAcceptingAndOpeningPayment(false);
+                    }
+                  }}
+                >
+                  {acceptingAndOpeningPayment ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Processing Escrow Payment...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4" /> Click to Pay & Start Collaboration
+                    </>
+                  )}
+                </Button>
+
+                {/* Contact Pravixo Team Button */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-10 rounded-2xl border-border hover:bg-secondary/60 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={openingSupportChat}
+                  onClick={async () => {
+                    setOpeningSupportChat(true);
+                    try {
+                      const res = await api.post("/api/conversations", {
+                        support: true,
+                        contactTeam: true,
+                        initialMessage: `Hi Pravixo Team, I am discussing the collaboration for "${acceptPaymentModalReq.campaign?.title || "Campaign"}" with ${acceptPaymentModalReq.creatorProfile?.fullName || "Creator"} and would like assistance regarding the campaign & payment terms.`,
+                      });
+                      const convId = res.data?.data || res.data?.conversation?._id;
+                      setAcceptPaymentModalReq(null);
+                      if (convId) {
+                        navigate(`/messages?conversationId=${convId}`);
+                      } else {
+                        navigate("/messages");
+                      }
+                      toast.success("Connecting with Pravixo Support Team...");
+                    } catch (err) {
+                      console.error("Support chat error:", err);
+                      navigate("/messages");
+                    } finally {
+                      setOpeningSupportChat(false);
+                    }
+                  }}
+                >
+                  {openingSupportChat ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Opening Chat...
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle className="h-3.5 w-3.5 text-primary" /> Contact Pravixo Team / Ask Queries
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

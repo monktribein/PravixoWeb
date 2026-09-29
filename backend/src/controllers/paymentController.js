@@ -1687,12 +1687,27 @@ export const initiateCollaborationPayment = async (req, res) => {
       }
     }
 
-    // Collaboration must be in AMOUNT_AGREED status
+    // Auto-derive and set AMOUNT_AGREED status if not set yet
     if (connection.collaborationStatus !== "AMOUNT_AGREED") {
-      return res.status(400).json({
-        success: false,
-        message: "Payment can only be initiated after collaboration amount is agreed.",
-      });
+      let finalBrandTotal = connection.proposedAmount || connection.brandTotal || 0;
+      if (!finalBrandTotal && connection.campaignId) {
+        const camp = await Campaign.findById(connection.campaignId).lean();
+        finalBrandTotal = Number(camp?.minBudgetPerCreator) || Number(camp?.totalBudget) || 0;
+      }
+      if (finalBrandTotal > 0) {
+        const fee = Math.round(finalBrandTotal * 0.20);
+        connection.brandTotal = finalBrandTotal;
+        connection.pravixoFee = fee;
+        connection.creatorAmount = finalBrandTotal - fee;
+        connection.collaborationStatus = "AMOUNT_AGREED";
+        connection.agreedAt = Date.now();
+        await connection.save();
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Payment can only be initiated after collaboration amount is agreed.",
+        });
+      }
     }
 
     // Prevent duplicate payment
@@ -1704,9 +1719,20 @@ export const initiateCollaborationPayment = async (req, res) => {
     }
 
     // Strict backend calculations from stored data (never trust frontend)
-    const creatorAmount = connection.creatorAmount;
-    const pravixoFee = connection.pravixoFee || Math.round(creatorAmount * 0.20);
-    const brandTotal = connection.brandTotal || (creatorAmount + pravixoFee);
+    let creatorAmount = connection.creatorAmount;
+    let pravixoFee = connection.pravixoFee || Math.round((connection.brandTotal || 0) * 0.20);
+    let brandTotal = connection.brandTotal || (creatorAmount + pravixoFee);
+
+    if ((!brandTotal || brandTotal <= 0) && connection.campaignId) {
+      const camp = await Campaign.findById(connection.campaignId).lean();
+      brandTotal = Number(camp?.minBudgetPerCreator) || Number(camp?.totalBudget) || 0;
+      pravixoFee = Math.round(brandTotal * 0.20);
+      creatorAmount = brandTotal - pravixoFee;
+      connection.brandTotal = brandTotal;
+      connection.pravixoFee = pravixoFee;
+      connection.creatorAmount = creatorAmount;
+      await connection.save();
+    }
 
     if (!brandTotal || brandTotal <= 0) {
       return res.status(400).json({

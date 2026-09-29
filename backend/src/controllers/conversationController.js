@@ -39,6 +39,18 @@ export const startConversation = async (req, res) => {
       convType = "admin_creator";
     } else if (admin && brand) {
       convType = "admin_brand";
+    } else if (req.body.support || req.body.contactTeam) {
+      const adminProf = await Profile.findOne({ role: "admin" }).select("_id").lean();
+      if (adminProf) {
+        admin = adminProf._id;
+        if (req.user?.role === "brand" || brand) {
+          brand = brand || req.user?._id;
+          convType = "admin_brand";
+        } else {
+          creator = creator || req.user?._id;
+          convType = "admin_creator";
+        }
+      }
     }
 
     const senderId = req.user?._id || admin || brand || creator;
