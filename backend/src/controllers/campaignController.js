@@ -461,10 +461,12 @@ export const joinCampaignRequest = async (req, res) => {
       }
     }
 
-    // Determine initial proposed amount
-    const initialRate = numProposedRate > 0
+    // Determine initial proposed amount (Brand Total Budget)
+    const brandTotal = numProposedRate > 0
       ? numProposedRate
       : (matchedTier?.cashAmount || campaign.minBudgetPerCreator || 0);
+    const pravixoFee = Math.round(brandTotal * 0.20);
+    const creatorAmount = brandTotal - pravixoFee;
 
     // Create Connection / Request record
     const connection = await Connection.create({
@@ -473,11 +475,11 @@ export const joinCampaignRequest = async (req, res) => {
       campaignId: campaign._id,
       pitch: pitch || `Hi! I would love to collaborate on your "${campaign.title}" campaign.`,
       appliedTier: matchedTier,
-      proposedAmount: initialRate,
+      proposedAmount: brandTotal,
       proposedBy: creatorId,
-      creatorAmount: initialRate,
-      pravixoFee: Math.round(initialRate * 0.20),
-      brandTotal: initialRate + Math.round(initialRate * 0.20),
+      creatorAmount,
+      pravixoFee,
+      brandTotal,
       status: "pending",
       creatorNotificationSeen: false,
       createdAt: Date.now(),

@@ -95,19 +95,91 @@ export default function Connections() {
   // ACCEPT CONNECTION
   // --------------------------------------------------
 
+  const openCollaborationPayment = async (connectionId) => {
+    try {
+      const res = await api.post(`/api/payments/collaboration/${connectionId}/order`);
+      const orderData = res.data?.data || res.data;
+      if (!orderData || !orderData.orderId) {
+        throw new Error("Failed to generate payment order.");
+      }
+
+      return new Promise((resolve, reject) => {
+        const options = {
+          key: orderData.key || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
+          amount: orderData.amount,
+          currency: orderData.currency || "INR",
+          name: "Pravixo Platform",
+          description: `Escrow Payment for Collaboration`,
+          order_id: orderData.orderId,
+          handler: async (response) => {
+            try {
+              await api.post(`/api/payments/collaboration/${connectionId}/verify`, {
+                gatewayOrderId: response.razorpay_order_id,
+                gatewayPaymentId: response.razorpay_payment_id,
+                gatewaySignature: response.razorpay_signature,
+              });
+              toast.success("Payment successful! Funds secured with Pravixo.");
+              resolve(true);
+            } catch (verifyErr) {
+              console.error("Verification error:", verifyErr);
+              toast.error(verifyErr?.response?.data?.message || "Payment verification failed.");
+              reject(verifyErr);
+            }
+          },
+          prefill: {
+            name: profile?.fullName || "",
+            email: profile?.email || "",
+            contact: profile?.phone || "",
+          },
+          theme: {
+            color: "#EC4899",
+          },
+          modal: {
+            ondismiss: () => {
+              toast.info("Payment window closed. You can pay anytime from the Chat header.");
+              resolve(false);
+            },
+          },
+        };
+
+        if (!window.Razorpay) {
+          const script = document.createElement("script");
+          script.src = "https://checkout.razorpay.com/v1/checkout.js";
+          script.onload = () => {
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+          };
+          document.body.appendChild(script);
+        } else {
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+        }
+      });
+    } catch (err) {
+      console.error("Payment error:", err);
+      toast.error(err?.response?.data?.message || err?.message || "Payment initiation failed.");
+    }
+  };
+
   const handleAccept = async (connectionId, partnerName) => {
     try {
       setActionLoading(connectionId);
-      await api.patch(`/connections/${connectionId}/accept`);
-      toast.success(`Connected with ${partnerName}!`);
+      const res = await api.patch(`/connections/${connectionId}/accept`);
+      const convId = res.data?.data?.conversationId || null;
+      toast.success(`Approved connection with ${partnerName}!`);
 
       setConnections((prev) =>
         prev.map((connection) =>
           connection._id === connectionId
-            ? { ...connection, status: "accepted" }
+            ? { ...connection, status: "accepted", conversationId: convId || connection.conversationId }
             : connection
         )
       );
+
+      if (profile?.role === "brand") {
+        toast.info("Opening Pravixo Escrow payment gateway...");
+        await openCollaborationPayment(connectionId);
+      }
     } catch (error) {
       console.error("Accept connection error:", error);
       toast.error(error?.response?.data?.message || "Failed to accept connection request.");
@@ -455,7 +527,15 @@ export default function Connections() {
                         <Button
                           size="sm"
                           className="h-8 w-full rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground hover:opacity-95 sm:w-auto"
-                          onClick={() => navigate("/messages")}
+                          onClick={() => {
+                            if (connection.conversationId) {
+                              navigate(`/messages?conversationId=${connection.conversationId}`);
+                            } else if (partner?._id) {
+                              navigate(`/messages?recipientId=${partner._id}`);
+                            } else {
+                              navigate("/messages");
+                            }
+                          }}
                         >
                           <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
                           Chat

@@ -1640,10 +1640,10 @@ export default function Messages() {
                     const hasPendingProposal = conn.proposedAmount > 0 && conn.collaborationStatus === "NEGOTIATING";
                     const isProposedByMe = String(conn.proposedBy) === String(profile._id);
 
-                    // Calculations
-                    const displayCreatorAmount = isAgreed ? conn.creatorAmount : (conn.proposedAmount || 0);
-                    const displayFee = isAgreed ? conn.pravixoFee : Math.round(displayCreatorAmount * 0.20);
-                    const displayBrandTotal = isAgreed ? conn.brandTotal : (displayCreatorAmount + displayFee);
+                    // Calculations (Brand pays total amount, Pravixo cuts 20% fee, Creator receives 80%)
+                    const displayBrandTotal = isAgreed ? conn.brandTotal : (conn.proposedAmount || 0);
+                    const displayFee = isAgreed ? conn.pravixoFee : Math.round(displayBrandTotal * 0.20);
+                    const displayCreatorAmount = isAgreed ? conn.creatorAmount : (displayBrandTotal - displayFee);
 
                     return (
                       <div>
@@ -2065,21 +2065,25 @@ export default function Messages() {
                                         <IndianRupee className="h-3.5 w-3.5 text-primary" />
                                         <span>
                                           {isProposedByMe
-                                            ? `You proposed a creator payment of ₹${conn.proposedAmount?.toLocaleString()}`
-                                            : `${otherProfile?.fullName || "Partner"} proposed a creator payment of ₹${conn.proposedAmount?.toLocaleString()}`}
+                                            ? `You proposed a total budget of ₹${conn.proposedAmount?.toLocaleString()}`
+                                            : `${otherProfile?.fullName || "Partner"} proposed a total budget of ₹${conn.proposedAmount?.toLocaleString()}`}
                                         </span>
                                       </div>
                                       {profile?.role === "creator" ? (
                                         <div className="flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
-                                          <span><strong>You will receive:</strong> ₹{displayCreatorAmount?.toLocaleString()}</span>
+                                          <span><strong>Brand pays:</strong> ₹{displayBrandTotal?.toLocaleString()}</span>
+                                          <span>•</span>
+                                          <span><strong>Pravixo fee (20%):</strong> ₹{displayFee?.toLocaleString()}</span>
+                                          <span>•</span>
+                                          <span className="text-emerald-600 font-semibold"><strong>You will receive:</strong> ₹{displayCreatorAmount?.toLocaleString()}</span>
                                         </div>
                                       ) : (
                                         <div className="flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
-                                          <span><strong>Creator receives:</strong> ₹{displayCreatorAmount?.toLocaleString()}</span>
+                                          <span><strong>Brand total:</strong> ₹{displayBrandTotal?.toLocaleString()}</span>
                                           <span>•</span>
-                                          <span><strong>Fee (20%):</strong> ₹{displayFee?.toLocaleString()}</span>
+                                          <span><strong>Pravixo fee (20%):</strong> ₹{displayFee?.toLocaleString()}</span>
                                           <span>•</span>
-                                          <span><strong>Brand pays:</strong> ₹{displayBrandTotal?.toLocaleString()}</span>
+                                          <span className="text-emerald-600 font-semibold"><strong>Creator receives:</strong> ₹{displayCreatorAmount?.toLocaleString()}</span>
                                         </div>
                                       )}
                                     </div>

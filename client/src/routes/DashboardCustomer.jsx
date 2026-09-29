@@ -617,6 +617,72 @@ const trackAnalytics = async () => {};
 const checkSubscriptionStatus = async () => {};
 const upgradeSubscription = async ({ profileId, packageId, offerId }) => api.post(`/subscriptions`, { profileId, packageId, offerId });
 
+const openCollaborationPayment = async (connectionId, userProfile) => {
+  try {
+    const res = await api.post(`/api/payments/collaboration/${connectionId}/order`);
+    const orderData = res.data?.data || res.data;
+    if (!orderData || !orderData.orderId) {
+      throw new Error("Failed to generate payment order.");
+    }
+
+    return new Promise((resolve, reject) => {
+      const options = {
+        key: orderData.key || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
+        amount: orderData.amount,
+        currency: orderData.currency || "INR",
+        name: "Pravixo Platform",
+        description: `Escrow Payment for Collaboration`,
+        order_id: orderData.orderId,
+        handler: async (response) => {
+          try {
+            await api.post(`/api/payments/collaboration/${connectionId}/verify`, {
+              gatewayOrderId: response.razorpay_order_id,
+              gatewayPaymentId: response.razorpay_payment_id,
+              gatewaySignature: response.razorpay_signature,
+            });
+            toast.success("Payment successful! Funds secured with Pravixo.");
+            resolve(true);
+          } catch (verifyErr) {
+            console.error("Verification error:", verifyErr);
+            toast.error(verifyErr?.response?.data?.message || "Payment verification failed.");
+            reject(verifyErr);
+          }
+        },
+        prefill: {
+          name: userProfile?.fullName || "",
+          email: userProfile?.email || "",
+          contact: userProfile?.phone || "",
+        },
+        theme: {
+          color: "#EC4899",
+        },
+        modal: {
+          ondismiss: () => {
+            toast.info("Payment window closed. You can pay anytime from the Chat header.");
+            resolve(false);
+          },
+        },
+      };
+
+      if (!window.Razorpay) {
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.onload = () => {
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+        };
+        document.body.appendChild(script);
+      } else {
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      }
+    });
+  } catch (err) {
+    console.error("Payment error:", err);
+    toast.error(err?.response?.data?.message || err?.message || "Payment initiation failed.");
+  }
+};
+
   // State variables for profile form
   const [fullName, setFullName] = useState("");
   const [handle, setHandle] = useState("");
@@ -5187,8 +5253,10 @@ const [submittingVerification, setSubmittingVerification] =
                         setProcessingRequestId(req._id);
                         try {
                           await acceptConnection({ connectionId: req._id });
-                          toast.success(`Approved request from ${req.creatorProfile?.fullName || "Creator"}!`);
+                          toast.success(`Approved request from ${req.creatorProfile?.fullName || "Creator"}! Opening payment gateway...`);
                           setRequestsRefreshKey((k) => k + 1);
+                          // Trigger direct payment gateway for brand to fund escrow to Pravixo
+                          await openCollaborationPayment(req._id, profile);
                         } catch (err) {
                           toast.error(err?.response?.data?.message || "Failed to approve request");
                         } finally {
@@ -5196,7 +5264,7 @@ const [submittingVerification, setSubmittingVerification] =
                         }
                       }}
                     >
-                      <Check className="h-3.5 w-3.5" /> Approve
+                      <Check className="h-3.5 w-3.5" /> Approve & Pay Escrow
                     </Button>
                     <Button
                       size="sm"
@@ -5310,12 +5378,16 @@ const [submittingVerification, setSubmittingVerification] =
               {/* Action Buttons */}
               <div className="flex gap-2.5 pt-2 border-t border-border/40">
                 <Link
-                  to={`/influencer/${selectedCreatorForDetails.creatorId}`}
+                  to={
+                    selectedCreatorForDetails.creatorProfile?.handle
+                      ? `/c/${selectedCreatorForDetails.creatorProfile.handle.replace("@", "")}`
+                      : `/influencer/${selectedCreatorForDetails.creatorId}`
+                  }
                   target="_blank"
                   className="flex-1"
                 >
                   <Button variant="outline" size="sm" className="w-full rounded-full text-xs h-9 font-semibold">
-                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> View Full Profile
+                    <Sparkles className="h-3.5 w-3.5 mr-1 text-primary" /> Media Kit
                   </Button>
                 </Link>
                 <Button
@@ -5344,12 +5416,16 @@ const [submittingVerification, setSubmittingVerification] =
                   disabled={processingRequestId === selectedCreatorForDetails._id}
                   className="flex-1 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white border-0 text-xs h-9 font-semibold"
                   onClick={async () => {
-                    setProcessingRequestId(selectedCreatorForDetails._id);
+                    const connId = selectedCreatorForDetails._id;
+                    const creatorName = selectedCreatorForDetails.creatorProfile?.fullName || "Creator";
+                    setProcessingRequestId(connId);
                     try {
-                      await acceptConnection({ connectionId: selectedCreatorForDetails._id });
-                      toast.success(`Approved request from ${selectedCreatorForDetails.creatorProfile?.fullName || "Creator"}!`);
+                      await acceptConnection({ connectionId: connId });
+                      toast.success(`Approved request from ${creatorName}! Opening payment gateway...`);
                       setSelectedCreatorForDetails(null);
                       setRequestsRefreshKey((k) => k + 1);
+                      // Trigger direct payment gateway for brand to fund escrow to Pravixo
+                      await openCollaborationPayment(connId, profile);
                     } catch (err) {
                       toast.error(err?.response?.data?.message || "Failed to approve request");
                     } finally {
@@ -5357,7 +5433,7 @@ const [submittingVerification, setSubmittingVerification] =
                     }
                   }}
                 >
-                  <Check className="h-4 w-4 mr-1" /> Approve
+                  <Check className="h-4 w-4 mr-1" /> Approve & Pay Escrow
                 </Button>
               </div>
             </div>

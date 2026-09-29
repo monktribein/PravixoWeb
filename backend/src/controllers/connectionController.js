@@ -202,6 +202,18 @@ export const acceptRequest = async (req, res) => {
     connection.creatorNotificationSeen = false;
     connection.updatedAt = Date.now();
 
+    // Lock in the agreed amount for payment on approval
+    const finalBrandTotal = connection.proposedAmount || connection.brandTotal || (campaign?.minBudgetPerCreator || 0);
+    if (finalBrandTotal > 0) {
+      const pravixoFee = Math.round(finalBrandTotal * 0.20);
+      const creatorAmount = finalBrandTotal - pravixoFee;
+      connection.brandTotal = finalBrandTotal;
+      connection.pravixoFee = pravixoFee;
+      connection.creatorAmount = creatorAmount;
+      connection.collaborationStatus = "AMOUNT_AGREED";
+      connection.agreedAt = Date.now();
+    }
+
     // Task 5: Derive deliverablesTracking snapshot from Campaign
     if (campaign && campaign.deliverables && (!connection.deliverablesTracking || connection.deliverablesTracking.length === 0)) {
       const delivs = [];
@@ -657,9 +669,25 @@ export const getAllConnections = async (req, res) => {
             : connection.brandId
         ).lean();
 
+        let conversationId = null;
+        if (connection.status === "accepted") {
+          const convFilter = {
+            creatorId: connection.creatorId,
+            brandId: connection.brandId,
+          };
+          if (connection.campaignId) {
+            convFilter.campaignId = connection.campaignId;
+          } else {
+            convFilter.campaignId = null;
+          }
+          const conversation = await Conversation.findOne(convFilter).select("_id").lean();
+          conversationId = conversation?._id || null;
+        }
+
         return {
           ...connection,
           otherProfile,
+          conversationId,
         };
       })
     );
