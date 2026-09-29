@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   CheckCircle2,
   User,
+  Briefcase,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeProvider";
@@ -309,19 +310,30 @@ export function SiteNavbar() {
                         <span>Overview Dashboard</span>
                       </Link>
 
-                      <Link
-                        to={`${dashboardBaseUrl}?tab=dashboard`}
-                        onClick={() => {
-                          setIsUserDropdownOpen(false);
-                          setTimeout(() => {
-                            window.scrollTo({ top: 400, behavior: "smooth" });
-                          }, 100);
-                        }}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
-                      >
-                        <User className="h-4 w-4 text-purple-500" />
-                        <span>Edit Profile</span>
-                      </Link>
+                      {profile?.role === "creator" ? (
+                        <Link
+                          to="/collaborations"
+                          onClick={() => setIsUserDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors font-semibold"
+                        >
+                          <Briefcase className="h-4 w-4 text-purple-500" />
+                          <span>My Work</span>
+                        </Link>
+                      ) : (
+                        <Link
+                          to={`${dashboardBaseUrl}?tab=dashboard`}
+                          onClick={() => {
+                            setIsUserDropdownOpen(false);
+                            setTimeout(() => {
+                              window.scrollTo({ top: 400, behavior: "smooth" });
+                            }, 100);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                        >
+                          <User className="h-4 w-4 text-purple-500" />
+                          <span>Edit Profile</span>
+                        </Link>
+                      )}
 
                       <Link
                         to={`${dashboardBaseUrl}?tab=subscription`}
@@ -350,14 +362,16 @@ export function SiteNavbar() {
                         <span>Refer & Earn (5% - 10%)</span>
                       </Link>
 
-                      <Link
-                        to="/collaborations"
-                        onClick={() => setIsUserDropdownOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
-                      >
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        <span>Collaborations & Deliverables</span>
-                      </Link>
+                      {profile?.role === "brand" && (
+                        <Link
+                          to="/collaborations"
+                          onClick={() => setIsUserDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                        >
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          <span>Collaborations</span>
+                        </Link>
+                      )}
 
                       {profile?.role === "creator" && (
                         <Link

@@ -579,13 +579,35 @@ export const getRequestsForCreator = async (req, res) => {
   try {
     const { creatorId } = req.params;
 
-    const requests = await Connection.find({ creatorId }).lean();
+    const requests = await Connection.find({ creatorId })
+      .populate("campaignId")
+      .populate("paymentId")
+      .lean();
 
     const data = await Promise.all(
-      requests.map(async (request) => ({
-        ...request,
-        brandProfile: await Profile.findById(request.brandId).lean(),
-      }))
+      requests.map(async (request) => {
+        const brandProfile = await Profile.findById(request.brandId).lean();
+        const campaign = request.campaignId && typeof request.campaignId === "object"
+          ? request.campaignId
+          : request.campaignId ? await Campaign.findById(request.campaignId).lean() : null;
+
+        let conversationId = null;
+        if (request.status === "accepted") {
+          const conv = await Conversation.findOne({
+            creatorId: request.creatorId,
+            brandId: request.brandId,
+            ...(request.campaignId ? { campaignId: request.campaignId._id || request.campaignId } : {}),
+          }).lean();
+          conversationId = conv?._id || null;
+        }
+
+        return {
+          ...request,
+          brandProfile,
+          campaign,
+          conversationId,
+        };
+      })
     );
 
     res.json({ success: true, data });

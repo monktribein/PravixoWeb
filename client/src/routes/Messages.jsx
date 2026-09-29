@@ -2628,24 +2628,7 @@ export default function Messages() {
                     </Button>
                   )}
 
-                  {/* Creator Direct Work Submission Action (For verified deliverables) */}
-                  {profile?.role === "creator" && activeConversation.connection && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setDeliverableFile(null);
-                        setDeliverableFilePreview(null);
-                        setDeliverableCaption("");
-                        setShareWorkModalOpen(true);
-                      }}
-                      className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 shrink-0"
-                      title="Submit Deliverable (Reel/Post)"
-                    >
-                      <Film className="h-4 w-4" />
-                    </Button>
-                  )}
+
 
                   {isRecordingVoice ? (
                     /* LIVE RECORDING STATE CONTROLS */

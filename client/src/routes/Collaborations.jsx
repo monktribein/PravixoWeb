@@ -6,6 +6,8 @@ import Button from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Badge } from "../components/ui/Badge";
 import { Textarea } from "../components/ui/TextArea";
+import { Label } from "../components/ui/Label";
+import { cn } from "../lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +39,7 @@ import {
   AlertCircle,
   ArrowRight,
   Filter,
+  Upload,
 } from "lucide-react";
 
 export default function CollaborationsPage() {
@@ -57,6 +60,14 @@ export default function CollaborationsPage() {
   const [reviewingSubmissionId, setReviewingSubmissionId] = useState(null);
   const [rejectingSubmission, setRejectingSubmission] = useState(null);
   const [submissionRejectionReason, setSubmissionRejectionReason] = useState("");
+
+  // Creator Upload / Submit Modal states
+  const [selectedCollabForUpload, setSelectedCollabForUpload] = useState(null);
+  const [uploadDeliverableType, setUploadDeliverableType] = useState("");
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadFilePreview, setUploadFilePreview] = useState(null);
+  const [uploadCaption, setUploadCaption] = useState("");
+  const [submittingUpload, setSubmittingUpload] = useState(false);
 
   const userRole = profile?.role || "brand";
 
@@ -442,16 +453,28 @@ export default function CollaborationsPage() {
                       </div>
                     </div>
 
-                    <Badge
-                      variant="secondary"
-                      className={`text-[9px] px-2.5 py-0.5 rounded-full font-bold uppercase shrink-0 border ${
-                        isPaid
-                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                          : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                      }`}
-                    >
-                      {isPaid ? "✓ Paid (Escrow)" : "⏳ Payment Pending"}
-                    </Badge>
+                    {/* Payment & Payout Badges */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <Badge
+                        variant="secondary"
+                        className={`text-[9px] px-2.5 py-0.5 rounded-full font-bold uppercase shrink-0 border ${
+                          isPaid
+                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                            : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                        }`}
+                      >
+                        {isPaid ? "✓ Paid (Escrow Secured)" : "⏳ Payment Pending"}
+                      </Badge>
+                      {collab.paymentReleaseStatus === "RELEASED" ? (
+                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                          💰 Payout Released
+                        </span>
+                      ) : collab.allDeliverablesCompleted ? (
+                        <span className="text-[9px] font-bold text-indigo-600 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
+                          ⏳ Review / 72h Hold
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
                   {/* Campaign & Budget Box */}
@@ -462,7 +485,7 @@ export default function CollaborationsPage() {
                           {campaign.title}
                         </span>
                         <span className="font-extrabold text-primary font-display whitespace-nowrap">
-                          ₹{Number(collab.agreedAmount || campaign.totalBudget || 0).toLocaleString("en-IN")}
+                          ₹{Number(collab.agreedAmount || collab.creatorAmount || campaign.totalBudget || 0).toLocaleString("en-IN")}
                         </span>
                       </div>
                       {campaign.category && (
@@ -557,13 +580,41 @@ export default function CollaborationsPage() {
                     )}
                   </div>
 
-                  <Button
-                    size="sm"
-                    className="h-8 rounded-full gradient-sunset text-white text-xs font-bold px-3.5 shadow-sm"
-                    onClick={() => setSelectedCollabForSubmissions(collab)}
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" /> View Deliverables
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    {/* If creator and payment is paid, show Submit Work button */}
+                    {userRole === "creator" && isPaid && !collab.allDeliverablesCompleted && (
+                      <Button
+                        size="sm"
+                        className="h-8 rounded-full gradient-sunset text-white text-xs font-bold px-3.5 shadow-sm flex items-center gap-1"
+                        onClick={() => {
+                          setSelectedCollabForUpload(collab);
+                          const firstIncomplete = collab.deliverablesTracking?.find(
+                            (d) => (d.completedQuantity || 0) < d.requiredQuantity
+                          );
+                          setUploadDeliverableType(
+                            firstIncomplete ? firstIncomplete.type : (deliverables?.posts ? "POST" : deliverables?.reels ? "REEL" : "POST")
+                          );
+                          setUploadFile(null);
+                          setUploadFilePreview(null);
+                          setUploadCaption("");
+                        }}
+                      >
+                        <Upload className="h-3.5 w-3.5" /> Submit Work
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant={userRole === "creator" && isPaid && !collab.allDeliverablesCompleted ? "outline" : "default"}
+                      className={cn(
+                        "h-8 rounded-full text-xs font-bold px-3.5 shadow-sm",
+                        !(userRole === "creator" && isPaid && !collab.allDeliverablesCompleted) && "gradient-sunset text-white"
+                      )}
+                      onClick={() => setSelectedCollabForSubmissions(collab)}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" /> {userRole === "creator" ? "View Status" : "View Deliverables"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
@@ -795,6 +846,230 @@ export default function CollaborationsPage() {
               className="rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4"
             >
               {reviewingSubmissionId === rejectingSubmission?._id ? "Sending..." : "Submit Rework Request"}
+            </Button>
+      {/* CREATOR SUBMIT DELIVERABLE DIALOG */}
+      <Dialog
+        open={Boolean(selectedCollabForUpload)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedCollabForUpload(null);
+            setUploadFile(null);
+            setUploadFilePreview(null);
+            setUploadCaption("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px] rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg font-bold flex items-center gap-2">
+              <Upload className="h-5 w-5 text-primary" /> Submit Deliverable Work
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Upload your completed work for "{selectedCollabForUpload?.campaign?.title || "Campaign"}". The brand will review your submitted content.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedCollabForUpload && (
+            <div className="space-y-4 py-2">
+              {/* Deliverable Type Select */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-foreground">
+                  Select Deliverable Type <span className="text-red-500">*</span>
+                </Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {selectedCollabForUpload.deliverablesTracking && selectedCollabForUpload.deliverablesTracking.length > 0 ? (
+                    selectedCollabForUpload.deliverablesTracking.map((deliv) => {
+                      const isSelected = uploadDeliverableType === deliv.type;
+                      const isFulfilled = (deliv.completedQuantity || 0) >= deliv.requiredQuantity;
+                      const typeLabels = {
+                        REEL: "Reel",
+                        POST: "Post",
+                        STORY: "Story",
+                        VIDEO: "Video",
+                      };
+                      return (
+                        <button
+                          key={deliv.type}
+                          type="button"
+                          disabled={isFulfilled}
+                          onClick={() => setUploadDeliverableType(deliv.type)}
+                          className={cn(
+                            "flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs transition font-semibold cursor-pointer",
+                            isSelected
+                              ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary"
+                              : isFulfilled
+                              ? "border-border/40 bg-muted/20 text-muted-foreground opacity-50 cursor-not-allowed"
+                              : "border-border bg-card hover:bg-secondary/60 text-foreground"
+                          )}
+                        >
+                          <span>{typeLabels[deliv.type] || deliv.type}</span>
+                          <span className="text-[10px] font-normal opacity-80 mt-0.5">
+                            {deliv.completedQuantity || 0}/{deliv.requiredQuantity}
+                          </span>
+                          {isFulfilled && (
+                            <span className="text-[9px] font-bold text-emerald-600">Done ✓</span>
+                          )}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    ["POST", "REEL", "STORY", "VIDEO"].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setUploadDeliverableType(t)}
+                        className={cn(
+                          "flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs transition font-semibold cursor-pointer",
+                          uploadDeliverableType === t
+                            ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary"
+                            : "border-border bg-card hover:bg-secondary/60 text-foreground"
+                        )}
+                      >
+                        <span>{t}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* File Upload Area */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-foreground">
+                  Upload Deliverable File (Video or Image) <span className="text-red-500">*</span>
+                </Label>
+                <div className="rounded-2xl border-2 border-dashed border-border/80 bg-secondary/20 p-4 text-center hover:border-primary/50 transition">
+                  {uploadFilePreview ? (
+                    <div className="space-y-3">
+                      {uploadFile?.type?.startsWith("video") ? (
+                        <video
+                          src={uploadFilePreview}
+                          controls
+                          className="max-h-48 mx-auto rounded-xl shadow-sm border border-border"
+                        />
+                      ) : (
+                        <img
+                          src={uploadFilePreview}
+                          alt="Preview"
+                          className="max-h-48 mx-auto rounded-xl object-contain shadow-sm border border-border"
+                        />
+                      )}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
+                        <span className="truncate max-w-[260px] font-medium text-foreground">
+                          {uploadFile?.name}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-full"
+                          onClick={() => {
+                            setUploadFile(null);
+                            setUploadFilePreview(null);
+                          }}
+                        >
+                          Change File
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center cursor-pointer py-4">
+                      <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-2 shadow-sm">
+                        <Upload className="h-6 w-6" />
+                      </div>
+                      <span className="text-xs font-bold text-foreground">Click or drag file to upload</span>
+                      <span className="text-[11px] text-muted-foreground mt-0.5">
+                        MP4, MOV, WebM, JPG, PNG, WebP up to 50MB
+                      </span>
+                      <input
+                        type="file"
+                        accept="video/*,image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            if (file.size > 50 * 1024 * 1024) {
+                              toast.error("File exceeds 50MB maximum size limit.");
+                              return;
+                            }
+                            setUploadFile(file);
+                            setUploadFilePreview(URL.createObjectURL(file));
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Optional Caption / Description */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-foreground">
+                  Caption / Description / Submission Notes (Optional)
+                </Label>
+                <Textarea
+                  placeholder="e.g. Here is the first draft of the post/reel focusing on the product..."
+                  value={uploadCaption}
+                  onChange={(e) => setUploadCaption(e.target.value)}
+                  className="text-xs min-h-[70px] rounded-xl resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2 sm:justify-end pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full text-xs"
+              onClick={() => {
+                setSelectedCollabForUpload(null);
+                setUploadFile(null);
+                setUploadFilePreview(null);
+                setUploadCaption("");
+              }}
+              disabled={submittingUpload}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-full gradient-sunset text-white font-bold text-xs px-6 shadow-glow"
+              disabled={!uploadDeliverableType || !uploadFile || submittingUpload}
+              onClick={async () => {
+                if (!selectedCollabForUpload || !uploadDeliverableType || !uploadFile) {
+                  toast.error("Please select deliverable type and upload a file.");
+                  return;
+                }
+
+                setSubmittingUpload(true);
+                try {
+                  const formData = new FormData();
+                  formData.append("deliverableType", uploadDeliverableType);
+                  formData.append("file", uploadFile);
+                  if (uploadCaption) {
+                    formData.append("caption", uploadCaption);
+                  }
+
+                  await api.post(`/submissions/${selectedCollabForUpload._id}/submit`, formData, {
+                    headers: {
+                      "Content-Type": "multipart/form-data",
+                    },
+                  });
+
+                  toast.success("Deliverable submitted successfully! Brand has been notified.");
+                  setSelectedCollabForUpload(null);
+                  setUploadFile(null);
+                  setUploadFilePreview(null);
+                  setUploadCaption("");
+                  setRefreshKey((k) => k + 1);
+                } catch (err) {
+                  console.error("Submission error:", err);
+                  toast.error(err?.response?.data?.message || err?.message || "Failed to submit deliverable.");
+                } finally {
+                  setSubmittingUpload(false);
+                }
+              }}
+            >
+              {submittingUpload ? "Submitting Work..." : "Submit Deliverable"}
             </Button>
           </DialogFooter>
         </DialogContent>
