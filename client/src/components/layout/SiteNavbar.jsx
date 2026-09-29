@@ -15,6 +15,7 @@ import {
   Megaphone,
   LayoutDashboard,
   CheckCircle2,
+  User,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeProvider";
