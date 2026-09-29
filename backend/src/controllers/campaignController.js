@@ -204,7 +204,7 @@ export const createCampaign = async (req, res) => {
 // =====================================================
 export const getDiscoverableCampaigns = async (req, res) => {
   try {
-    const creatorId = req.user?._id;
+    const creatorId = req.user?._id || req.query.creatorId;
     const now = Date.now();
 
     // Only APPROVED and active campaigns with valid date range

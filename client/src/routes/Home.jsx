@@ -450,18 +450,28 @@ const FALLBACK_CAMPAIGNS = [
   },
 ];
 
-function HomeCampaignCard({ camp, onCardClick, onApplyClick }) {
+function HomeCampaignCard({ camp, isCreator, onCardClick, onApplyClick }) {
   const brandName = camp.brand?.fullName || camp.brand?.name || "Brand Partner";
   const brandAvatar = resolveImageUrl(camp.brand?.avatarUrl || camp.brand?.avatar) || getGenderAvatar(brandName, "male", "brand");
   const isBarter = Boolean(camp.isBarterAllowed);
-  const minBudget = Number(camp.creatorMinBudget || camp.budgetPerCreator || 0);
-  const maxBudget = Number(camp.creatorMaxBudget || camp.totalBudget || minBudget || 0);
+  const minBudget = Number(camp.creatorMinBudget || camp.minBudgetPerCreator || camp.budgetPerCreator || 0);
+  const maxBudget = Number(camp.creatorMaxBudget || camp.maxBudgetPerCreator || camp.totalBudget || minBudget || 0);
   const minFollowers = Number(camp.minFollowers || 0);
+
+  const isApplied = Boolean(camp.isRequested || camp.requestStatus === "pending");
+  const isAccepted = Boolean(camp.isParticipating || camp.requestStatus === "accepted");
 
   return (
     <div
       onClick={onCardClick}
-      className="group relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border/80 bg-card p-5 sm:p-6 shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-pink-500/40 hover:shadow-pink-500/10 cursor-pointer card-3d"
+      className={cn(
+        "group relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border bg-card p-5 sm:p-6 shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl cursor-pointer card-3d",
+        isAccepted
+          ? "border-emerald-500/40 shadow-emerald-500/10"
+          : isApplied
+          ? "border-amber-500/40 shadow-amber-500/10"
+          : "border-border/80 hover:border-pink-500/40 hover:shadow-pink-500/10"
+      )}
     >
       {/* Background soft ambient gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-pink-500/[0.03] via-transparent to-purple-500/[0.03] pointer-events-none" />
@@ -493,9 +503,21 @@ function HomeCampaignCard({ camp, onCardClick, onApplyClick }) {
             </div>
           </div>
 
-          <Badge className="rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20 text-[10px] font-bold shrink-0 px-2.5 py-0.5">
-            {camp.category || "General"}
-          </Badge>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isAccepted ? (
+              <Badge className="rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-bold shrink-0 px-2.5 py-0.5 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Joined
+              </Badge>
+            ) : isApplied ? (
+              <Badge className="rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-bold shrink-0 px-2.5 py-0.5 flex items-center gap-1">
+                <Clock className="h-3 w-3" /> Applied
+              </Badge>
+            ) : (
+              <Badge className="rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20 text-[10px] font-bold shrink-0 px-2.5 py-0.5">
+                {camp.category || "General"}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Title & Description */}
@@ -569,17 +591,45 @@ function HomeCampaignCard({ camp, onCardClick, onApplyClick }) {
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onApplyClick) onApplyClick();
-          }}
-          className="w-full inline-flex items-center justify-center gap-1.5 rounded-full gradient-sunset py-2 text-xs font-bold text-white shadow-glow transition-all hover:scale-[1.02] active:scale-95 group-hover:opacity-95 cursor-pointer"
-        >
-          <span>Find Campaigns</span>
-          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-        </button>
+        {isAccepted ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onApplyClick) onApplyClick();
+            }}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 py-2 text-xs font-bold transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            <span>Active Collaboration</span>
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+          </button>
+        ) : isApplied ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onApplyClick) onApplyClick();
+            }}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 py-2 text-xs font-bold transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            <span>Applied (Pending Brand Review)</span>
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onApplyClick) onApplyClick();
+            }}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-full gradient-sunset py-2 text-xs font-bold text-white shadow-glow transition-all hover:scale-[1.02] active:scale-95 group-hover:opacity-95 cursor-pointer"
+          >
+            <span>{isCreator ? "Apply to Campaign" : "Explore Campaign"}</span>
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -625,10 +675,11 @@ export default function Home() {
 
     const fetchLiveProfilesAndCampaigns = async () => {
       try {
+        const creatorId = profile?._id || user?.id || user?._id;
         const [creatorsRes, brandsRes, campaignsRes] = await Promise.all([
           api.get("/profiles", { params: { role: "creator" } }).catch(() => ({ data: [] })),
           api.get("/profiles", { params: { role: "brand" } }).catch(() => ({ data: [] })),
-          api.get("/campaigns/discover").catch(() => ({ data: [] })),
+          api.get("/campaigns/discover", { params: creatorId ? { creatorId } : {} }).catch(() => ({ data: [] })),
         ]);
 
         const creatorsData =
@@ -664,13 +715,13 @@ export default function Home() {
     };
 
     fetchLiveProfilesAndCampaigns();
-  }, []);
+  }, [profile?._id, user?.id, user?._id]);
 
   const featuredCampaigns = useMemo(() => {
     if (liveCampaigns && liveCampaigns.length > 0) {
-      return liveCampaigns.slice(0, 2);
+      return liveCampaigns.slice(0, 10);
     }
-    return FALLBACK_CAMPAIGNS.slice(0, 2);
+    return FALLBACK_CAMPAIGNS;
   }, [liveCampaigns]);
 
   const isTestOrDummyProfile = (p) => {
@@ -1267,6 +1318,7 @@ export default function Home() {
                 >
                   <HomeCampaignCard
                     camp={camp}
+                    isCreator={profile?.role === "creator"}
                     onCardClick={() => {
                       setSelectedCampaignDetail(camp);
                     }}
@@ -1700,22 +1752,45 @@ export default function Home() {
                 >
                   Close
                 </Button>
-                <Button
-                  className="w-full sm:w-auto rounded-full gradient-sunset text-white font-bold px-8 shadow-glow cursor-pointer"
-                  onClick={() => {
-                    const camp = selectedCampaignDetail;
-                    setSelectedCampaignDetail(null);
-                    if (!user) {
-                      setShowCreatorSignupModal(true);
-                    } else if (profile?.role === "creator") {
+                {selectedCampaignDetail.isParticipating || selectedCampaignDetail.requestStatus === "accepted" ? (
+                  <Button
+                    className="w-full sm:w-auto rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-8 shadow-glow cursor-pointer"
+                    onClick={() => {
+                      setSelectedCampaignDetail(null);
                       navigate("/dashboard/creator?tab=campaigns");
-                    } else {
-                      navigate("/dashboard/brand?tab=campaigns");
-                    }
-                  }}
-                >
-                  Apply to Campaign
-                </Button>
+                    }}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                    Active Collaboration
+                  </Button>
+                ) : selectedCampaignDetail.isRequested || selectedCampaignDetail.requestStatus === "pending" ? (
+                  <Button
+                    className="w-full sm:w-auto rounded-full bg-amber-500 hover:bg-amber-600 text-white font-bold px-8 shadow-glow cursor-pointer"
+                    onClick={() => {
+                      setSelectedCampaignDetail(null);
+                      navigate("/dashboard/creator?tab=campaigns");
+                    }}
+                  >
+                    <Clock className="w-4 h-4 mr-1.5" />
+                    Applied (Pending Review)
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full sm:w-auto rounded-full gradient-sunset text-white font-bold px-8 shadow-glow cursor-pointer"
+                    onClick={() => {
+                      setSelectedCampaignDetail(null);
+                      if (!user) {
+                        setShowCreatorSignupModal(true);
+                      } else if (profile?.role === "creator") {
+                        navigate("/dashboard/creator?tab=campaigns");
+                      } else {
+                        navigate("/dashboard/brand?tab=campaigns");
+                      }
+                    }}
+                  >
+                    {profile?.role === "creator" ? "Apply to Campaign" : "Explore Campaign"}
+                  </Button>
+                )}
               </div>
             </div>
           )}
