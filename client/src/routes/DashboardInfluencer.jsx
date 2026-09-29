@@ -669,6 +669,7 @@ export function DashboardInfluencer() {
   const [reworkFilePreview, setReworkFilePreview] = useState(null);
   const [reworkCaption, setReworkCaption] = useState("");
   const [submittingRework, setSubmittingRework] = useState(false);
+  const [showCampaignBreakdownDialog, setShowCampaignBreakdownDialog] = useState(false);
 
   const [searchParams] = useSearchParams();
   // Tab State
@@ -4760,26 +4761,36 @@ const CAMPAIGNS_PER_PAGE = 6;
                 </div>
 
                 <div className="mt-6 grid grid-cols-1 sm:grid-cols-4 gap-4">
-                  {/* Available Balance Card */}
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-sm relative overflow-hidden">
+                  {/* Available Balance Card (Clickable to view Campaign Escrow breakdown) */}
+                  <div
+                    onClick={() => setShowCampaignBreakdownDialog(true)}
+                    className="rounded-2xl border border-primary/30 bg-primary/5 p-5 shadow-sm relative overflow-hidden cursor-pointer hover:border-primary hover:bg-primary/10 transition-all group"
+                    title="Click to view detailed campaign escrow & payment status"
+                  >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-primary uppercase tracking-wider">Available Balance</span>
-                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                      <span className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1">
+                        Available Balance <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100 transition-opacity" />
+                      </span>
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                         <IndianRupee className="h-4 w-4" />
                       </div>
                     </div>
                     <div className="mt-3 text-3xl font-extrabold text-foreground font-display">
                       ₹{Number(creatorWallet.availableBalance || 0).toLocaleString("en-IN")}
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Available for immediate withdrawal
+                    <p className="text-[11px] text-primary/80 font-medium mt-1 flex items-center gap-1">
+                      <span>Click to view campaign-wise breakdown</span> &rarr;
                     </p>
                   </div>
 
-                  {/* Pending Withdrawals Card */}
-                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 shadow-sm">
+                  {/* Pending Withdrawals & Escrows Card */}
+                  <div
+                    onClick={() => setShowCampaignBreakdownDialog(true)}
+                    className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 shadow-sm cursor-pointer hover:border-amber-500/40 hover:bg-amber-500/10 transition-all"
+                    title="Click to view locked escrow amounts"
+                  >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Pending Withdrawals</span>
+                      <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Pending Withdrawals / Escrow</span>
                       <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
                         <Clock className="h-4 w-4" />
                       </div>
@@ -6803,6 +6814,168 @@ const CAMPAIGNS_PER_PAGE = 6;
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* CAMPAIGN ESCROW & EARNINGS BREAKDOWN DIALOG */}
+      <Dialog
+        open={showCampaignBreakdownDialog}
+        onOpenChange={(open) => !open && setShowCampaignBreakdownDialog(false)}
+      >
+        <DialogContent className="max-w-2xl rounded-3xl p-6 max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg font-bold flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" /> Campaign Escrow & Earnings Breakdown
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Real-time ledger of which brands have funded escrow, 20% platform cut breakdown, deliverables progress, and wallet release status.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-1 space-y-4 py-2 custom-scrollbar text-xs">
+            {/* Summary Highlights */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-secondary/20 p-3.5 rounded-2xl border border-border/60">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground block">Available in Wallet</span>
+                <span className="text-base font-extrabold text-foreground font-display text-primary">
+                  ₹{Number(creatorWallet.availableBalance || 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground block">Pending Escrow / Review</span>
+                <span className="text-base font-bold text-amber-600 font-display">
+                  ₹{(() => {
+                    const pendingCollabs = (myRequests || []).filter((c) => c.status === "accepted" && c.paymentStatus === "PAID" && c.paymentReleaseStatus !== "RELEASED");
+                    const totalPending = pendingCollabs.reduce((acc, c) => acc + (c.creatorAmount || 0), 0);
+                    return totalPending.toLocaleString("en-IN");
+                  })()}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground block">Lifetime Earned</span>
+                <span className="text-base font-bold text-emerald-600 font-display">
+                  ₹{Number(creatorWallet.totalEarned || 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            {/* Campaign-by-Campaign List */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
+                All Campaign Collaborations ({(myRequests || []).filter(c => c.status === "accepted").length})
+              </h4>
+
+              {(!myRequests || myRequests.filter(c => c.status === "accepted").length === 0) ? (
+                <div className="py-8 text-center border border-dashed border-border rounded-2xl">
+                  <Wallet className="h-8 w-8 mx-auto text-muted-foreground/30 mb-1" />
+                  <p className="font-semibold text-foreground">No active campaign collaborations yet</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    When you apply and get accepted by brands, escrow details will appear here.
+                  </p>
+                </div>
+              ) : (
+                myRequests
+                  .filter((c) => c.status === "accepted")
+                  .map((collab) => {
+                    const brandTotal = collab.brandTotal || collab.proposedAmount || (collab.creatorAmount ? Math.round(collab.creatorAmount / 0.8) : 0);
+                    const pravixoFee = collab.pravixoFee || Math.round(brandTotal * 0.20);
+                    const creatorNet = collab.creatorAmount || (brandTotal - pravixoFee);
+                    const isBrandPaid = collab.paymentStatus === "PAID";
+                    const isReleased = collab.paymentReleaseStatus === "RELEASED";
+
+                    return (
+                      <div
+                        key={collab._id}
+                        className="rounded-2xl border border-border bg-card p-4 space-y-3 shadow-sm hover:border-primary/40 transition-all"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="font-bold text-sm text-foreground block truncate">
+                              {collab.campaign?.title || "Campaign Collaboration"}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              Brand: <strong>{collab.brandProfile?.fullName || "Brand Partner"}</strong>
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {isBrandPaid ? (
+                              <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px] font-bold">
+                                ✓ Brand Paid Escrow
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-500/30 text-[10px] font-semibold">
+                                ⏳ Brand Payment Pending
+                              </Badge>
+                            )}
+
+                            {isReleased ? (
+                              <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[10px] font-bold">
+                                💰 Released to Wallet
+                              </Badge>
+                            ) : isBrandPaid ? (
+                              <Badge variant="outline" className="bg-secondary text-muted-foreground text-[10px]">
+                                Escrow Protected
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Financial Breakdown Table */}
+                        <div className="grid grid-cols-3 gap-2 bg-secondary/30 p-2.5 rounded-xl border border-border/50 text-[11px]">
+                          <div>
+                            <span className="text-[10px] text-muted-foreground block uppercase font-semibold">Brand Budget</span>
+                            <span className="font-bold text-foreground">₹{brandTotal.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-muted-foreground block uppercase font-semibold">Pravixo Cut (20%)</span>
+                            <span className="font-bold text-muted-foreground">- ₹{pravixoFee.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-emerald-600 block uppercase font-bold">Your Net Payout</span>
+                            <span className="font-bold text-emerald-600">₹{creatorNet.toLocaleString("en-IN")}</span>
+                          </div>
+                        </div>
+
+                        {/* Deliverables & Actions */}
+                        <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground">
+                          <span>
+                            Deliverables: {collab.deliverablesTracking?.filter(d => (d.completedQuantity || 0) >= (d.requiredQuantity || 1)).length || 0} / {collab.deliverablesTracking?.length || 1} Completed
+                          </span>
+                          <Link
+                            to={collab.conversationId ? `/messages?conversationId=${collab.conversationId}` : `/messages?recipientId=${collab.brandId}`}
+                            className="font-bold text-primary hover:underline flex items-center gap-1"
+                          >
+                            <MessageSquare className="h-3 w-3" /> View In Chat &rarr;
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-border/40">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full text-xs"
+              onClick={() => setShowCampaignBreakdownDialog(false)}
+            >
+              Close
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-full gradient-sunset text-white font-bold text-xs px-5 shadow-glow"
+              onClick={() => {
+                setShowCampaignBreakdownDialog(false);
+                setShowWithdrawDialog(true);
+              }}
+            >
+              Withdraw Available Funds
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
