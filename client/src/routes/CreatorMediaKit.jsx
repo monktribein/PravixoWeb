@@ -74,6 +74,18 @@ export default function CreatorMediaKit() {
   const [activeSocialFeedTab, setActiveSocialFeedTab] = useState("instagram");
   const [showBrandPromptModal, setShowBrandPromptModal] = useState(false);
 
+  // Reviews state
+  const [reviewsList, setReviewsList] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(true);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewEligibility, setReviewEligibility] = useState({ canReview: false, campaigns: [], reason: "" });
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
+  const [submitRating, setSubmitRating] = useState(5);
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [reviewText, setReviewText] = useState("");
+  const [campaignRef, setCampaignRef] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   const mediaKitRef = useRef(null);
 
   const resolveImageUrl = (url) => {
@@ -82,6 +94,21 @@ export default function CreatorMediaKit() {
     let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
     if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
     return `${apiUrl}${url}`;
+  };
+
+  const fetchCreatorReviews = async (creatorId) => {
+    if (!creatorId) return;
+    setLoadingReviews(true);
+    try {
+      const res = await api.get(`/reviews/target/${creatorId}`);
+      const data = res.data?.data || res.data || [];
+      setReviewsList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load reviews:", err);
+      setReviewsList([]);
+    } finally {
+      setLoadingReviews(false);
+    }
   };
 
   useEffect(() => {
@@ -95,7 +122,7 @@ export default function CreatorMediaKit() {
         setCreator(data);
 
         if (data?._id) {
-          // Fetch portfolio, pricing, and social connections in parallel
+          // Fetch portfolio, pricing, social connections and reviews in parallel
           const [portfolioRes, pricingRes, socialRes] = await Promise.allSettled([
             api.get(`/portfolio/profile/${data._id}`),
             api.get(`/pricing/profile/${data._id}`),
@@ -111,6 +138,8 @@ export default function CreatorMediaKit() {
           if (socialRes.status === "fulfilled") {
             setSocialConnections(socialRes.value.data?.data || socialRes.value.data || []);
           }
+
+          fetchCreatorReviews(data._id);
         }
       } catch (err) {
         console.error("Failed to load Media Kit profile:", err);
@@ -122,6 +151,130 @@ export default function CreatorMediaKit() {
 
     loadMediaKit();
   }, [handle]);
+
+  // Check review eligibility whenever active profile or creator changes
+  useEffect(() => {
+    async function checkEligibility() {
+      if (!creator?._id || !profile?._id) {
+        setReviewEligibility({ canReview: false, campaigns: [], reason: "Log in as a collaborating Brand to review" });
+        return;
+      }
+      if (profile.role === "creator") {
+        setReviewEligibility({
+          canReview: false,
+          campaigns: [],
+          reason: "Only verified brands who have collaborated on a campaign can review this creator.",
+        });
+        return;
+      }
+      if (String(profile._id) === String(creator._id)) {
+        setReviewEligibility({
+          canReview: false,
+          campaigns: [],
+          reason: "You cannot review your own profile.",
+        });
+        return;
+      }
+
+      setCheckingEligibility(true);
+      try {
+        const res = await api.get(`/reviews/can-review/${creator._id}?reviewerId=${profile._id}`);
+        const data = res.data?.data || {};
+        setReviewEligibility({
+          canReview: !!data.canReview,
+          campaigns: data.campaigns || [],
+          alreadyReviewed: !!data.alreadyReviewed,
+          reason: data.reason || "",
+          conversationId: data.conversationId,
+        });
+        if (data.campaigns && data.campaigns.length > 0) {
+          setCampaignRef(data.campaigns[0].title || "Direct Collaboration");
+        }
+      } catch (err) {
+        console.error("Error checking review eligibility:", err);
+        setReviewEligibility({
+          canReview: false,
+          campaigns: [],
+          reason: "Could not verify collaboration history.",
+        });
+      } finally {
+        setCheckingEligibility(false);
+      }
+    }
+
+    checkEligibility();
+  }, [creator?._id, profile?._id, profile?.role]);
+
+  const handleOpenReviewModal = () => {
+    if (!user) {
+      setShowBrandPromptModal(true);
+      return;
+    }
+    if (profile?.role === "creator") {
+      toast.error("Only brands that have collaborated with this creator on a campaign can submit a review.");
+      return;
+    }
+    if (reviewEligibility.alreadyReviewed) {
+      toast.info("You have already submitted a verified review for this creator.");
+      return;
+    }
+    if (!reviewEligibility.canReview) {
+      toast.error(
+        reviewEligibility.reason || "You can only write a review if you have worked together on an accepted campaign!"
+      );
+      return;
+    }
+    setIsReviewModalOpen(true);
+  };
+
+  const handleSubmitReview = async (e) => {
+    e?.preventDefault();
+    if (!reviewTitle.trim() || !reviewText.trim()) {
+      toast.error("Please provide both a title and review feedback.");
+      return;
+    }
+    if (submitRating < 1 || submitRating > 5) {
+      toast.error("Please select a rating between 1 and 5 stars.");
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const payload = {
+        targetId: creator._id,
+        reviewerId: profile._id,
+        rating: submitRating,
+        title: reviewTitle.trim(),
+        text: reviewText.trim(),
+        campaignRef: campaignRef || "Verified Campaign Collab",
+        conversationId: reviewEligibility.conversationId,
+      };
+
+      const res = await api.post("/reviews", payload);
+      if (res.data?.success || res.status === 200 || res.status === 201) {
+        toast.success("Verified review submitted successfully! 🎉");
+        setIsReviewModalOpen(false);
+        setReviewTitle("");
+        setReviewText("");
+        // Reload reviews & update eligibility
+        fetchCreatorReviews(creator._id);
+        setReviewEligibility((prev) => ({
+          ...prev,
+          canReview: false,
+          alreadyReviewed: true,
+          reason: "You have already reviewed this creator.",
+        }));
+      } else {
+        toast.error(res.data?.message || "Failed to submit review.");
+      }
+    } catch (err) {
+      console.error("Submit review error:", err);
+      const errMsg = err.response?.data?.message || "Could not submit review. Please ensure collaboration verification.";
+      toast.error(errMsg);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const isOwnProfile =
     (profile?._id && creator?._id && String(profile._id) === String(creator._id)) ||
@@ -1105,6 +1258,150 @@ export default function CreatorMediaKit() {
           </section>
         )}
 
+        {/* VERIFIED REVIEWS & TESTIMONIALS SECTION */}
+        <section className="bg-card rounded-3xl p-6 sm:p-8 border border-border shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5" /> 100% Verified Collaborations
+                </span>
+              </div>
+              <h2 className="text-xl font-bold font-display text-foreground mt-2 flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-400 fill-amber-400" /> Verified Brand Reviews
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                Authentic feedback from verified brand partners who completed campaigns with @{rawHandle}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 self-start sm:self-auto">
+              <Button
+                onClick={handleOpenReviewModal}
+                className="rounded-full gradient-sunset text-white text-xs sm:text-sm font-bold shadow-glow hover:opacity-95 cursor-pointer flex items-center gap-1.5 px-5 py-2"
+              >
+                <Star className="w-4 h-4 fill-white" />
+                Write a Review
+              </Button>
+            </div>
+          </div>
+
+          {/* Rating Summary Card */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-secondary/30 rounded-2xl p-5 border border-border/60 items-center">
+            <div className="flex items-center gap-4 sm:col-span-1 border-b sm:border-b-0 sm:border-r border-border/60 pb-3 sm:pb-0 sm:pr-4">
+              <div className="text-4xl sm:text-5xl font-black font-display text-foreground">
+                {creator?.rating ? Number(creator.rating).toFixed(1) : (reviewsList.length > 0 ? (reviewsList.reduce((acc, r) => acc + (r.rating || 5), 0) / reviewsList.length).toFixed(1) : "5.0")}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1 text-amber-400">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className="w-4 h-4 fill-amber-400" />
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">
+                  Based on {reviewsList.length} verified {reviewsList.length === 1 ? "review" : "reviews"}
+                </p>
+              </div>
+            </div>
+
+            <div className="sm:col-span-2 text-xs text-muted-foreground space-y-1.5">
+              <p className="flex items-center gap-2 text-foreground/90 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                Only brands who have partnered in accepted campaigns with this creator can leave a review.
+              </p>
+              <p className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                All reviews are tied to genuine campaign deliverables and proof of work.
+              </p>
+            </div>
+          </div>
+
+          {/* Reviews List */}
+          {loadingReviews ? (
+            <div className="py-12 flex flex-col items-center justify-center text-center">
+              <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mb-2" />
+              <p className="text-xs text-muted-foreground">Loading verified reviews...</p>
+            </div>
+          ) : reviewsList.length === 0 ? (
+            <div className="py-12 px-4 rounded-2xl border border-dashed border-border text-center space-y-3 bg-secondary/20">
+              <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-500 mx-auto flex items-center justify-center">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-foreground">No Reviews Yet</h3>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                Be the first brand partner to work with @{rawHandle} and leave a verified collaboration review!
+              </p>
+              <Button
+                onClick={() => handleHireAction(`/influencer/${creator._id}`)}
+                variant="outline"
+                className="rounded-full text-xs font-semibold px-4 cursor-pointer mt-2"
+              >
+                Start Collaboration
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {reviewsList.map((review, idx) => {
+                const reviewer = review.reviewer;
+                const reviewerName = reviewer?.fullName || reviewer?.brandName || review.authorName || "Verified Brand";
+                const reviewerAvatar = resolveImageUrl(reviewer?.avatarUrl) || getGenderAvatar(reviewerName, "male", "brand");
+                const reviewerCompany = reviewer?.companyName || reviewer?.industry || "Brand Partner";
+
+                return (
+                  <div
+                    key={review._id || idx}
+                    className="p-5 rounded-2xl bg-secondary/40 border border-border/80 flex flex-col justify-between space-y-4 hover:border-border transition-all"
+                  >
+                    <div className="space-y-3">
+                      {/* Top Row: Reviewer Info + Rating */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={reviewerAvatar}
+                            alt={reviewerName}
+                            className="w-10 h-10 rounded-full object-cover border border-border shrink-0 bg-background"
+                          />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-bold text-foreground line-clamp-1">{reviewerName}</span>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            </div>
+                            <span className="text-[11px] text-muted-foreground block line-clamp-1">{reviewerCompany}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-0.5 text-amber-400 bg-background/80 px-2 py-1 rounded-lg border border-border/60">
+                          <Star className="w-3.5 h-3.5 fill-amber-400" />
+                          <span className="text-xs font-bold text-foreground ml-1">{review.rating || 5}.0</span>
+                        </div>
+                      </div>
+
+                      {/* Review Title & Content */}
+                      <div>
+                        <h4 className="text-sm font-bold text-foreground line-clamp-1">{review.title}</h4>
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                          "{review.text}"
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Bottom Metadata */}
+                    <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 text-primary/90 font-medium">
+                        <Briefcase className="w-3 h-3" />
+                        {review.campaignRef || "Verified Campaign"}
+                      </span>
+                      <span>
+                        {review.createdAt ? new Date(review.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Verified"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
         {/* BOTTOM CTA BAR */}
         <section className="rounded-3xl gradient-sunset p-8 text-center text-white space-y-4 shadow-glow relative overflow-hidden border border-white/15">
           <div className="max-w-2xl mx-auto space-y-3 relative z-10">
@@ -1133,6 +1430,127 @@ export default function CreatorMediaKit() {
         </section>
 
       </main>
+
+      {/* Review Submission Modal for Verified Collaborating Brands */}
+      <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
+        <DialogContent className="sm:max-w-lg rounded-3xl p-6 bg-card border-border text-foreground shadow-2xl">
+          <DialogHeader className="space-y-2">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-1">
+              <Star className="w-6 h-6 fill-amber-500" />
+            </div>
+            <DialogTitle className="font-display text-2xl font-bold text-foreground">
+              Review @{rawHandle}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs sm:text-sm">
+              Share verified collaboration feedback for @{rawHandle}. Your review will appear publicly on their verified media kit.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmitReview} className="space-y-4 mt-2">
+            {/* Star Rating selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                Overall Rating <span className="text-destructive">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setSubmitRating(star)}
+                    className="p-1.5 rounded-lg hover:bg-secondary transition-all cursor-pointer"
+                  >
+                    <Star
+                      className={`w-7 h-7 transition-all ${
+                        star <= submitRating
+                          ? "text-amber-400 fill-amber-400 scale-110"
+                          : "text-muted-foreground/40 hover:text-amber-300"
+                      }`}
+                    />
+                  </button>
+                ))}
+                <span className="text-sm font-bold text-foreground ml-2">
+                  {submitRating === 5 ? "5.0 - Exceptional" : submitRating === 4 ? "4.0 - Great Work" : submitRating === 3 ? "3.0 - Satisfactory" : `${submitRating}.0 Stars`}
+                </span>
+              </div>
+            </div>
+
+            {/* Campaign Selector if available */}
+            {reviewEligibility.campaigns && reviewEligibility.campaigns.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  Associated Campaign
+                </label>
+                <select
+                  value={campaignRef}
+                  onChange={(e) => setCampaignRef(e.target.value)}
+                  className="w-full bg-secondary/50 border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  {reviewEligibility.campaigns.map((camp) => (
+                    <option key={camp.id || camp.title} value={camp.title}>
+                      {camp.title}
+                    </option>
+                  ))}
+                  <option value="Direct Brand Deal">Direct Brand Deal</option>
+                </select>
+              </div>
+            )}
+
+            {/* Title input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                Headline / Title <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Outstanding ROI & high quality deliverables!"
+                value={reviewTitle}
+                onChange={(e) => setReviewTitle(e.target.value)}
+                className="w-full bg-secondary/50 border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+
+            {/* Detailed Review */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                Detailed Feedback <span className="text-destructive">*</span>
+              </label>
+              <textarea
+                required
+                rows={4}
+                placeholder="Describe communication, punctuality, content quality, and campaign results..."
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                className="w-full bg-secondary/50 border border-border rounded-xl p-3.5 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+              />
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2.5 text-[11px] text-amber-600 dark:text-amber-400">
+              <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>Verified review submission is only granted to brands with completed/accepted campaign milestones.</span>
+            </div>
+
+            <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsReviewModalOpen(false)}
+                className="w-full sm:w-auto rounded-full text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submittingReview}
+                className="w-full sm:w-auto rounded-full gradient-sunset text-white text-xs font-bold shadow-glow cursor-pointer"
+              >
+                {submittingReview ? "Submitting Review..." : "Publish Verified Review"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Sweet Brand Account Registration/Login Dialog for Unauthenticated Visitors */}
       <Dialog open={showBrandPromptModal} onOpenChange={setShowBrandPromptModal}>

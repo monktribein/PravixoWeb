@@ -311,7 +311,8 @@ export const getDiscoverableCampaigns = async (req, res) => {
 export const joinCampaignRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const { pitch } = req.body;
+    const { pitch, proposedRate, appliedTier } = req.body;
+    const numProposedRate = proposedRate ? Number(proposedRate) : 0;
 
     // Security Check: Authenticated User & Role
     if (!req.user || !req.user._id) {
@@ -415,15 +416,15 @@ export const joinCampaignRequest = async (req, res) => {
         });
       }
 
-      if (req.body.appliedTier && req.body.appliedTier.minFollowers !== undefined) {
-        const selectedMin = Number(req.body.appliedTier.minFollowers) || 0;
+      if (appliedTier && appliedTier.minFollowers !== undefined) {
+        const selectedMin = Number(appliedTier.minFollowers) || 0;
         if (totalFollowers < selectedMin) {
           return res.status(400).json({
             success: false,
             message: `You need at least ${selectedMin.toLocaleString()} followers for the selected option.`,
           });
         }
-        matchedTier = req.body.appliedTier;
+        matchedTier = appliedTier;
       } else {
         const eligibleTiers = sortedTiers.filter(
           (t) => totalFollowers >= (Number(t.minFollowers) || 0)
@@ -460,6 +461,11 @@ export const joinCampaignRequest = async (req, res) => {
       }
     }
 
+    // Determine initial proposed amount
+    const initialRate = numProposedRate > 0
+      ? numProposedRate
+      : (matchedTier?.cashAmount || campaign.minBudgetPerCreator || 0);
+
     // Create Connection / Request record
     const connection = await Connection.create({
       creatorId,
@@ -467,27 +473,59 @@ export const joinCampaignRequest = async (req, res) => {
       campaignId: campaign._id,
       pitch: pitch || `Hi! I would love to collaborate on your "${campaign.title}" campaign.`,
       appliedTier: matchedTier,
+      proposedAmount: initialRate,
+      proposedBy: creatorId,
+      creatorAmount: initialRate,
+      pravixoFee: Math.round(initialRate * 0.20),
+      brandTotal: initialRate + Math.round(initialRate * 0.20),
       status: "pending",
       creatorNotificationSeen: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
 
+    // Create pending conversation so history exists
+    let conversation = await Conversation.findOne({
+      creatorId,
+      brandId: campaign.brandId,
+      campaignId: campaign._id,
+    });
+
+    if (!conversation) {
+      conversation = await Conversation.create({
+        creatorId,
+        brandId: campaign.brandId,
+        campaignId: campaign._id,
+        status: "pending",
+      });
+    }
+
+    // Post initial pitch message in the conversation
+    const pitchText = (pitch && pitch.trim()) || `Hi! I'm excited to collaborate on your "${campaign.title}" campaign.`;
+    const rateNote = initialRate > 0 ? ` [Proposed Rate: ₹${initialRate.toLocaleString("en-IN")}]` : "";
+    await Message.create({
+      conversationId: conversation._id,
+      senderId: creatorId,
+      text: `${pitchText}${rateNote}`,
+      messageType: "text",
+      read: false,
+    });
+
     // Notify brand of incoming campaign join request
-    const joinNotifText = `${req.user.fullName || "A Creator"} requested to join your campaign "${campaign.title}".`;
+    const joinNotifText = `${req.user.fullName || "A Creator"} requested to join your campaign "${campaign.title}". Proposed rate: ₹${initialRate.toLocaleString("en-IN")}`;
     await Notification.create({
       recipientId: campaign.brandId,
       senderId: creatorId,
       type: "campaign_request_received",
       text: joinNotifText,
-      targetUrl: "/dashboard/customer",
+      targetUrl: "/connections",
       createdAt: Date.now(),
     });
 
     sendPushToUser(campaign.brandId, {
       title: "New Campaign Join Request! 📩",
       body: joinNotifText,
-      url: "/dashboard/customer",
+      url: "/connections",
     }).catch((err) => console.error("Campaign join request push error:", err.message));
 
     return res.status(201).json({

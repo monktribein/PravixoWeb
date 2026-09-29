@@ -55,6 +55,14 @@ import { getGenderAvatar, DEFAULT_BANNER } from "../utils/avatar";
 import { formatINR } from "@/lib/format";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/Dialog";
 
 import heroBanner from "@/assets/hero-banner.jpg";
 import pravixoFlow from "@/assets/pravixo-flow.jpeg";
@@ -526,7 +534,7 @@ const FALLBACK_CAMPAIGNS = [
   },
 ];
 
-function HomeCampaignCard({ camp, onNavigate }) {
+function HomeCampaignCard({ camp, onCardClick, onApplyClick }) {
   const brandName = camp.brand?.fullName || camp.brand?.name || "Brand Partner";
   const brandAvatar = resolveImageUrl(camp.brand?.avatarUrl || camp.brand?.avatar) || getGenderAvatar(brandName, "male", "brand");
   const isBarter = Boolean(camp.isBarterAllowed);
@@ -536,7 +544,7 @@ function HomeCampaignCard({ camp, onNavigate }) {
 
   return (
     <div
-      onClick={onNavigate}
+      onClick={onCardClick}
       className="group relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border/80 bg-card p-5 sm:p-6 shadow-card transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-pink-500/40 hover:shadow-pink-500/10 cursor-pointer card-3d"
     >
       {/* Background soft ambient gradient */}
@@ -593,7 +601,9 @@ function HomeCampaignCard({ camp, onNavigate }) {
                 className="inline-flex items-center gap-1 rounded-lg bg-secondary/60 text-[10px] font-medium text-foreground px-2 py-0.5 border border-border/50"
               >
                 <Sparkles className="h-2.5 w-2.5 text-pink-500" />
-                <span className="truncate max-w-[120px]">{deliv}</span>
+                <span className="truncate max-w-[120px]">
+                  {typeof deliv === "object" ? `${deliv.quantity || 1}x ${deliv.type || "Deliverable"}` : deliv}
+                </span>
               </span>
             ))}
             {camp.deliverables.length > 2 && (
@@ -645,7 +655,11 @@ function HomeCampaignCard({ camp, onNavigate }) {
 
         <button
           type="button"
-          className="w-full inline-flex items-center justify-center gap-1.5 rounded-full gradient-sunset py-2 text-xs font-bold text-white shadow-glow transition-all hover:scale-[1.02] active:scale-95 group-hover:opacity-95"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onApplyClick) onApplyClick();
+          }}
+          className="w-full inline-flex items-center justify-center gap-1.5 rounded-full gradient-sunset py-2 text-xs font-bold text-white shadow-glow transition-all hover:scale-[1.02] active:scale-95 group-hover:opacity-95 cursor-pointer"
         >
           <span>Find Campaigns</span>
           <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
@@ -662,6 +676,9 @@ export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingRedirectUrl, setPendingRedirectUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [selectedCampaignDetail, setSelectedCampaignDetail] = useState(null);
+  const [showCreatorSignupModal, setShowCreatorSignupModal] = useState(false);
 
   const [liveCreators, setLiveCreators] = useState([]);
   const [liveBrands, setLiveBrands] = useState([]);
@@ -1334,15 +1351,16 @@ export default function Home() {
                 >
                   <HomeCampaignCard
                     camp={camp}
-                    onNavigate={() => {
+                    onCardClick={() => {
+                      setSelectedCampaignDetail(camp);
+                    }}
+                    onApplyClick={() => {
                       if (!user) {
-                        navigate("/login", {
-                          state: { from: "/dashboard/creator?tab=campaigns" },
-                        });
-                      } else if (profile?.role === "brand") {
-                        navigate("/dashboard/brand?tab=campaigns");
-                      } else {
+                        setShowCreatorSignupModal(true);
+                      } else if (profile?.role === "creator") {
                         navigate("/dashboard/creator?tab=campaigns");
+                      } else {
+                        navigate("/dashboard/brand?tab=campaigns");
                       }
                     }}
                   />
@@ -1646,6 +1664,203 @@ export default function Home() {
       </section>
 
 
+
+      {/* Campaign Details Preview Dialog */}
+      <Dialog
+        open={Boolean(selectedCampaignDetail)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedCampaignDetail(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl rounded-3xl p-6 sm:p-8 bg-card border-border text-foreground shadow-2xl max-h-[90vh] overflow-y-auto">
+          {selectedCampaignDetail && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-border/80">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={
+                      resolveImageUrl(
+                        selectedCampaignDetail.brand?.avatarUrl || selectedCampaignDetail.brand?.avatar
+                      ) || getGenderAvatar(selectedCampaignDetail.brand?.fullName || "Brand", "male", "brand")
+                    }
+                    alt={selectedCampaignDetail.brand?.fullName || "Brand"}
+                    className="h-14 w-14 rounded-2xl border-2 border-border/80 object-cover bg-muted shrink-0"
+                  />
+                  <div>
+                    <h3 className="text-xl font-bold font-display text-foreground flex items-center gap-1.5">
+                      {selectedCampaignDetail.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                      <span className="font-semibold text-foreground">
+                        {selectedCampaignDetail.brand?.fullName || selectedCampaignDetail.brand?.name || "Brand Partner"}
+                      </span>
+                      •
+                      <MapPin className="h-3.5 w-3.5 text-pink-500" />
+                      <span>{selectedCampaignDetail.location || selectedCampaignDetail.brand?.location || "Pan India"}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <Badge className="rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20 text-xs font-bold shrink-0 px-3 py-1">
+                  {selectedCampaignDetail.category || "General"}
+                </Badge>
+              </div>
+
+              {/* Brief Description */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Campaign Brief & Overview
+                </h4>
+                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line bg-secondary/30 p-4 rounded-2xl border border-border/60">
+                  {selectedCampaignDetail.description}
+                </p>
+              </div>
+
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-secondary/40 p-3.5 rounded-2xl border border-border/60">
+                  <span className="text-[11px] font-medium text-muted-foreground block">
+                    Creator Payout
+                  </span>
+                  <span className="text-base font-black text-gradient-sunset mt-0.5 block">
+                    {Number(selectedCampaignDetail.creatorMinBudget || selectedCampaignDetail.budgetPerCreator || 0) > 0
+                      ? `₹${Number(selectedCampaignDetail.creatorMinBudget || selectedCampaignDetail.budgetPerCreator).toLocaleString()}`
+                      : selectedCampaignDetail.isBarterAllowed
+                      ? "Product Perks (Barter)"
+                      : `₹${Number(selectedCampaignDetail.totalBudget || 0).toLocaleString()}`}
+                  </span>
+                </div>
+
+                <div className="bg-secondary/40 p-3.5 rounded-2xl border border-border/60">
+                  <span className="text-[11px] font-medium text-muted-foreground block">
+                    Required Followers
+                  </span>
+                  <span className="text-base font-bold text-foreground mt-0.5 block flex items-center gap-1">
+                    <Users className="h-4 w-4 text-pink-500" />
+                    {selectedCampaignDetail.minFollowers
+                      ? `${Number(selectedCampaignDetail.minFollowers).toLocaleString()}+ fans`
+                      : "Open to all"}
+                  </span>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1 bg-secondary/40 p-3.5 rounded-2xl border border-border/60">
+                  <span className="text-[11px] font-medium text-muted-foreground block">
+                    Compensation Type
+                  </span>
+                  <span className="text-sm font-bold text-foreground mt-1 block flex items-center gap-1">
+                    <Handshake className="h-4 w-4 text-emerald-500" />
+                    {selectedCampaignDetail.isBarterAllowed ? "Paid / Barter" : "Direct Escrow Payout"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Deliverables */}
+              {selectedCampaignDetail.deliverables && selectedCampaignDetail.deliverables.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Required Deliverables
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedCampaignDetail.deliverables.map((deliv, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 font-semibold text-xs px-3 py-1.5 border border-pink-500/20"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        {typeof deliv === "object" ? `${deliv.quantity || 1}x ${deliv.type || "Deliverable"}` : deliv}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Footer */}
+              <div className="pt-4 border-t border-border flex flex-col sm:flex-row items-center justify-end gap-3">
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto rounded-full cursor-pointer"
+                  onClick={() => setSelectedCampaignDetail(null)}
+                >
+                  Close
+                </Button>
+                <Button
+                  className="w-full sm:w-auto rounded-full gradient-sunset text-white font-bold px-8 shadow-glow cursor-pointer"
+                  onClick={() => {
+                    const camp = selectedCampaignDetail;
+                    setSelectedCampaignDetail(null);
+                    if (!user) {
+                      setShowCreatorSignupModal(true);
+                    } else if (profile?.role === "creator") {
+                      navigate("/dashboard/creator?tab=campaigns");
+                    } else {
+                      navigate("/dashboard/brand?tab=campaigns");
+                    }
+                  }}
+                >
+                  Apply to Campaign
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Creator Account Registration Dialog for Unauthenticated Visitors */}
+      <Dialog open={showCreatorSignupModal} onOpenChange={setShowCreatorSignupModal}>
+        <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-card border-border text-foreground shadow-2xl">
+          <DialogHeader className="text-center sm:text-center space-y-2">
+            <div className="mx-auto w-14 h-14 rounded-3xl gradient-sunset flex items-center justify-center text-white shadow-glow mb-1">
+              <Sparkles className="w-7 h-7" />
+            </div>
+            <DialogTitle className="font-display text-2xl font-bold text-foreground">
+              Creator Account Required
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-sm leading-relaxed">
+              To apply for this campaign and collaborate with verified brands, you need to create a <strong>Creator Account</strong> on <strong>Pravixo</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-secondary/40 rounded-2xl p-4 border border-border/80 my-2 space-y-2 text-xs text-foreground/90">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>Free instant profile & audited dynamic media kit</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>Guaranteed 100% upfront escrow payment security</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>Direct brand chat & campaign contract management</span>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-col gap-2 pt-2">
+            <Button
+              className="w-full rounded-full gradient-sunset text-white font-bold h-11 text-sm shadow-glow cursor-pointer"
+              onClick={() => {
+                setShowCreatorSignupModal(false);
+                navigate("/register?role=creator");
+              }}
+            >
+              Create Free Creator Account
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full rounded-full bg-secondary hover:bg-secondary/80 text-foreground border-border font-semibold h-10 text-xs cursor-pointer"
+              onClick={() => {
+                setShowCreatorSignupModal(false);
+                navigate("/login", {
+                  state: { from: "/dashboard/creator?tab=campaigns" },
+                });
+              }}
+            >
+              Already have an account? Sign In
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {showAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

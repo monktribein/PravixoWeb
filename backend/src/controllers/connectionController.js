@@ -296,6 +296,16 @@ export const acceptRequest = async (req, res) => {
     const brandName = brandProfile?.fullName || "A Brand";
     const campaignTitle = campaign?.title || "Collaboration";
     const approveText = `${brandName} approved your request for "${campaignTitle}".`;
+    
+    // Add approval message to chat history
+    await Message.create({
+      conversationId: conversation._id,
+      senderId: connection.brandId,
+      text: `[Collaboration Approved] 🎉 ${brandName} approved your application for "${campaignTitle}". Next step: Brand will fund the campaign escrow to activate the collaboration.`,
+      messageType: "system",
+      read: false,
+    }).catch((msgErr) => console.warn("Could not post approval message to chat:", msgErr));
+
     await Notification.create({
       recipientId: connection.creatorId,
       senderId: connection.brandId,
@@ -333,6 +343,7 @@ export const acceptRequest = async (req, res) => {
 export const rejectRequest = async (req, res) => {
   try {
     const { connectionId } = req.params;
+    const { reason } = req.body || {};
 
     if (!mongoose.Types.ObjectId.isValid(connectionId)) {
       return res.status(400).json({
@@ -385,9 +396,32 @@ export const rejectRequest = async (req, res) => {
     if (connection.campaignId) {
       campaign = await Campaign.findById(connection.campaignId).select("title").lean();
     }
+    const campaignTitle = campaign?.title || "Campaign Collaboration";
     const brandProfile = await Profile.findById(connection.brandId).select("fullName").lean();
     const brandName = brandProfile?.fullName || "A Brand";
-    const rejectText = `${brandName} declined your request for "${campaignTitle}".`;
+    const declineReasonText = reason && reason.trim() ? `: "${reason.trim()}"` : "";
+    const rejectText = `${brandName} declined your request for "${campaignTitle}"${declineReasonText}.`;
+
+    // Add rejection reason to chat history if conversation exists
+    try {
+      const conv = await Conversation.findOne({
+        creatorId: connection.creatorId,
+        brandId: connection.brandId,
+        campaignId: connection.campaignId,
+      });
+      if (conv) {
+        await Message.create({
+          conversationId: conv._id,
+          senderId: connection.brandId,
+          text: `[Collaboration Declined] ${brandName} declined this collaboration${reason && reason.trim() ? `. Reason: "${reason.trim()}"` : ""}.`,
+          messageType: "system",
+          read: false,
+        });
+      }
+    } catch (chatErr) {
+      console.warn("Could not post rejection message to chat:", chatErr);
+    }
+
     await Notification.create({
       recipientId: connection.creatorId,
       senderId: connection.brandId,

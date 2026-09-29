@@ -2024,8 +2024,35 @@ export const verifyCollaborationPayment = async (req, res) => {
       recipientId: connection.creatorId,
       senderId: connection.brandId,
       type: "payment_secured",
-      text: `${brandName} has successfully paid Pravixo ₹${payment.grossAmount.toLocaleString()} for "${campaignTitle}". Creator allocation: ₹${payment.creatorAmount.toLocaleString()}.`,
+      text: `${brandName} has successfully paid Pravixo ₹${payment.grossAmount.toLocaleString()} for "${campaignTitle}". You may now begin work on deliverables!`,
     });
+
+    // Add Escrow Funded message to chat history
+    try {
+      const conv = await Conversation.findOne({
+        creatorId: connection.creatorId,
+        brandId: connection.brandId,
+        campaignId: connection.campaignId,
+      });
+      if (conv) {
+        await Message.create({
+          conversationId: conv._id,
+          senderId: connection.brandId,
+          text: `[Escrow Funded] 💳 ${brandName} deposited ₹${payment.grossAmount.toLocaleString()} to Pravixo Escrow for "${campaignTitle}". Creator payout of ₹${payment.creatorAmount.toLocaleString()} (after 20% platform fee) is now 100% secured. Creator can now start work!`,
+          messageType: "system",
+          metadata: {
+            paymentId: payment._id,
+            grossAmount: payment.grossAmount,
+            creatorAmount: payment.creatorAmount,
+            platformFee: payment.platformCommissionAmount,
+            status: "PAID",
+          },
+          read: false,
+        });
+      }
+    } catch (chatErr) {
+      console.warn("Could not post payment message to chat:", chatErr);
+    }
 
     // Notify Admins
     const admins = await Profile.find({ role: "admin" }).select("_id").lean();

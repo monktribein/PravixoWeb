@@ -618,6 +618,7 @@ export function DashboardInfluencer() {
   const [selectedCampaignForDiscovery, setSelectedCampaignForDiscovery] = useState(null);
   const [selectedTierForJoin, setSelectedTierForJoin] = useState(null);
   const [joinPitch, setJoinPitch] = useState("");
+  const [joinProposedRate, setJoinProposedRate] = useState("");
   const [joiningCampaign, setJoiningCampaign] = useState(false);
 
   // Deliverable Submission Modal States (Task 6 & Task 7)
@@ -4341,6 +4342,7 @@ const CAMPAIGNS_PER_PAGE = 6;
                                       onClick={() => {
                                         setSelectedCampaignForDiscovery(camp);
                                         setSelectedTierForJoin(matchedTier || null);
+                                        setJoinProposedRate(matchedTier?.cashAmount ? String(matchedTier.cashAmount) : camp.minBudgetPerCreator ? String(camp.minBudgetPerCreator) : "");
                                         setJoinPitch(`Hi ${camp.brand?.fullName || "there"}! I'm excited to collaborate on your "${camp.title}" campaign.`);
                                       }}
                                     >
@@ -5779,19 +5781,38 @@ const CAMPAIGNS_PER_PAGE = 6;
                 </div>
               )}
 
-              {/* Pitch Input */}
+              {/* Proposed Rate & Pitch Input */}
               {!selectedCampaignForDiscovery.isParticipating && !selectedCampaignForDiscovery.isRequested && (
-                <div className="space-y-1.5 pt-2 border-t border-border/40">
-                  <label className="text-xs font-semibold text-foreground">
-                    Your Pitch to Brand
-                  </label>
-                  <Textarea
-                    placeholder="Briefly describe why you are a great fit for this campaign..."
-                    value={joinPitch}
-                    onChange={(e) => setJoinPitch(e.target.value)}
-                    className="text-xs rounded-xl resize-none"
-                    rows={3}
-                  />
+                <div className="space-y-3 pt-2 border-t border-border/40">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                      <span>Your Proposed Rate (₹)</span>
+                      <span className="text-[10px] text-muted-foreground">Direct proposal to brand</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-xs">₹</span>
+                      <Input
+                        type="number"
+                        placeholder={selectedTierForJoin?.cashAmount ? String(selectedTierForJoin.cashAmount) : "e.g. 2500"}
+                        value={joinProposedRate}
+                        onChange={(e) => setJoinProposedRate(e.target.value)}
+                        className="pl-7 text-xs rounded-xl h-9"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Your Pitch to Brand
+                    </label>
+                    <Textarea
+                      placeholder="Briefly describe why you are a great fit for this campaign..."
+                      value={joinPitch}
+                      onChange={(e) => setJoinPitch(e.target.value)}
+                      className="text-xs rounded-xl resize-none"
+                      rows={3}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -5821,11 +5842,13 @@ const CAMPAIGNS_PER_PAGE = 6;
                       try {
                         const res = await apiPost(`/campaigns/${selectedCampaignForDiscovery._id}/join`, {
                           pitch: joinPitch.trim(),
+                          proposedRate: joinProposedRate ? Number(joinProposedRate) : undefined,
                           appliedTier: selectedTierForJoin || undefined,
                         });
-                        toast.success("Application submitted successfully!");
+                        toast.success("Application submitted successfully! It will appear in your chat history.");
                         setSelectedCampaignForDiscovery(null);
                         setDiscoverRefreshKey((k) => k + 1);
+                        setRequestsRefreshKey((k) => k + 1);
                       } catch (err) {
                         toast.error(err.response?.data?.message || err.message || "Failed to submit application");
                       } finally {
