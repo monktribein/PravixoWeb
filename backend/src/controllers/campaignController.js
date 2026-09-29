@@ -207,11 +207,15 @@ export const getDiscoverableCampaigns = async (req, res) => {
     const creatorId = req.user?._id || req.query.creatorId;
     const now = Date.now();
 
-    // Only APPROVED and active campaigns with valid date range
+    // Only APPROVED campaigns that are active and not expired
     const filter = {
       status: "APPROVED",
-      active: true,
-      endDate: { $gte: now - 24 * 60 * 60 * 1000 }, // allow ongoing until end of day
+      active: { $ne: false },
+      $or: [
+        { endDate: { $exists: false } },
+        { endDate: null },
+        { endDate: { $gte: now - 24 * 60 * 60 * 1000 } },
+      ],
     };
 
     const campaigns = await Campaign.find(filter)
@@ -267,7 +271,7 @@ export const getDiscoverableCampaigns = async (req, res) => {
           }
         }
 
-        const isBudgetExhausted = totalBudget > 0 && minBudget > 0 && remainingBudget < minBudget;
+        const isBudgetExhausted = totalBudget > 0 && minBudget > 0 && connections.length > 0 && remainingBudget < minBudget;
 
         return {
           ...camp,
@@ -287,7 +291,7 @@ export const getDiscoverableCampaigns = async (req, res) => {
       })
     );
 
-    // Filter out campaigns where remaining budget cannot afford even 1 creator (if totalBudget > 0 and minBudget > 0)
+    // Filter out campaigns where remaining budget cannot afford even 1 creator
     const discoverable = data.filter((camp) => !camp.isBudgetExhausted);
 
     return res.status(200).json({
