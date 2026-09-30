@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 import Review from "../models/Review.js";
 import Profile from "../models/Profile.js";
 import Conversation from "../models/Conversation.js";
+import Connection from "../models/Connection.js";
+import Campaign from "../models/Campaign.js";
 
 // Check karta hai ki user (brand ya creator) kisi doosre party ko review kar sakta hai ya nahi.
 // Sirf vhi review kar sakta hai jiske sath collaboration hui hai (accepted/amount_agreed/paid connection).
