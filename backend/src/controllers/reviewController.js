@@ -339,13 +339,36 @@ export const listReviewsForTarget = async (req, res) => {
 
         const reviewerProfile = revProfileId ? await Profile.findById(revProfileId).lean() : null;
 
+        const cleanHandle = reviewerProfile?.handle ? (reviewerProfile.handle.startsWith("@") ? reviewerProfile.handle.slice(1) : reviewerProfile.handle) : "";
+        const finalName = reviewerProfile?.fullName || reviewerProfile?.companyName || reviewerProfile?.brandName || reviewerProfile?.name || review.brandName || "Verified User";
+        const finalAvatar = reviewerProfile?.avatarUrl || reviewerProfile?.logoUrl || reviewerProfile?.image || review.brandAvatar || null;
+        const finalRole = review.reviewerRole || reviewerProfile?.role || "brand";
+        const finalGender = reviewerProfile?.gender || "male";
+        const finalCompany = reviewerProfile?.companyName || reviewerProfile?.brandName || (finalRole === "brand" ? "Brand Partner" : "Verified Creator");
+
         return {
           ...review,
-          reviewerName: reviewerProfile?.fullName || reviewerProfile?.name || "Verified User",
-          reviewerAvatar: reviewerProfile?.avatarUrl,
-          reviewerRole: review.reviewerRole || (reviewerProfile?.role || "brand"),
-          brandName: reviewerProfile?.fullName || reviewerProfile?.name || review.brandName || "Verified User",
-          brandAvatar: reviewerProfile?.avatarUrl || review.brandAvatar,
+          reviewerId: reviewerProfile?._id || revProfileId,
+          reviewerHandle: cleanHandle,
+          reviewerName: finalName,
+          reviewerAvatar: finalAvatar,
+          reviewerRole: finalRole,
+          reviewerGender: finalGender,
+          reviewerCompany: finalCompany,
+          brandName: finalName,
+          brandAvatar: finalAvatar,
+          brandHandle: cleanHandle,
+          reviewer: {
+            _id: reviewerProfile?._id || revProfileId,
+            fullName: finalName,
+            name: finalName,
+            brandName: finalName,
+            handle: cleanHandle,
+            avatarUrl: finalAvatar,
+            gender: finalGender,
+            role: finalRole,
+            companyName: finalCompany,
+          },
         };
       })
     );

@@ -1389,9 +1389,12 @@ export default function CreatorMediaKit() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {reviewsList.map((review, idx) => {
                 const reviewer = review.reviewer;
-                const reviewerName = reviewer?.fullName || reviewer?.brandName || review.authorName || "Verified Brand";
-                const reviewerAvatar = resolveImageUrl(reviewer?.avatarUrl) || getGenderAvatar(reviewerName, "male", "brand");
-                const reviewerCompany = reviewer?.companyName || reviewer?.industry || "Brand Partner";
+                const reviewerName = review.reviewerName || reviewer?.fullName || reviewer?.brandName || reviewer?.name || review.brandName || review.authorName || "Verified Partner";
+                const reviewerRole = review.reviewerRole || reviewer?.role || "brand";
+                const reviewerAvatar = resolveImageUrl(review.reviewerAvatar || reviewer?.avatarUrl || review.brandAvatar) || getGenderAvatar(reviewerName, review.reviewerGender || reviewer?.gender || "male", reviewerRole);
+                const reviewerCompany = review.reviewerCompany || reviewer?.companyName || (reviewerRole === "brand" ? "Brand Partner" : "Creator Partner");
+                const reviewerHandle = (review.reviewerHandle || reviewer?.handle || review.brandHandle || "").replace(/^@/, "");
+                const reviewerLink = reviewerHandle ? `/c/${reviewerHandle}` : (review.reviewerId ? `/influencer/${review.reviewerId}` : null);
 
                 return (
                   <div
@@ -1401,20 +1404,45 @@ export default function CreatorMediaKit() {
                     <div className="space-y-3">
                       {/* Top Row: Reviewer Info + Rating */}
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={reviewerAvatar}
-                            alt={reviewerName}
-                            className="w-10 h-10 rounded-full object-cover border border-border shrink-0 bg-background"
-                          />
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-bold text-foreground line-clamp-1">{reviewerName}</span>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        {reviewerLink ? (
+                          <Link
+                            to={reviewerLink}
+                            className="flex items-center gap-3 group/rev hover:opacity-90 transition-opacity"
+                            title={`View ${reviewerName}'s profile`}
+                          >
+                            <img
+                              src={reviewerAvatar}
+                              alt={reviewerName}
+                              className="w-10 h-10 rounded-full object-cover border border-border shrink-0 bg-background group-hover/rev:ring-2 group-hover/rev:ring-primary/50 transition-all"
+                            />
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-bold text-foreground line-clamp-1 group-hover/rev:text-primary transition-colors">
+                                  {reviewerName}
+                                </span>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                              </div>
+                              <span className="text-[11px] text-muted-foreground block line-clamp-1">
+                                {reviewerCompany}
+                              </span>
                             </div>
-                            <span className="text-[11px] text-muted-foreground block line-clamp-1">{reviewerCompany}</span>
+                          </Link>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={reviewerAvatar}
+                              alt={reviewerName}
+                              className="w-10 h-10 rounded-full object-cover border border-border shrink-0 bg-background"
+                            />
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-bold text-foreground line-clamp-1">{reviewerName}</span>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                              </div>
+                              <span className="text-[11px] text-muted-foreground block line-clamp-1">{reviewerCompany}</span>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         <div className="flex items-center gap-0.5 text-amber-400 bg-background/80 px-2 py-1 rounded-lg border border-border/60">
                           <Star className="w-3.5 h-3.5 fill-amber-400" />
