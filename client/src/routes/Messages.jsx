@@ -76,7 +76,7 @@ const resolveImageUrl = (url) => {
 const getConversationAvatar = (other, convType) => {
   const isSupport = other?.role === "admin" || convType === "admin_creator" || convType === "admin_brand";
   if (isSupport) return logoImg;
-  return resolveImageUrl(other?.avatarUrl) || getGenderAvatar(other?.fullName || "User", "male", other?.role || "creator");
+  return resolveImageUrl(other?.avatarUrl) || getGenderAvatar(other?.fullName || "User", other?.gender || "female", other?.role || "creator");
 };
 
 export default function Messages() {
@@ -626,6 +626,62 @@ export default function Messages() {
    * ----------------------------------------------------
    */
   const [isPayingCollaboration, setIsPayingCollaboration] = useState(false);
+  const [showPaymentChoiceModal, setShowPaymentChoiceModal] = useState(false);
+  const [brandWalletBalance, setBrandWalletBalance] = useState(0);
+
+  const fetchBrandWalletBalance = async () => {
+    try {
+      const res = await api.get("/api/wallet/my-wallet");
+      const w = res.data?.data?.wallet || res.data?.wallet || {};
+      setBrandWalletBalance(Number(w.availableBalance || 0));
+    } catch (e) {
+      console.error("Failed to fetch brand wallet balance:", e);
+    }
+  };
+
+  const handleOpenPaymentChoice = async () => {
+    await fetchBrandWalletBalance();
+    setShowPaymentChoiceModal(true);
+  };
+
+  const handlePayWithWallet = async () => {
+    const connId = activeConversation?.connection?._id;
+    if (!connId) {
+      toast.error("No active collaboration connection found.");
+      return;
+    }
+
+    try {
+      setIsPayingCollaboration(true);
+      const res = await api.post(`/api/payments/collaboration/${connId}/pay-with-wallet`);
+      const updatedConn = res.data?.data?.connection || {
+        ...activeConversation.connection,
+        paymentStatus: "PAID",
+      };
+
+      setActiveConversation((prev) => ({
+        ...prev,
+        connection: updatedConn,
+      }));
+
+      setConversations((prev) =>
+        prev.map((c) =>
+          c._id === activeConversation._id
+            ? { ...c, connection: updatedConn }
+            : c
+        )
+      );
+
+      toast.success("Payment successful! Funds deducted from your Pravixo Wallet and secured in escrow.");
+      setShowPaymentChoiceModal(false);
+      await fetchConversations();
+    } catch (error) {
+      console.error("Pay with wallet error:", error);
+      toast.error(error?.response?.data?.message || error?.message || "Failed to pay with wallet.");
+    } finally {
+      setIsPayingCollaboration(false);
+    }
+  };
 
   const handlePayCollaboration = async () => {
     const connId = activeConversation?.connection?._id;
@@ -636,6 +692,7 @@ export default function Messages() {
 
     try {
       setIsPayingCollaboration(true);
+      setShowPaymentChoiceModal(false);
 
       // Step 1: Request Order from backend
       const res = await api.post(`/api/payments/collaboration/${connId}/order`);
@@ -1473,7 +1530,7 @@ export default function Messages() {
                             const isSupport = other?.role === "admin" || conversation.conversationType === "admin_creator" || conversation.conversationType === "admin_brand";
                             e.target.src = isSupport
                               ? logoImg
-                              : getGenderAvatar(other?.fullName || "User", "male", other?.role || "creator");
+                              : getGenderAvatar(other?.fullName || "User", other?.gender || "female", other?.role || "creator");
                           }}
                         />
 
@@ -1602,7 +1659,7 @@ export default function Messages() {
                       e.target.onerror = null;
                       e.target.src = isOtherAdmin
                         ? logoImg
-                        : getGenderAvatar(otherProfile?.fullName || "User", "male", otherProfile?.role || "creator");
+                        : getGenderAvatar(otherProfile?.fullName || "User", otherProfile?.gender || "female", otherProfile?.role || "creator");
                     }}
                   />
 
@@ -1710,7 +1767,7 @@ export default function Messages() {
                                 ) : profile.role === "brand" ? (
                                   <Button
                                     size="sm"
-                                    onClick={handlePayCollaboration}
+                                    onClick={handleOpenPaymentChoice}
                                     disabled={isPayingCollaboration}
                                     className="h-7 rounded-full gradient-sunset text-white font-bold text-[11px] px-3 shadow-glow flex items-center gap-1 cursor-pointer"
                                   >
@@ -2093,38 +2150,45 @@ export default function Messages() {
                                       <Button
                                         size="sm"
                                         onClick={handleAgreeAmount}
-                                        disabled={isAgreeingOffer}
-                                        className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 h-8 shrink-0 flex items-center gap-1.5"
+                                        disabled={isAgreeingOffer || isAgreed}
+                                        className={cn(
+                                          "rounded-full text-xs font-semibold px-4 h-8 shrink-0 flex items-center gap-1.5 transition-all",
+                                          isAgreed
+                                            ? "bg-emerald-600/60 text-white cursor-not-allowed opacity-80"
+                                            : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                        )}
                                       >
                                         <Check className="h-3.5 w-3.5" />
-                                        {isAgreeingOffer ? "Agreeing..." : "Accept & Agree"}
+                                        {isAgreeingOffer ? "Agreeing..." : isAgreed ? "Agreed ✓" : "Accept & Agree"}
                                       </Button>
                                     )}
                                   </div>
                                 )}
 
-                                <form onSubmit={handleProposeAmount} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                  <div className="relative flex-1">
-                                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      placeholder={hasPendingProposal ? "Enter counter offer for creator payment..." : "Enter proposed creator payment amount (₹)..."}
-                                      value={negotiationAmount}
-                                      onChange={(e) => setNegotiationAmount(e.target.value)}
-                                      className="w-full rounded-xl border border-input bg-background py-2 pl-9 pr-4 text-xs font-medium outline-none focus:ring-1 focus:ring-primary"
-                                    />
-                                  </div>
+                                {!isAgreed && conn.paymentStatus !== "PAID" && (
+                                  <form onSubmit={handleProposeAmount} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                    <div className="relative flex-1">
+                                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        placeholder={hasPendingProposal ? "Enter counter offer for creator payment..." : "Enter proposed creator payment amount (₹)..."}
+                                        value={negotiationAmount}
+                                        onChange={(e) => setNegotiationAmount(e.target.value)}
+                                        className="w-full rounded-xl border border-input bg-background py-2 pl-9 pr-4 text-xs font-medium outline-none focus:ring-1 focus:ring-primary"
+                                      />
+                                    </div>
 
-                                  <Button
-                                    type="submit"
-                                    size="sm"
-                                    disabled={!negotiationAmount || isSubmittingOffer}
-                                    className="rounded-xl gradient-sunset text-white text-xs font-semibold px-4 h-9 shrink-0"
-                                  >
-                                    {isSubmittingOffer ? "Sending..." : hasPendingProposal ? "Send Counter Offer" : "Propose Amount"}
-                                  </Button>
-                                </form>
+                                    <Button
+                                      type="submit"
+                                      size="sm"
+                                      disabled={!negotiationAmount || isSubmittingOffer}
+                                      className="rounded-xl gradient-sunset text-white text-xs font-semibold px-4 h-9 shrink-0"
+                                    >
+                                      {isSubmittingOffer ? "Sending..." : hasPendingProposal ? "Send Counter Offer" : "Propose Amount"}
+                                    </Button>
+                                  </form>
+                                )}
                               </div>
                             )}
                           </div>
@@ -3430,6 +3494,123 @@ export default function Messages() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* BRAND PAYMENT CHOICE DIALOG (WALLET VS RAZORPAY) */}
+      <Dialog open={showPaymentChoiceModal} onOpenChange={setShowPaymentChoiceModal}>
+        <DialogContent className="sm:max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="h-9 w-9 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="font-display text-lg font-bold text-foreground">
+                  Escrow Payment for Collaboration
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Choose how you would like to secure the deal amount in Pravixo Escrow.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {activeConversation?.connection && (
+            <div className="space-y-4 pt-2">
+              <div className="p-4 rounded-2xl bg-secondary/30 border border-border/70 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">Total Amount to Pay</span>
+                  <span className="text-2xl font-black text-foreground font-display">
+                    ₹{Number(activeConversation.connection.brandTotal || 0).toLocaleString()}
+                  </span>
+                </div>
+                <Badge variant="outline" className="text-xs font-semibold bg-primary/5 text-primary border-primary/20 px-3 py-1">
+                  100% Escrow Protected
+                </Badge>
+              </div>
+
+              {/* Option 1: Pay with Pravixo Wallet */}
+              <div
+                className={cn(
+                  "p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3",
+                  brandWalletBalance >= (activeConversation.connection.brandTotal || 0)
+                    ? "border-emerald-500/40 bg-emerald-500/5 hover:border-emerald-500"
+                    : "border-border/60 bg-muted/20 opacity-70"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center">
+                      <Wallet className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground">Pay with Pravixo Wallet</h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Available Balance: <strong className="text-foreground">₹{brandWalletBalance.toLocaleString()}</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  {brandWalletBalance < (activeConversation.connection.brandTotal || 0) && (
+                    <Badge variant="outline" className="text-[9px] text-amber-600 bg-amber-500/10 border-amber-500/20">
+                      Insufficient Balance
+                    </Badge>
+                  )}
+                </div>
+
+                {brandWalletBalance >= (activeConversation.connection.brandTotal || 0) ? (
+                  <Button
+                    size="sm"
+                    disabled={isPayingCollaboration}
+                    onClick={handlePayWithWallet}
+                    className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-9 shadow-sm"
+                  >
+                    {isPayingCollaboration ? "Securing Funds..." : `Pay ₹${activeConversation.connection.brandTotal?.toLocaleString()} from Wallet (Instant)`}
+                  </Button>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
+                    <span className="text-[10px] text-muted-foreground">Short by ₹{((activeConversation.connection.brandTotal || 0) - brandWalletBalance).toLocaleString()}</span>
+                    <Link
+                      to="/dashboard/brand?tab=wallet"
+                      className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                    >
+                      Top up wallet <ArrowUpRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Option 2: Pay via Razorpay (UPI, Cards, Netbanking) */}
+              <div className="p-4 rounded-2xl border border-border bg-card flex flex-col justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                    <CreditCard className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground">Pay via Razorpay</h4>
+                    <p className="text-[11px] text-muted-foreground">
+                      UPI, Credit/Debit Cards, Net Banking, and Wallets
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  disabled={isPayingCollaboration}
+                  onClick={handlePayCollaboration}
+                  className="w-full rounded-xl gradient-sunset text-white text-xs font-bold h-9 shadow-glow"
+                >
+                  {isPayingCollaboration ? "Opening Checkout..." : `Pay ₹${activeConversation.connection.brandTotal?.toLocaleString()} with Razorpay`}
+                </Button>
+              </div>
+
+              <div className="text-[10px] text-muted-foreground text-center flex items-center justify-center gap-1">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Pravixo Escrow Guarantee: Funds released only after you approve deliverables.</span>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

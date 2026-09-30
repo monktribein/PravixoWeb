@@ -7,6 +7,7 @@ import {
   approveDeliverableSubmission,
   rejectDeliverableSubmission,
   resubmitDeliverableContent,
+  deleteDeliverableSubmission,
 } from "../controllers/submissionController.js";
 
 const router = express.Router();
@@ -48,4 +49,12 @@ router.patch(
   rejectDeliverableSubmission
 );
 
+// Delete deliverable submission
+router.delete(
+  "/:submissionId",
+  protect,
+  deleteDeliverableSubmission
+);
+
 export default router;
+

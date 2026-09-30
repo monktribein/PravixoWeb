@@ -45,6 +45,10 @@ import {
   Loader2,
   HelpCircle,
   AlertCircle,
+  Wallet,
+  Landmark,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from "lucide-react";
 
 
@@ -494,6 +498,106 @@ export function DashboardCustomer() {
   }, [popupSettings, offers, profile, user]);
 
   const [referralRefreshKey, setReferralRefreshKey] = useState(0);
+  const [walletRefreshKey, setWalletRefreshKey] = useState(0);
+  const [isRefreshingWallet, setIsRefreshingWallet] = useState(false);
+  const [showAddFundsModal, setShowAddFundsModal] = useState(false);
+  const [addFundsAmount, setAddFundsAmount] = useState("");
+  const [isAddingFunds, setIsAddingFunds] = useState(false);
+
+  // Brand Wallet Query
+  const { data: brandWalletData = null } = useApiQuery(
+    `/wallet/my-wallet?k=${walletRefreshKey}`,
+    {},
+    Boolean(profile)
+  );
+
+  const brandWallet = (brandWalletData && typeof brandWalletData === "object" && !Array.isArray(brandWalletData))
+    ? (brandWalletData.wallet || {})
+    : {};
+  const brandTransactionsList = (brandWalletData && Array.isArray(brandWalletData.recentTransactions))
+    ? brandWalletData.recentTransactions
+    : [];
+
+  const handleAddFunds = async (e) => {
+    e?.preventDefault();
+    const amountNum = Number(addFundsAmount);
+    if (!amountNum || amountNum < 10) {
+      toast.error("Please enter a valid deposit amount of at least ₹10");
+      return;
+    }
+
+    try {
+      setIsAddingFunds(true);
+      const res = await api.post("/api/wallet/deposit/order", { amount: amountNum });
+      const orderData = res.data?.data || res.data;
+
+      if (!orderData || !orderData.orderId) {
+        throw new Error("Failed to initialize wallet deposit order.");
+      }
+
+      const options = {
+        key: orderData.key || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_placeholder",
+        amount: orderData.amount,
+        currency: orderData.currency || "INR",
+        name: "Pravixo Platform",
+        description: `Add Funds to Brand Wallet (₹${amountNum.toLocaleString()})`,
+        order_id: orderData.orderId,
+        handler: async (response) => {
+          try {
+            setIsAddingFunds(true);
+            await api.post("/api/wallet/deposit/verify", {
+              amount: amountNum,
+              gatewayOrderId: response.razorpay_order_id,
+              gatewayPaymentId: response.razorpay_payment_id,
+              gatewaySignature: response.razorpay_signature,
+            });
+
+            toast.success(`Successfully added ₹${amountNum.toLocaleString()} to your wallet!`);
+            setShowAddFundsModal(false);
+            setAddFundsAmount("");
+            setWalletRefreshKey((k) => k + 1);
+          } catch (verifyErr) {
+            console.error("Wallet deposit verification failed:", verifyErr);
+            toast.error(verifyErr?.response?.data?.message || verifyErr.message || "Payment verification failed.");
+          } finally {
+            setIsAddingFunds(false);
+          }
+        },
+        prefill: {
+          name: profile.fullName || "",
+          email: profile.email || "",
+          contact: profile.phone || "",
+        },
+        theme: {
+          color: "#EC4899",
+        },
+        modal: {
+          ondismiss: () => {
+            setIsAddingFunds(false);
+            toast.info("Add funds cancelled.");
+          },
+        },
+      };
+
+      if (!window.Razorpay) {
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.onload = () => {
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+        };
+        document.body.appendChild(script);
+      } else {
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      }
+    } catch (err) {
+      console.error("Deposit order error:", err);
+      toast.error(err?.response?.data?.message || err.message || "Failed to create deposit order.");
+      setIsAddingFunds(false);
+    }
+  };
+
   const { data: referralCodeData = null } = useApiQuery(
     `/referrals/my-code?k=${referralRefreshKey}`,
     {},
@@ -1852,12 +1956,12 @@ const [submittingVerification, setSubmittingVerification] =
                 >
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <img src={
-                        req.creatorProfile?.avatarUrl ||
-                        `https://api.dicebear.com/9.x/avataaars/svg?seed=${req.creatorProfile?.fullName}`
+                        resolveImageUrl(req.creatorProfile?.avatarUrl) ||
+                        getGenderAvatar(req.creatorProfile?.fullName || "Creator", req.creatorProfile?.gender, "creator")
                       }
                       alt=""
                       className="h-12 w-12 rounded-xl object-cover aspect-square border border-border/50 shadow-sm flex-shrink-0"
-                     onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }} />
+                     onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(req.creatorProfile?.fullName || "Creator", req.creatorProfile?.gender, "creator"); }} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
@@ -3322,12 +3426,12 @@ const [submittingVerification, setSubmittingVerification] =
                         className="flex items-center gap-3 rounded-2xl border border-border p-3"
                       >
                         <img src={
-                            creator.avatarUrl ||
-                            `https://api.dicebear.com/9.x/avataaars/svg?seed=${creator.fullName}`
+                            resolveImageUrl(creator.avatarUrl) ||
+                            getGenderAvatar(creator.fullName, creator.gender, "creator")
                           }
                           alt=""
                           className="h-10 w-10 rounded-full object-cover aspect-square flex-shrink-0 border border-border"
-                         onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }} />
+                         onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(creator.fullName, creator.gender, "creator"); }} />
                         <div className="min-w-0 flex-1">
                           <Link
                             to={`/influencer/${creator._id}`}
@@ -3922,15 +4026,131 @@ const [submittingVerification, setSubmittingVerification] =
               </div>
             </div>
           </div>
-        ) : activeTab === "referrals" ? (
+        ) : (activeTab === "wallet" || activeTab === "referrals") ? (
           <div className="space-y-6">
+            {/* BRAND WALLET & FUNDS CARD */}
+            <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
+                    <Wallet className="h-6 w-6 text-primary" /> Brand Wallet & Funds
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Add funds in advance to instantly pay creators for collaborations, and receive direct platform referral earnings.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full text-xs flex items-center gap-1.5"
+                    disabled={isRefreshingWallet}
+                    onClick={async () => {
+                      setIsRefreshingWallet(true);
+                      setWalletRefreshKey((k) => k + 1);
+                      setReferralRefreshKey((k) => k + 1);
+                      toast.info("Refreshing wallet balance & transactions...");
+                      setTimeout(() => {
+                        setIsRefreshingWallet(false);
+                        toast.success("Wallet updated!");
+                      }, 700);
+                    }}
+                  >
+                    <History className={`h-3.5 w-3.5 ${isRefreshingWallet ? "animate-spin text-primary" : ""}`} />
+                    {isRefreshingWallet ? "Refreshing..." : "Refresh"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="rounded-full text-xs font-bold px-5 gradient-sunset text-white shadow-glow border-0 flex items-center gap-1.5"
+                    onClick={() => {
+                      setAddFundsAmount("");
+                      setShowAddFundsModal(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" /> Add Funds to Wallet
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                {/* Available Balance Card */}
+                <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5 shadow-sm relative overflow-hidden group">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1">
+                      Available Balance
+                    </span>
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                      <IndianRupee className="h-4 w-4" />
+                    </div>
+                  </div>
+                  <div className="mt-3 text-3xl font-extrabold text-foreground font-display">
+                    ₹{Number(brandWallet.availableBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Ready for 1-click escrow payments
+                  </p>
+                </div>
+
+                {/* Total Referral Commission Earned */}
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Referral Income</span>
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                      <Gift className="h-4 w-4" />
+                    </div>
+                  </div>
+                  <div className="mt-3 text-3xl font-bold text-foreground font-display text-emerald-600">
+                    ₹{Number(referralEarnings?.total_earned || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Credited directly to this wallet
+                  </p>
+                </div>
+
+                {/* Active Referrals Count */}
+                <div
+                  onClick={() => setShowReferredModal(true)}
+                  className="rounded-2xl border border-border bg-card p-5 shadow-sm cursor-pointer hover:border-primary/50 hover:bg-secondary/20 transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider group-hover:text-primary">Active Referrals</span>
+                    <div className="h-8 w-8 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
+                      <Users className="h-4 w-4" />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <div className="text-3xl font-bold text-foreground font-display">
+                      {referralEarnings?.active_referrals_count ?? (referredListQuery?.total || 0)}
+                    </div>
+                    <span className="text-[11px] font-bold text-primary flex items-center gap-0.5">
+                      View list <ChevronRight className="h-3 w-3" />
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Referred creators & brand partners
+                  </p>
+                </div>
+
+                {/* Protection Policy Notice */}
+                <div className="rounded-2xl border border-border bg-secondary/30 p-5 shadow-sm flex flex-col justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-primary" />
+                    <span className="text-xs font-bold text-foreground">1-Click Escrow Protection</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+                    Use your wallet balance to lock collaboration escrow instantly without repeating card/UPI authorization on every deal.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* REFERRAL HERO CARD */}
             <div className="rounded-3xl border border-border bg-gradient-to-br from-card via-card/90 to-primary/5 p-6 sm:p-8 shadow-sm relative overflow-hidden">
               <div className="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
               <div className="max-w-3xl relative z-10">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-xs font-bold mb-3">
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>Tiered Referral Income (5% - 10%) • Paid Directly by Pravixo</span>
+                  <span>Tiered Referral Income (5% - 10%) • Auto-Credited to Brand Wallet</span>
                 </div>
                 <h2 className="font-display text-2xl sm:text-3xl font-black text-foreground tracking-tight">
                   Invite creators & brands. <span className="text-gradient-sunset">Earn up to 10% on every deal.</span>
@@ -4191,6 +4411,218 @@ const [submittingVerification, setSubmittingVerification] =
                 </div>
               )}
             </div>
+
+            {/* WALLET TRANSACTIONS & ACTIVITY LEDGER */}
+            <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                    <History className="h-4 w-4 text-primary" /> Wallet Activity & Transaction Ledger
+                  </h3>
+                  <p className="text-xs text-muted-foreground">Detailed history of all deposits, referral credits, and campaign escrow payments</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="rounded-full text-xs font-bold px-4 gradient-sunset text-white shadow-glow border-0 flex items-center gap-1.5"
+                    onClick={() => {
+                      setAddFundsAmount("");
+                      setShowAddFundsModal(true);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add Funds
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full text-xs flex items-center gap-1.5"
+                    disabled={isRefreshingWallet}
+                    onClick={() => {
+                      setIsRefreshingWallet(true);
+                      setWalletRefreshKey((k) => k + 1);
+                      toast.info("Refreshing ledger...");
+                      setTimeout(() => {
+                        setIsRefreshingWallet(false);
+                        toast.success("Ledger updated!");
+                      }, 700);
+                    }}
+                  >
+                    <History className={`h-3.5 w-3.5 ${isRefreshingWallet ? "animate-spin text-primary" : ""}`} />
+                    {isRefreshingWallet ? "Refreshing..." : "Refresh"}
+                  </Button>
+                </div>
+              </div>
+
+              {(!brandTransactionsList || brandTransactionsList.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-border rounded-2xl bg-secondary/5">
+                  <Wallet className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                  <p className="font-semibold text-sm text-foreground">No wallet transactions recorded yet</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-[340px]">
+                    Deposit funds to pay for campaigns instantly or invite peers to earn referral bonuses directly into your wallet.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-border/50 text-muted-foreground font-semibold">
+                        <th className="pb-3 pl-2">Type</th>
+                        <th className="pb-3 px-2">Description / Note</th>
+                        <th className="pb-3 px-2">Date</th>
+                        <th className="pb-3 px-2">Amount</th>
+                        <th className="pb-3 pr-2 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {brandTransactionsList.map((tx, idx) => {
+                        const isCredit = tx.amount > 0 && tx.transaction_type !== "escrow_payment" && tx.transaction_type !== "withdrawal";
+                        return (
+                          <tr key={tx._id || idx} className="hover:bg-secondary/10 transition-colors">
+                            <td className="py-3.5 pl-2 font-semibold text-foreground flex items-center gap-2">
+                              <div className={cn(
+                                "h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0",
+                                isCredit ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary"
+                              )}>
+                                {isCredit ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
+                              </div>
+                              <span className="capitalize font-medium">
+                                {tx.transaction_type === "referral_earning" ? "Referral Bonus" :
+                                 tx.transaction_type === "deposit" ? "Wallet Deposit" :
+                                 tx.transaction_type === "escrow_payment" ? "Campaign Escrow" :
+                                 tx.transaction_type?.replace(/_/g, " ") || "Transaction"}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-2 text-muted-foreground max-w-[280px] truncate">
+                              {tx.notes || tx.description || (tx.source_model ? `Ref: ${tx.source_model}` : "Wallet transaction")}
+                            </td>
+                            <td className="py-3.5 px-2 text-muted-foreground whitespace-nowrap">
+                              {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString(undefined, {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit"
+                              }) : "-"}
+                            </td>
+                            <td className={cn(
+                              "py-3.5 px-2 font-bold text-sm whitespace-nowrap",
+                              isCredit ? "text-emerald-600" : "text-foreground"
+                            )}>
+                              {isCredit ? "+" : "-"}₹{Math.abs(Number(tx.amount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3.5 pr-2 text-right">
+                              <Badge className={cn(
+                                "rounded-full text-[9px] font-bold px-2 py-0.5 border capitalize",
+                                tx.status === "completed" ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30" :
+                                tx.status === "pending" ? "bg-amber-500/15 text-amber-700 border-amber-500/30" :
+                                "bg-secondary text-muted-foreground border-border"
+                              )}>
+                                {tx.status || "Completed"}
+                              </Badge>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* ADD FUNDS MODAL DIALOG */}
+            <Dialog open={showAddFundsModal} onOpenChange={setShowAddFundsModal}>
+              <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-card border border-border">
+                <DialogHeader>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="h-9 w-9 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+                      <Wallet className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <DialogTitle className="font-display text-lg sm:text-xl font-bold text-foreground">
+                        Add Funds to Brand Wallet
+                      </DialogTitle>
+                      <DialogDescription className="text-xs text-muted-foreground">
+                        Top up your wallet balance securely via Razorpay (UPI, Netbanking, Cards).
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <form onSubmit={handleAddFunds} className="space-y-4 mt-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="addFundsAmount" className="text-xs font-semibold">Deposit Amount (₹) *</Label>
+                    <div className="relative">
+                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="addFundsAmount"
+                        type="number"
+                        min="10"
+                        step="1"
+                        placeholder="e.g. 5000"
+                        value={addFundsAmount}
+                        onChange={(e) => setAddFundsAmount(e.target.value)}
+                        className="pl-9 text-sm font-bold rounded-xl"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    {/* Quick Amount Suggestion Pills */}
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                      {[1000, 2500, 5000, 10000, 25000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setAddFundsAmount(String(amt))}
+                          className="px-2.5 py-1 rounded-lg border border-border bg-secondary/30 hover:bg-secondary text-[11px] font-semibold text-foreground transition-colors cursor-pointer"
+                        >
+                          +₹{amt.toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/80 bg-secondary/20 p-3 text-xs space-y-1">
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Current Balance:</span>
+                      <span className="font-bold text-foreground">₹{Number(brandWallet.availableBalance || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>New Balance After Top-up:</span>
+                      <span className="font-bold text-emerald-600">
+                        ₹{(Number(brandWallet.availableBalance || 0) + (Number(addFundsAmount) || 0)).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="mt-4 pt-3 border-t border-border/40 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full text-xs font-bold"
+                      onClick={() => setShowAddFundsModal(false)}
+                      disabled={isAddingFunds}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={isAddingFunds || !addFundsAmount || Number(addFundsAmount) < 10}
+                      className="rounded-full gradient-sunset text-white text-xs font-bold px-6 shadow-glow"
+                    >
+                      {isAddingFunds ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Processing...
+                        </>
+                      ) : (
+                        `Pay & Add ₹${Number(addFundsAmount || 0).toLocaleString()}`
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
 
             {/* REFERRED USERS DIALOG */}
             <Dialog open={showReferredModal} onOpenChange={setShowReferredModal}>
@@ -5256,15 +5688,15 @@ const [submittingVerification, setSubmittingVerification] =
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <img
                       src={
-                        req.creatorProfile?.avatarUrl ||
-                        `https://api.dicebear.com/9.x/avataaars/svg?seed=${req.creatorProfile?.fullName || "Creator"}`
+                        resolveImageUrl(req.creatorProfile?.avatarUrl) ||
+                        getGenderAvatar(req.creatorProfile?.fullName || "Creator", req.creatorProfile?.gender, "creator")
                       }
                       alt=""
                       className="h-12 w-12 rounded-xl object-cover border border-border shrink-0 cursor-pointer"
                       onClick={() => setSelectedCreatorForDetails(req)}
                       onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                        e.target.src = getGenderAvatar(req.creatorProfile?.fullName || "Creator", req.creatorProfile?.gender, "creator");
                       }}
                     />
                     <div className="min-w-0 flex-1">
@@ -5371,14 +5803,14 @@ const [submittingVerification, setSubmittingVerification] =
                 <div className="flex items-center gap-3.5">
                   <img
                     src={
-                      selectedCreatorForDetails.creatorProfile?.avatarUrl ||
-                      `https://api.dicebear.com/9.x/avataaars/svg?seed=${selectedCreatorForDetails.creatorProfile?.fullName || "Creator"}`
+                      resolveImageUrl(selectedCreatorForDetails.creatorProfile?.avatarUrl) ||
+                      getGenderAvatar(selectedCreatorForDetails.creatorProfile?.fullName || "Creator", selectedCreatorForDetails.creatorProfile?.gender, "creator")
                     }
                     alt=""
                     className="h-14 w-14 rounded-2xl object-cover border border-border shadow-sm shrink-0"
                     onError={(e) => {
                       e.target.onerror = null;
-                      e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                      e.target.src = getGenderAvatar(selectedCreatorForDetails.creatorProfile?.fullName || "Creator", selectedCreatorForDetails.creatorProfile?.gender, "creator");
                     }}
                   />
                   <div>
@@ -5869,14 +6301,14 @@ const [submittingVerification, setSubmittingVerification] =
                     <div className="flex items-center gap-3 min-w-0">
                       <img
                         src={
-                          creator?.avatarUrl ||
-                          `https://api.dicebear.com/9.x/avataaars/svg?seed=${creator?.fullName || "Creator"}`
+                          resolveImageUrl(creator?.avatarUrl) ||
+                          getGenderAvatar(creator?.fullName || "Creator", creator?.gender, "creator")
                         }
                         alt=""
                         className="h-12 w-12 rounded-2xl object-cover border border-border shrink-0"
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                          e.target.src = getGenderAvatar(creator?.fullName || "Creator", creator?.gender, "creator");
                         }}
                       />
                       <div className="min-w-0">
@@ -5993,14 +6425,14 @@ const [submittingVerification, setSubmittingVerification] =
                           <div className="flex items-center gap-3 min-w-0">
                             <img
                               src={
-                                creator?.avatarUrl ||
-                                `https://api.dicebear.com/9.x/avataaars/svg?seed=${creator?.fullName || "Creator"}`
+                                resolveImageUrl(creator?.avatarUrl) ||
+                                getGenderAvatar(creator?.fullName || "Creator", creator?.gender, "creator")
                               }
                               alt=""
                               className="h-10 w-10 rounded-xl object-cover border border-border shrink-0"
                               onError={(e) => {
                                 e.target.onerror = null;
-                                e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                                e.target.src = getGenderAvatar(creator?.fullName || "Creator", creator?.gender, "creator");
                               }}
                             />
                             <div className="min-w-0">
@@ -6186,9 +6618,9 @@ const [submittingVerification, setSubmittingVerification] =
               followListUsers.map((u) => {
                 const uId = u._id || u.profileId;
                 const avatar =
-                  u.avatarUrl ||
-                  u.profilePicture ||
-                  `https://api.dicebear.com/9.x/avataaars/svg?seed=${u.fullName || "User"}`;
+                  resolveImageUrl(u.avatarUrl) ||
+                  resolveImageUrl(u.profilePicture) ||
+                  getGenderAvatar(u.fullName || u.handle || "User", u.gender, u.role || "creator");
 
                 return (
                   <div
@@ -6208,7 +6640,7 @@ const [submittingVerification, setSubmittingVerification] =
                         className="h-10 w-10 rounded-full object-cover border border-border shrink-0"
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                          e.target.src = getGenderAvatar(u.fullName || u.handle || "User", u.gender, u.role || "creator");
                         }}
                       />
                       <div className="min-w-0">
@@ -7076,12 +7508,12 @@ const [submittingVerification, setSubmittingVerification] =
                 <div className="flex items-center gap-3 min-w-0">
                   <img
                     src={
-                      acceptPaymentModalReq.creatorProfile?.avatarUrl ||
-                      `https://api.dicebear.com/9.x/avataaars/svg?seed=${acceptPaymentModalReq.creatorProfile?.fullName}`
+                      resolveImageUrl(acceptPaymentModalReq.creatorProfile?.avatarUrl) ||
+                      getGenderAvatar(acceptPaymentModalReq.creatorProfile?.fullName || "Creator", acceptPaymentModalReq.creatorProfile?.gender, "creator")
                     }
                     alt=""
                     className="h-11 w-11 rounded-xl object-cover border border-border shrink-0"
-                    onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }}
+                    onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(acceptPaymentModalReq.creatorProfile?.fullName || "Creator", acceptPaymentModalReq.creatorProfile?.gender, "creator"); }}
                   />
                   <div className="min-w-0">
                     <h4 className="text-xs font-bold text-foreground truncate">

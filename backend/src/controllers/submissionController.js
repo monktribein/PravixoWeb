@@ -162,14 +162,14 @@ export const submitDeliverableContent = async (req, res) => {
       senderId: connection.creatorId,
       type: "deliverable_submitted",
       text: `${creatorName} submitted a ${deliverableType} for "${campaignTitle}".`,
-      targetUrl: "/dashboard/customer",
+      targetUrl: "/collaborations",
       createdAt: now,
     });
 
     sendPushToUser(connection.brandId, {
       title: "Deliverable Submitted! 🎬",
       body: `${creatorName} submitted a ${deliverableType} for "${campaignTitle}".`,
-      url: "/dashboard/customer",
+      url: "/collaborations",
     }).catch((err) => console.error("Deliverable submission push error:", err.message));
 
     // Notify Admin
@@ -441,14 +441,14 @@ export const approveDeliverableSubmission = async (req, res) => {
       senderId: connection.brandId,
       type: "deliverable_approved",
       text: approvalText,
-      targetUrl: "/dashboard/influencer",
+      targetUrl: "/collaborations",
       createdAt: now,
     });
 
     sendPushToUser(connection.creatorId, {
       title: "Deliverable Approved! ✅",
       body: approvalText,
-      url: "/dashboard/influencer",
+      url: "/collaborations",
     }).catch((err) => console.error("Deliverable approval push error:", err.message));
 
     // 2. Send Deliverable Approval Notification to Admins
@@ -473,14 +473,14 @@ export const approveDeliverableSubmission = async (req, res) => {
         senderId: connection.brandId,
         type: "all_deliverables_approved",
         text: creatorAllDoneText,
-        targetUrl: "/dashboard/influencer",
+        targetUrl: "/collaborations",
         createdAt: now,
       });
 
       sendPushToUser(connection.creatorId, {
         title: "All Deliverables Approved! 🎉",
         body: creatorAllDoneText,
-        url: "/dashboard/influencer",
+        url: "/collaborations",
       }).catch((err) => console.error("All deliverables push error:", err.message));
 
       // Notify Brand that work is fully completed
@@ -490,14 +490,14 @@ export const approveDeliverableSubmission = async (req, res) => {
         senderId: connection.creatorId,
         type: "all_deliverables_approved",
         text: brandAllDoneText,
-        targetUrl: "/dashboard/customer",
+        targetUrl: "/collaborations",
         createdAt: now,
       });
 
       sendPushToUser(connection.brandId, {
         title: "Campaign Work Complete! 🌟",
         body: brandAllDoneText,
-        url: "/dashboard/customer",
+        url: "/collaborations",
       }).catch((err) => console.error("Brand all deliverables push error:", err.message));
 
       // Notify Admins that collaboration work is completed
@@ -589,7 +589,7 @@ export const approveDeliverableSubmission = async (req, res) => {
 export const rejectDeliverableSubmission = async (req, res) => {
   try {
     const { submissionId } = req.params;
-    const { reason } = req.body;
+    const reasonText = (req.body.reason || req.body.rejectionReason || "").trim();
 
     if (!mongoose.Types.ObjectId.isValid(submissionId)) {
       return res.status(400).json({
@@ -598,7 +598,7 @@ export const rejectDeliverableSubmission = async (req, res) => {
       });
     }
 
-    if (!reason || !reason.trim()) {
+    if (!reasonText) {
       return res.status(400).json({
         success: false,
         message: "Rejection feedback reason is required.",
@@ -648,7 +648,7 @@ export const rejectDeliverableSubmission = async (req, res) => {
 
     const now = Date.now();
     submission.status = "REJECTED";
-    submission.rejectionReason = reason.trim();
+    submission.rejectionReason = reasonText;
     submission.rejectedAt = now;
     submission.updatedAt = now;
     await submission.save();
@@ -682,20 +682,20 @@ export const rejectDeliverableSubmission = async (req, res) => {
       if (camp) campaignTitle = camp.title;
     }
 
-    const rejectText = `${brandName} requested changes on your ${submission.deliverableType} (v${submission.version || 1}) for "${campaignTitle}". Reason: ${reason.trim()}`;
+    const rejectText = `${brandName} requested changes on your ${submission.deliverableType} (v${submission.version || 1}) for "${campaignTitle}". Reason: ${reasonText}`;
     await Notification.create({
       recipientId: connection.creatorId,
       senderId: connection.brandId,
       type: "deliverable_rejected",
       text: rejectText,
-      targetUrl: "/dashboard/influencer",
+      targetUrl: "/collaborations",
       createdAt: now,
     });
 
     sendPushToUser(connection.creatorId, {
       title: "Deliverable Feedback / Changes Requested ⚠️",
       body: rejectText,
-      url: "/dashboard/influencer",
+      url: "/collaborations",
     }).catch((err) => console.error("Deliverable rejection push error:", err.message));
 
     // Post review status message in conversation chat
@@ -710,7 +710,7 @@ export const rejectDeliverableSubmission = async (req, res) => {
         await Message.create({
           conversationId: conversation._id,
           senderId: connection.brandId,
-          text: `[Deliverable Rejected] ${brandName} requested rework on ${submission.deliverableType} (v${submission.version || 1}). Feedback: "${reason.trim()}".`,
+          text: `[Deliverable Rejected] ${brandName} requested rework on ${submission.deliverableType} (v${submission.version || 1}). Feedback: "${reasonText}".`,
           messageType: "deliverable_submission",
           metadata: {
             submissionId: submission._id,
@@ -718,7 +718,7 @@ export const rejectDeliverableSubmission = async (req, res) => {
             contentUrl: submission.contentUrl,
             status: "REJECTED",
             version: submission.version || 1,
-            rejectionReason: reason.trim(),
+            rejectionReason: reasonText,
             reviewedAt: now,
           },
           read: false,
@@ -889,6 +889,7 @@ export const resubmitDeliverableContent = async (req, res) => {
       senderId: connection.creatorId,
       type: "deliverable_resubmitted",
       text: `${creatorName} resubmitted ${previousSubmission.deliverableType} (v${newVersionNumber}) after rework for "${campaignTitle}".`,
+      targetUrl: "/collaborations",
       createdAt: now,
     });
 
@@ -953,4 +954,125 @@ export const resubmitDeliverableContent = async (req, res) => {
     });
   }
 };
+
+// 6. Delete Deliverable Submission (Creator can delete their own submitted/rejected submissions; Brand/Admin can delete if needed)
+export const deleteDeliverableSubmission = async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(submissionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid submission ID.",
+      });
+    }
+
+    const submission = await Submission.findById(submissionId);
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: "Submission not found.",
+      });
+    }
+
+    const connection = await Connection.findById(submission.connectionId);
+    if (!connection) {
+      return res.status(404).json({
+        success: false,
+        message: "Associated collaboration record not found.",
+      });
+    }
+
+    // Security Check: Creator of submission, Brand or Admin can delete
+    if (req.user) {
+      const isCreator = String(submission.creatorId) === String(req.user._id);
+      const isBrand = String(submission.brandId) === String(req.user._id);
+      const isAdmin = req.user.role === "admin";
+
+      if (!isCreator && !isBrand && !isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized: You do not have permission to delete this submission.",
+        });
+      }
+
+      // If submission is APPROVED, only admin or brand can delete it to avoid accidental state inconsistency
+      if (submission.status === "APPROVED" && isCreator && !isAdmin) {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot delete an approved deliverable. Please contact the brand or support.",
+        });
+      }
+    }
+
+    await Submission.findByIdAndDelete(submissionId);
+
+    // Recalculate deliverables tracking and approval status on connection
+    const now = Date.now();
+    const approvedCountForType = await Submission.countDocuments({
+      connectionId: connection._id,
+      deliverableType: submission.deliverableType,
+      status: "APPROVED",
+    });
+
+    const submittedCountForType = await Submission.countDocuments({
+      connectionId: connection._id,
+      deliverableType: submission.deliverableType,
+      status: { $in: ["SUBMITTED", "RESUBMITTED"] },
+    });
+
+    const deliverableItem = connection.deliverablesTracking?.find(
+      (d) => d.type === submission.deliverableType
+    );
+
+    if (deliverableItem) {
+      deliverableItem.completedQuantity = approvedCountForType;
+      if (approvedCountForType >= deliverableItem.requiredQuantity) {
+        deliverableItem.status = "COMPLETED";
+      } else if (submittedCountForType > 0) {
+        deliverableItem.status = "SUBMITTED";
+      } else if (approvedCountForType > 0) {
+        deliverableItem.status = "IN_PROGRESS";
+      } else {
+        deliverableItem.status = "PENDING";
+      }
+      deliverableItem.updatedAt = now;
+    }
+
+    // Recalculate overall completion
+    const allApproved =
+      connection.deliverablesTracking &&
+      connection.deliverablesTracking.length > 0 &&
+      connection.deliverablesTracking.every(
+        (deliv) => (deliv.completedQuantity || 0) >= (deliv.requiredQuantity || 1)
+      );
+
+    connection.allDeliverablesCompleted = allApproved;
+    if (!allApproved) {
+      connection.approvalCompletedAt = null;
+      connection.paymentReleaseEligibleAt = null;
+      connection.paymentReleaseStatus = "NOT_STARTED";
+    }
+    connection.updatedAt = now;
+    await connection.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Submission deleted successfully.",
+      data: {
+        deletedSubmissionId: submissionId,
+        deliverablesTracking: connection.deliverablesTracking,
+        allDeliverablesCompleted: connection.allDeliverablesCompleted,
+      },
+    });
+  } catch (error) {
+    console.error("Delete submission error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete submission.",
+      error: error.message,
+    });
+  }
+};
+
 

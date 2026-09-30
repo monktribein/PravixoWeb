@@ -1976,6 +1976,10 @@ export const verifyCollaborationPayment = async (req, res) => {
 
     // Update Connection model
     connection.paymentStatus = "PAID";
+    connection.collaborationStatus = "AMOUNT_AGREED";
+    if (!connection.agreedAt) {
+      connection.agreedAt = now;
+    }
     connection.paidAt = now;
     connection.updatedAt = now;
 
@@ -2106,6 +2110,203 @@ export const verifyCollaborationPayment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to verify collaboration payment.",
+    });
+  }
+};
+
+/**
+ * POST /api/payments/collaboration/:connectionId/pay-with-wallet
+ * Pay the collaboration escrow directly using Brand Wallet balance.
+ */
+export const payCollaborationWithWallet = async (req, res) => {
+  try {
+    const { connectionId } = req.params;
+    const userId = req.user?._id;
+
+    if (!isValidObjectId(connectionId)) {
+      return res.status(400).json({ success: false, message: "Invalid collaboration ID" });
+    }
+
+    const connection = await Connection.findById(connectionId);
+    if (!connection) {
+      return res.status(404).json({ success: false, message: "Collaboration not found" });
+    }
+
+    if (String(connection.brandId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    if (connection.paymentStatus === "PAID") {
+      return res.status(400).json({ success: false, message: "This collaboration is already paid." });
+    }
+
+    let creatorAmount = connection.creatorAmount;
+    let pravixoFee = connection.pravixoFee || Math.round((connection.brandTotal || 0) * 0.20);
+    let brandTotal = connection.brandTotal || (creatorAmount + pravixoFee);
+
+    if (!brandTotal || brandTotal <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid agreed collaboration amount." });
+    }
+
+    // Atomically check and deduct brand wallet balance
+    const Wallet = (await import("../models/Wallet.js")).default;
+    const WalletTransaction = (await import("../models/WalletTransaction.js")).default;
+
+    const brandWallet = await Wallet.findOneAndUpdate(
+      {
+        creatorId: userId,
+        availableBalance: { $gte: brandTotal },
+      },
+      {
+        $inc: {
+          availableBalance: -brandTotal,
+          totalWithdrawn: brandTotal,
+        },
+      },
+      { new: true }
+    );
+
+    if (!brandWallet) {
+      const current = await Wallet.findOne({ creatorId: userId });
+      const available = current?.availableBalance || 0;
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient wallet balance. Total amount ₹${brandTotal.toLocaleString("en-IN")} required, but only ₹${available.toLocaleString("en-IN")} available. Please add funds to your wallet first.`,
+      });
+    }
+
+    const now = Date.now();
+    const invoiceNumber = `INV-${now}-${connection._id.toString().slice(-4).toUpperCase()}`;
+    const txnRef = `WAL-${now}-${userId.toString().slice(-4).toUpperCase()}`;
+
+    // Record wallet debit transaction
+    await WalletTransaction.create({
+      creatorId: userId,
+      collaborationId: connection._id,
+      campaignId: connection.campaignId,
+      type: "DEBIT",
+      transaction_type: "escrow_payment",
+      amount: brandTotal,
+      currency: "INR",
+      status: "COMPLETED",
+      description: `Escrow payment funded via Wallet for collaboration`,
+      referenceId: txnRef,
+      balanceAfter: brandWallet.availableBalance,
+    });
+
+    // Create or update Payment record
+    let payment = await Payment.findOne({ connectionId: connection._id });
+    if (!payment) {
+      payment = await Payment.create({
+        campaignId: connection.campaignId,
+        connectionId: connection._id,
+        brandId: connection.brandId,
+        creatorId: connection.creatorId,
+        paymentGateway: "wallet",
+        invoiceNumber,
+        invoiceStatus: "paid",
+        currency: "INR",
+        grossAmount: brandTotal,
+        platformCommissionPercentage: 20,
+        platformCommissionAmount: pravixoFee,
+        creatorAmount,
+        paymentStatus: "payment_successful",
+        transactionReference: txnRef,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      payment.grossAmount = brandTotal;
+      payment.platformCommissionAmount = pravixoFee;
+      payment.creatorAmount = creatorAmount;
+      payment.invoiceStatus = "paid";
+      payment.paymentStatus = "payment_successful";
+      payment.transactionReference = txnRef;
+      payment.paymentGateway = "wallet";
+      payment.updatedAt = now;
+      await payment.save();
+    }
+
+    connection.paymentId = payment._id;
+    connection.paymentStatus = "PAID";
+    connection.collaborationStatus = "AMOUNT_AGREED";
+    if (!connection.agreedAt) connection.agreedAt = now;
+    connection.paidAt = now;
+    connection.updatedAt = now;
+
+    // Snapshot deliverables if needed
+    if ((!connection.deliverablesTracking || connection.deliverablesTracking.length === 0) && connection.campaignId) {
+      const camp = await Campaign.findById(connection.campaignId).lean();
+      if (camp && camp.deliverables) {
+        const delivs = [];
+        if (camp.deliverables.reels > 0) delivs.push({ type: "REEL", requiredQuantity: camp.deliverables.reels, completedQuantity: 0, status: "PENDING", createdAt: now, updatedAt: now });
+        if (camp.deliverables.posts > 0) delivs.push({ type: "POST", requiredQuantity: camp.deliverables.posts, completedQuantity: 0, status: "PENDING", createdAt: now, updatedAt: now });
+        if (camp.deliverables.stories > 0) delivs.push({ type: "STORY", requiredQuantity: camp.deliverables.stories, completedQuantity: 0, status: "PENDING", createdAt: now, updatedAt: now });
+        if (camp.deliverables.videos > 0) delivs.push({ type: "VIDEO", requiredQuantity: camp.deliverables.videos, completedQuantity: 0, status: "PENDING", createdAt: now, updatedAt: now });
+        connection.deliverablesTracking = delivs;
+      }
+    }
+
+    await connection.save();
+
+    // Notify Creator & Admin
+    const brandProfile = await Profile.findById(connection.brandId).select("fullName").lean();
+    const brandName = brandProfile?.fullName || "Brand";
+
+    let campaignTitle = "collaboration";
+    if (connection.campaignId) {
+      const camp = await Campaign.findById(connection.campaignId).select("title").lean();
+      if (camp) campaignTitle = camp.title;
+    }
+
+    await Notification.create({
+      recipientId: connection.creatorId,
+      senderId: connection.brandId,
+      type: "payment_secured",
+      text: `${brandName} funded Pravixo Escrow with ₹${brandTotal.toLocaleString("en-IN")} via Brand Wallet for "${campaignTitle}". You can now begin work!`,
+    });
+
+    try {
+      const conv = await Conversation.findOne({
+        creatorId: connection.creatorId,
+        brandId: connection.brandId,
+        campaignId: connection.campaignId,
+      });
+      if (conv) {
+        await Message.create({
+          conversationId: conv._id,
+          senderId: connection.brandId,
+          text: `[Escrow Funded] 💳 ${brandName} paid ₹${brandTotal.toLocaleString("en-IN")} via Brand Wallet to Pravixo Escrow for "${campaignTitle}". Creator payout of ₹${creatorAmount.toLocaleString("en-IN")} is 100% secured!`,
+          messageType: "system",
+          metadata: {
+            paymentId: payment._id,
+            grossAmount: brandTotal,
+            creatorAmount,
+            platformFee: pravixoFee,
+            status: "PAID",
+            paidVia: "wallet",
+          },
+          read: false,
+        });
+      }
+    } catch (chatErr) {
+      console.log("Chat error:", chatErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Paid successfully using Wallet balance!",
+      data: {
+        connection,
+        payment,
+        wallet: brandWallet,
+      },
+    });
+  } catch (err) {
+    console.error("payCollaborationWithWallet error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to pay using wallet.",
     });
   }
 };

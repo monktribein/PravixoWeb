@@ -1906,7 +1906,7 @@ export default function InfluencerDetails() {
                 <img src={inf.avatar}
                   alt={inf.name}
                   className="h-28 w-28 sm:h-36 sm:w-36 rounded-full border-4 border-background object-cover shadow-elevated bg-background"
-                 onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }} />
+                 onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(inf.name, inf.gender, inf.role || "creator"); }} />
               </div>
 
               <div className="pb-2 space-y-2">
@@ -2758,15 +2758,12 @@ export default function InfluencerDetails() {
                         <div className="flex items-center gap-3">
 
                           <img src={
-                              review.brandAvatar ||
-                              `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(
-                                review.brandName ||
-                                "Brand"
-                              )}`
+                              resolveImageUrl(review.brandAvatar) ||
+                              getGenderAvatar(review.brandName || "Brand", "male", "brand")
                             }
                             alt=""
                             className="h-10 w-10 rounded-full object-cover border"
-                           onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }} />
+                           onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(review.brandName || "Brand", "male", "brand"); }} />
 
                           <div>
 
@@ -3178,9 +3175,10 @@ export default function InfluencerDetails() {
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full overflow-hidden border border-border bg-muted shrink-0">
                     <img
-                      src={resolveImageUrl(inf.avatarUrl || inf.avatar) || "https://api.dicebear.com/9.x/avataaars/svg?seed=Creator"}
+                      src={resolveImageUrl(inf.avatarUrl || inf.avatar) || getGenderAvatar(inf.name, inf.gender, "creator")}
                       alt={inf.name}
                       className="h-full w-full object-cover"
+                      onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(inf.name, inf.gender, "creator"); }}
                     />
                   </div>
                   <div className="min-w-0">
@@ -3209,9 +3207,10 @@ export default function InfluencerDetails() {
                   <div className="flex gap-2.5">
                     <div className="h-7 w-7 rounded-full overflow-hidden shrink-0 border border-border">
                       <img
-                        src={resolveImageUrl(inf.avatarUrl || inf.avatar) || "https://api.dicebear.com/9.x/avataaars/svg?seed=Creator"}
+                        src={resolveImageUrl(inf.avatarUrl || inf.avatar) || getGenderAvatar(inf.name, inf.gender, "creator")}
                         alt=""
                         className="h-full w-full object-cover"
+                        onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(inf.name, inf.gender, "creator"); }}
                       />
                     </div>
                     <div className="flex-1 min-w-0">

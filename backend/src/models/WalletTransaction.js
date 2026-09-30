@@ -52,6 +52,8 @@ const walletTransactionSchema = new mongoose.Schema(
         "withdrawal",
         "referral_commission",
         "refund_reversal",
+        "deposit",
+        "escrow_payment",
       ],
       default: "collaboration",
     },

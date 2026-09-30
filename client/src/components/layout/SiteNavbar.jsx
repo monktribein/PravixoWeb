@@ -317,21 +317,16 @@ export function SiteNavbar() {
                           className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors font-semibold"
                         >
                           <Briefcase className="h-4 w-4 text-purple-500" />
-                          <span>My Work</span>
+                          <span>My Work & Deliverables</span>
                         </Link>
                       ) : (
                         <Link
-                          to={`${dashboardBaseUrl}?tab=dashboard`}
-                          onClick={() => {
-                            setIsUserDropdownOpen(false);
-                            setTimeout(() => {
-                              window.scrollTo({ top: 400, behavior: "smooth" });
-                            }, 100);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                          to="/collaborations"
+                          onClick={() => setIsUserDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors font-semibold"
                         >
-                          <User className="h-4 w-4 text-purple-500" />
-                          <span>Edit Profile</span>
+                          <Briefcase className="h-4 w-4 text-purple-500" />
+                          <span>Campaign Work & Deliverables</span>
                         </Link>
                       )}
 
@@ -354,35 +349,13 @@ export function SiteNavbar() {
                       </Link>
 
                       <Link
-                        to="/referrals"
+                        to={`${dashboardBaseUrl}?tab=wallet`}
                         onClick={() => setIsUserDropdownOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors font-medium"
                       >
-                        <Gift className="h-4 w-4 text-emerald-500" />
-                        <span>Refer & Earn (5% - 10%)</span>
+                        <Wallet className="h-4 w-4 text-emerald-500" />
+                        <span>My Wallet</span>
                       </Link>
-
-                      {profile?.role === "brand" && (
-                        <Link
-                          to="/collaborations"
-                          onClick={() => setIsUserDropdownOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
-                        >
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                          <span>Collaborations</span>
-                        </Link>
-                      )}
-
-                      {profile?.role === "creator" && (
-                        <Link
-                          to={`${dashboardBaseUrl}?tab=wallet`}
-                          onClick={() => setIsUserDropdownOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
-                        >
-                          <Wallet className="h-4 w-4 text-indigo-500" />
-                          <span>Wallet & Payouts</span>
-                        </Link>
-                      )}
 
                       {profile?.role === "creator" ? (
                         <Link

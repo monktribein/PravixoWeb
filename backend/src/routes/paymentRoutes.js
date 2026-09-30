@@ -13,6 +13,7 @@ import {
   getPaymentsForCreator,
   initiateCollaborationPayment,
   verifyCollaborationPayment,
+  payCollaborationWithWallet,
 } from "../controllers/paymentController.js";
 
 const router = express.Router();
@@ -33,6 +34,12 @@ router.post(
   "/collaboration/:connectionId/verify",
   protect,
   verifyCollaborationPayment
+);
+
+router.post(
+  "/collaboration/:connectionId/pay-with-wallet",
+  protect,
+  payCollaborationWithWallet
 );
 
 /*

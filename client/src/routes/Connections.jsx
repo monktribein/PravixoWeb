@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getGenderAvatar } from "../utils/avatar";
 
 const resolveImageUrl = (url) => {
   if (!url || url === "undefined" || url === "null") return null;
@@ -405,13 +406,11 @@ export default function Connections() {
                       <div className="flex min-w-0 items-center gap-3">
                         <img src={
                             resolveImageUrl(partner.avatarUrl) ||
-                            `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(
-                              partner.fullName || "User"
-                            )}`
+                            getGenderAvatar(partner.fullName || "User", partner.gender, partner.role || "creator")
                           }
                           alt={partner.fullName || "User"}
                           className="h-12 w-12 flex-shrink-0 rounded-2xl border border-border/50 object-cover shadow-sm"
-                         onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }} />
+                         onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(partner.fullName || "User", partner.gender, partner.role || "creator"); }} />
 
                         <div className="min-w-0">
                           <Link

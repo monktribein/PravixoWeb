@@ -154,14 +154,14 @@ export const getConversations = async (req, res) => {
         let otherProfile = null;
         if (otherId) {
           otherProfile = await Profile.findById(otherId)
-            .select("fullName email handle avatarUrl role")
+            .select("fullName email handle avatarUrl gender role")
             .lean();
         }
 
         // If other user is an admin or system admin representation
         if (!otherProfile && conversation.adminId && (role === "creator" || role === "brand")) {
           otherProfile = await Profile.findById(conversation.adminId)
-            .select("fullName email handle avatarUrl role")
+            .select("fullName email handle avatarUrl gender role")
             .lean();
         }
 
@@ -281,7 +281,7 @@ export const getConversationDetails = async (req, res) => {
     let otherProfile = null;
     if (otherId) {
       otherProfile = await Profile.findById(otherId)
-        .select("fullName email handle avatarUrl role")
+        .select("fullName email handle avatarUrl gender role")
         .lean();
     }
 

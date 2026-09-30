@@ -103,23 +103,19 @@ export const creditCreatorWallet = async ({
 
 /**
  * GET /api/wallet/my-wallet
- * Retrieve authenticated creator's wallet balance and summary.
+ * Retrieve authenticated user's (creator or brand) wallet balance and summary.
  */
 export const getMyWallet = async (req, res) => {
   try {
-    const creatorId = req.user?._id;
-    if (!creatorId) {
+    const userId = req.user?._id;
+    if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
-    if (req.user?.role !== "creator" && req.user?.role !== "admin") {
-      return res.status(403).json({ success: false, message: "Wallet is only available for creators." });
-    }
-
-    let wallet = await Wallet.findOne({ creatorId });
+    let wallet = await Wallet.findOne({ creatorId: userId });
     if (!wallet) {
       wallet = await Wallet.create({
-        creatorId,
+        creatorId: userId,
         availableBalance: 0,
         pendingWithdrawalBalance: 0,
         totalEarned: 0,
@@ -129,7 +125,7 @@ export const getMyWallet = async (req, res) => {
     }
 
     // Get recent transactions
-    const recentTransactions = await WalletTransaction.find({ creatorId })
+    const recentTransactions = await WalletTransaction.find({ creatorId: userId })
       .sort({ createdAt: -1 })
       .limit(10)
       .populate("campaignId", "title")
@@ -148,6 +144,146 @@ export const getMyWallet = async (req, res) => {
       success: false,
       message: "Failed to load wallet.",
       error: error.message,
+    });
+  }
+};
+
+/**
+ * POST /api/wallet/deposit/order
+ * Initiate an order to add funds into the Brand/User wallet using Razorpay.
+ */
+export const createDepositOrder = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { amount } = req.body;
+    const numericAmount = Number(amount);
+
+    if (!numericAmount || numericAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter a valid deposit amount greater than zero.",
+      });
+    }
+
+    const { createOrder } = await import("../services/razorpayService.js");
+    const receiptId = `DEP-${Date.now()}-${userId.toString().slice(-4).toUpperCase()}`;
+
+    const order = await createOrder({
+      amount: numericAmount,
+      currency: "INR",
+      receiptId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        key: process.env.RAZORPAY_KEY_ID || "rzp_test_placeholder",
+      },
+    });
+  } catch (error) {
+    console.error("Create deposit order error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to create deposit order.",
+    });
+  }
+};
+
+/**
+ * POST /api/wallet/deposit/verify
+ * Verify Razorpay payment and credit the funds into User/Brand wallet.
+ */
+export const verifyDepositPayment = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { gatewayOrderId, gatewayPaymentId, gatewaySignature, amount } = req.body;
+
+    if (!gatewayOrderId || !gatewayPaymentId || !gatewaySignature) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification credentials missing.",
+      });
+    }
+
+    const { verifySignature, capturePayment } = await import("../services/razorpayService.js");
+
+    const isValid = verifySignature({
+      orderId: gatewayOrderId,
+      paymentId: gatewayPaymentId,
+      signature: gatewaySignature,
+    });
+
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid deposit payment signature.",
+      });
+    }
+
+    const depositAmount = Number(amount);
+    if (!depositAmount || depositAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid deposit amount.",
+      });
+    }
+
+    try {
+      await capturePayment({
+        paymentId: gatewayPaymentId,
+        amount: depositAmount,
+        currency: "INR",
+      });
+    } catch (e) {
+      console.log("Deposit capture note:", e.message);
+    }
+
+    const refId = `DEP-${gatewayPaymentId}`;
+
+    // Atomically credit wallet
+    const { wallet, transaction } = await creditCreatorWallet({
+      creatorId: userId,
+      amount: depositAmount,
+      referenceId: refId,
+      description: `Added funds to wallet (Ref: ${gatewayPaymentId})`,
+      transaction_type: "deposit",
+      status: "COMPLETED",
+    });
+
+    // Notify User
+    await Notification.create({
+      recipientId: userId,
+      senderId: userId,
+      type: "wallet_deposit",
+      text: `Successfully added ₹${depositAmount.toLocaleString("en-IN")} to your Pravixo Wallet. (Ref: ${gatewayPaymentId})`,
+      targetUrl: req.user?.role === "brand" ? "/dashboard/brand?tab=wallet" : "/dashboard/creator?tab=wallet",
+      createdAt: Date.now(),
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `₹${depositAmount.toLocaleString("en-IN")} added to wallet successfully.`,
+      data: {
+        wallet,
+        transaction,
+      },
+    });
+  } catch (error) {
+    console.error("Verify deposit payment error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to verify deposit payment.",
     });
   }
 };

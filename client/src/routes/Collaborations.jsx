@@ -40,7 +40,10 @@ import {
   ArrowRight,
   Filter,
   Upload,
+  Trash2,
 } from "lucide-react";
+
+import { getGenderAvatar } from "../utils/avatar";
 
 export default function CollaborationsPage() {
   const navigate = useNavigate();
@@ -58,11 +61,14 @@ export default function CollaborationsPage() {
   const [collabMeta, setCollabMeta] = useState(null);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [reviewingSubmissionId, setReviewingSubmissionId] = useState(null);
+  const [deletingSubmissionId, setDeletingSubmissionId] = useState(null);
+  const [deletingCollabId, setDeletingCollabId] = useState(null);
   const [rejectingSubmission, setRejectingSubmission] = useState(null);
   const [submissionRejectionReason, setSubmissionRejectionReason] = useState("");
 
   // Creator Upload / Submit Modal states
   const [selectedCollabForUpload, setSelectedCollabForUpload] = useState(null);
+  const [resubmittingSubmission, setResubmittingSubmission] = useState(null);
   const [uploadDeliverableType, setUploadDeliverableType] = useState("");
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadFilePreview, setUploadFilePreview] = useState(null);
@@ -83,9 +89,7 @@ export default function CollaborationsPage() {
     return `${apiUrl}${url}`;
   };
 
-  const getGenderAvatar = (seed) => {
-    return `https://api.dicebear.com/9.x/avataaars/svg?seed=${seed || "PravixoUser"}`;
-  };
+
 
   const fetchCollaborations = async () => {
     if (!profile?._id) return;
@@ -192,6 +196,53 @@ export default function CollaborationsPage() {
       setReviewingSubmissionId(null);
     }
   };
+
+  // Delete Submission Handler (for Creator or Brand)
+  const handleDeleteSubmission = async (submissionId) => {
+    if (!submissionId) return;
+    if (!window.confirm("Are you sure you want to delete this submitted deliverable?")) {
+      return;
+    }
+    setDeletingSubmissionId(submissionId);
+    try {
+      const res = await api.delete(`/submissions/${submissionId}`);
+      if (res.data?.success) {
+        toast.success("Submission deleted successfully!");
+        if (selectedCollabForSubmissions?._id) {
+          loadSubmissions(selectedCollabForSubmissions._id);
+        }
+        setRefreshKey((k) => k + 1);
+      }
+    } catch (err) {
+      console.error("Delete submission error:", err);
+      toast.error(err.response?.data?.message || "Failed to delete submission.");
+    } finally {
+      setDeletingSubmissionId(null);
+    }
+  };
+
+  // Delete / Dismiss Collaboration Handler
+  const handleDeleteCollaboration = async (collabId) => {
+    if (!collabId) return;
+    if (!window.confirm("Are you sure you want to delete/remove this collaboration?")) {
+      return;
+    }
+    setDeletingCollabId(collabId);
+    try {
+      const res = await api.delete(`/connections/${collabId}`);
+      if (res.data?.success) {
+        toast.success(res.data.message || "Collaboration deleted successfully.");
+        setRefreshKey((k) => k + 1);
+      }
+    } catch (err) {
+      console.error("Delete collaboration error:", err);
+      toast.error(err.response?.data?.message || "Failed to delete collaboration.");
+    } finally {
+      setDeletingCollabId(null);
+    }
+  };
+
+
 
   // Extract unique campaigns for filter dropdown
   const uniqueCampaigns = useMemo(() => {
@@ -415,9 +466,12 @@ export default function CollaborationsPage() {
             const partnerId = partner?._id || collab.creatorId?._id || collab.creatorId;
             const payment = collab.payment;
             const isPaid =
+              collab.paymentStatus === "PAID" ||
               payment?.paymentStatus === "held_in_escrow" ||
               payment?.paymentStatus === "released" ||
-              payment?.paymentStatus === "payout_released";
+              payment?.paymentStatus === "payout_released" ||
+              payment?.paymentStatus === "completed" ||
+              payment?.paymentStatus === "payment_successful";
 
             const campaign = collab.campaign;
             const deliverables = campaign?.deliverables;
@@ -425,7 +479,7 @@ export default function CollaborationsPage() {
             return (
               <div
                 key={collab._id}
-                className="rounded-3xl border border-border bg-card p-5 shadow-sm hover:border-primary/40 transition-all flex flex-col justify-between gap-4 relative overflow-hidden"
+                className="rounded-3xl border border-border bg-card p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col justify-between gap-4 relative overflow-hidden"
               >
                 <div className="space-y-3">
                   {/* Top Row: Partner Info & Status Badges */}
@@ -434,13 +488,13 @@ export default function CollaborationsPage() {
                       <img
                         src={
                           resolveImageUrl(partner?.avatarUrl) ||
-                          getGenderAvatar(partner?.fullName || partner?.name || "Partner")
+                          getGenderAvatar(partner?.fullName || partner?.name || "Partner", partner?.gender, userRole === "brand" ? "creator" : "brand")
                         }
                         alt=""
                         className="h-11 w-11 rounded-2xl object-cover border border-border/80 shrink-0"
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = getGenderAvatar("Fallback");
+                          e.target.src = getGenderAvatar(partner?.fullName || partner?.name || "Partner", partner?.gender, userRole === "brand" ? "creator" : "brand");
                         }}
                       />
                       <div className="min-w-0">
@@ -520,7 +574,7 @@ export default function CollaborationsPage() {
                           ✓ All Approved
                         </Badge>
                       ) : collab.pendingSubmissionsCount > 0 ? (
-                        <Badge variant="outline" className="text-[9px] uppercase px-2 py-0.5 bg-amber-500/15 text-amber-600 border-amber-500/30 font-bold animate-pulse">
+                        <Badge variant="outline" className="text-[9px] uppercase px-2 py-0.5 bg-amber-500/15 text-amber-600 border-amber-500/30 font-bold">
                           ⏳ Brand Review Pending ({collab.pendingSubmissionsCount})
                         </Badge>
                       ) : collab.rejectedSubmissionsCount > 0 ? (
@@ -542,17 +596,30 @@ export default function CollaborationsPage() {
                             <span
                               key={deliv.type}
                               className={cn(
-                                "inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-semibold border",
+                                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-semibold border transition-all",
                                 isFulfilled
                                   ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                                  : deliv.status === "SUBMITTED" || deliv.status === "RESUBMITTED"
+                                  ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
                                   : "bg-background border-border text-foreground"
                               )}
+                              title={
+                                isFulfilled
+                                  ? "Deliverable completed and approved"
+                                  : deliv.status === "SUBMITTED" || deliv.status === "RESUBMITTED"
+                                  ? "Work submitted, awaiting brand review"
+                                  : "Pending submission"
+                              }
                             >
                               <span>{deliv.type}</span>
-                              <span className="text-[10px] opacity-80">
-                                ({deliv.completedQuantity || 0}/{deliv.requiredQuantity})
+                              <span className="text-[10px] opacity-90 font-mono">
+                                ({deliv.completedQuantity || 0}/{deliv.requiredQuantity} Approved)
                               </span>
-                              {isFulfilled && <span>✓</span>}
+                              {isFulfilled ? (
+                                <span className="text-emerald-600 font-bold">✓</span>
+                              ) : (deliv.status === "SUBMITTED" || deliv.status === "RESUBMITTED") ? (
+                                <span className="text-amber-500 text-[9px] font-bold uppercase tracking-tight">⏳ In Review</span>
+                              ) : null}
                             </span>
                           );
                         })
@@ -596,28 +663,44 @@ export default function CollaborationsPage() {
 
                 {/* Bottom Action Controls */}
                 <div className="flex items-center justify-between gap-2 pt-3 border-t border-border/50">
-                  <div className="flex items-center gap-1.5">
-                    {collab.conversationId && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 rounded-full text-xs px-3 font-semibold"
-                        onClick={() => navigate(`/messages?conversationId=${collab.conversationId}`)}
-                      >
-                        <MessageCircle className="h-3.5 w-3.5 mr-1 text-primary" /> Chat
-                      </Button>
-                    )}
-                    {partnerId && (
+                    <div className="flex items-center gap-1.5">
+                      {collab.conversationId && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-full text-xs px-3 font-semibold"
+                          onClick={() => navigate(`/messages?conversationId=${collab.conversationId}`)}
+                        >
+                          <MessageCircle className="h-3.5 w-3.5 mr-1 text-primary" /> Chat
+                        </Button>
+                      )}
+                      {partnerId && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 rounded-full text-xs px-2.5 font-semibold text-muted-foreground hover:text-foreground"
+                          onClick={() => navigate(userRole === "brand" ? `/influencer/${partnerId}` : `/brand/${partnerId}`)}
+                          title="View Profile"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {/* Delete Collaboration button */}
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-8 rounded-full text-xs px-2.5 font-semibold text-muted-foreground hover:text-foreground"
-                        onClick={() => navigate(userRole === "brand" ? `/influencer/${partnerId}` : `/brand/${partnerId}`)}
+                        disabled={deletingCollabId === collab._id}
+                        className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                        onClick={() => handleDeleteCollaboration(collab._id)}
+                        title="Delete Collaboration"
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        {deletingCollabId === collab._id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
                       </Button>
-                    )}
-                  </div>
+                    </div>
 
                   <div className="flex items-center gap-1.5">
                     {/* If creator and payment is paid, show Submit Work button */}
@@ -793,39 +876,82 @@ export default function CollaborationsPage() {
                       </div>
                     )}
 
-                    {isRejected && sub.rejectionReason && (
-                      <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600">
-                        <span className="text-[10px] uppercase font-bold block mb-0.5">Your Feedback to Creator:</span>
-                        <p>{sub.rejectionReason}</p>
+                    {/* Rejection / Rework Feedback Banner (Visible to Creator & Brand) */}
+                    {isRejected && (
+                      <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 space-y-1">
+                        <div className="flex items-center gap-1.5 font-bold text-[11px] uppercase tracking-wider text-red-600">
+                          <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                          <span>{userRole === "creator" ? "Changes Requested by Brand:" : "Your Feedback to Creator:"}</span>
+                        </div>
+                        <p className="font-medium text-foreground whitespace-pre-wrap pl-5">
+                          {sub.rejectionReason || "Please review deliverables scope and upload updated version."}
+                        </p>
                       </div>
                     )}
 
-                    {/* Action Controls for Brand */}
-                    {userRole === "brand" && !isApproved && !isRejected && (
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={reviewingSubmissionId === sub._id}
-                          onClick={() => {
-                            setRejectingSubmission(sub);
-                            setSubmissionRejectionReason("");
-                          }}
-                          className="rounded-full text-xs font-semibold h-8 border-red-500/30 text-red-600 hover:bg-red-500/10 px-4"
-                        >
-                          <X className="h-3.5 w-3.5 mr-1" /> Request Rework
-                        </Button>
-                        <Button
-                          size="sm"
-                          disabled={reviewingSubmissionId === sub._id}
-                          onClick={() => handleApproveSubmission(sub._id)}
-                          className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-8 px-5 shadow-sm"
-                        >
-                          <Check className="h-3.5 w-3.5 mr-1" />
-                          {reviewingSubmissionId === sub._id ? "Approving..." : "Approve Work"}
-                        </Button>
+                    {/* Action Controls for Brand & Creator */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/40">
+                      <div>
+                        {/* Delete Button (Allowed for Creator on unapproved submissions or Brand/Admin) */}
+                        {(!isApproved || userRole === "brand" || profile?.role === "admin") && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={deletingSubmissionId === sub._id || reviewingSubmissionId === sub._id}
+                            onClick={() => handleDeleteSubmission(sub._id)}
+                            className="h-8 rounded-full text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            {deletingSubmissionId === sub._id ? "Deleting..." : "Delete Submission"}
+                          </Button>
+                        )}
                       </div>
-                    )}
+
+                      {/* Creator Resubmit Rework Button */}
+                      {userRole === "creator" && isRejected && (
+                        <Button
+                          size="sm"
+                          className="h-8 rounded-full gradient-sunset text-white text-xs font-bold px-4 shadow-sm flex items-center gap-1.5"
+                          onClick={() => {
+                            setResubmittingSubmission(sub);
+                            setSelectedCollabForUpload(selectedCollabForSubmissions);
+                            setUploadDeliverableType(sub.deliverableType);
+                            setUploadFile(null);
+                            setUploadFilePreview(null);
+                            setUploadCaption("");
+                          }}
+                        >
+                          <Upload className="h-3.5 w-3.5" /> Resubmit Reworked Work
+                        </Button>
+                      )}
+
+                      {/* Brand Action Buttons */}
+                      {userRole === "brand" && !isApproved && !isRejected && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={reviewingSubmissionId === sub._id || deletingSubmissionId === sub._id}
+                            onClick={() => {
+                              setRejectingSubmission(sub);
+                              setSubmissionRejectionReason("");
+                            }}
+                            className="rounded-full text-xs font-semibold h-8 border-red-500/30 text-red-600 hover:bg-red-500/10 px-4"
+                          >
+                            <X className="h-3.5 w-3.5 mr-1" /> Request Rework
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={reviewingSubmissionId === sub._id || deletingSubmissionId === sub._id}
+                            onClick={() => handleApproveSubmission(sub._id)}
+                            className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-8 px-5 shadow-sm"
+                          >
+                            <Check className="h-3.5 w-3.5 mr-1" />
+                            {reviewingSubmissionId === sub._id ? "Approving..." : "Approve Work"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })
@@ -890,12 +1016,13 @@ export default function CollaborationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* CREATOR SUBMIT DELIVERABLE DIALOG */}
+      {/* CREATOR SUBMIT / RESUBMIT DELIVERABLE DIALOG */}
       <Dialog
         open={Boolean(selectedCollabForUpload)}
         onOpenChange={(open) => {
           if (!open) {
             setSelectedCollabForUpload(null);
+            setResubmittingSubmission(null);
             setUploadFile(null);
             setUploadFilePreview(null);
             setUploadCaption("");
@@ -905,80 +1032,87 @@ export default function CollaborationsPage() {
         <DialogContent className="sm:max-w-[500px] rounded-3xl p-6">
           <DialogHeader>
             <DialogTitle className="font-display text-lg font-bold flex items-center gap-2">
-              <Upload className="h-5 w-5 text-primary" /> Submit Deliverable Work
+              <Upload className="h-5 w-5 text-primary" />
+              {resubmittingSubmission
+                ? `Resubmit Reworked ${resubmittingSubmission.deliverableType || "Deliverable"} (v${(resubmittingSubmission.version || 1) + 1})`
+                : "Submit Deliverable Work"}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Upload your completed work for "{selectedCollabForUpload?.campaign?.title || "Campaign"}". The brand will review your submitted content.
+              {resubmittingSubmission
+                ? `Upload your updated version addressing the brand's feedback for "${selectedCollabForUpload?.campaign?.title || "Campaign"}".`
+                : `Upload your completed work for "${selectedCollabForUpload?.campaign?.title || "Campaign"}". The brand will review your submitted content.`}
             </DialogDescription>
           </DialogHeader>
 
           {selectedCollabForUpload && (
             <div className="space-y-4 py-2">
-              {/* Deliverable Type Select */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-foreground">
-                  Select Deliverable Type <span className="text-red-500">*</span>
-                </Label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {selectedCollabForUpload.deliverablesTracking && selectedCollabForUpload.deliverablesTracking.length > 0 ? (
-                    selectedCollabForUpload.deliverablesTracking.map((deliv) => {
-                      const isSelected = uploadDeliverableType === deliv.type;
-                      const isFulfilled = (deliv.completedQuantity || 0) >= deliv.requiredQuantity;
-                      const typeLabels = {
-                        REEL: "Reel",
-                        POST: "Post",
-                        STORY: "Story",
-                        VIDEO: "Video",
-                      };
-                      return (
+              {/* Deliverable Type Select (Only for initial submissions) */}
+              {!resubmittingSubmission && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-foreground">
+                    Select Deliverable Type <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {selectedCollabForUpload.deliverablesTracking && selectedCollabForUpload.deliverablesTracking.length > 0 ? (
+                      selectedCollabForUpload.deliverablesTracking.map((deliv) => {
+                        const isSelected = uploadDeliverableType === deliv.type;
+                        const isFulfilled = (deliv.completedQuantity || 0) >= deliv.requiredQuantity;
+                        const typeLabels = {
+                          REEL: "Reel",
+                          POST: "Post",
+                          STORY: "Story",
+                          VIDEO: "Video",
+                        };
+                        return (
+                          <button
+                            key={deliv.type}
+                            type="button"
+                            disabled={isFulfilled}
+                            onClick={() => setUploadDeliverableType(deliv.type)}
+                            className={cn(
+                              "flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs transition font-semibold cursor-pointer",
+                              isSelected
+                                ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary"
+                                : isFulfilled
+                                ? "border-border/40 bg-muted/20 text-muted-foreground opacity-50 cursor-not-allowed"
+                                : "border-border bg-card hover:bg-secondary/60 text-foreground"
+                            )}
+                          >
+                            <span>{typeLabels[deliv.type] || deliv.type}</span>
+                            <span className="text-[10px] font-normal opacity-80 mt-0.5">
+                              {deliv.completedQuantity || 0}/{deliv.requiredQuantity}
+                            </span>
+                            {isFulfilled && (
+                              <span className="text-[9px] font-bold text-emerald-600">Done ✓</span>
+                            )}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      ["POST", "REEL", "STORY", "VIDEO"].map((t) => (
                         <button
-                          key={deliv.type}
+                          key={t}
                           type="button"
-                          disabled={isFulfilled}
-                          onClick={() => setUploadDeliverableType(deliv.type)}
+                          onClick={() => setUploadDeliverableType(t)}
                           className={cn(
                             "flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs transition font-semibold cursor-pointer",
-                            isSelected
+                            uploadDeliverableType === t
                               ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary"
-                              : isFulfilled
-                              ? "border-border/40 bg-muted/20 text-muted-foreground opacity-50 cursor-not-allowed"
                               : "border-border bg-card hover:bg-secondary/60 text-foreground"
                           )}
                         >
-                          <span>{typeLabels[deliv.type] || deliv.type}</span>
-                          <span className="text-[10px] font-normal opacity-80 mt-0.5">
-                            {deliv.completedQuantity || 0}/{deliv.requiredQuantity}
-                          </span>
-                          {isFulfilled && (
-                            <span className="text-[9px] font-bold text-emerald-600">Done ✓</span>
-                          )}
+                          <span>{t}</span>
                         </button>
-                      );
-                    })
-                  ) : (
-                    ["POST", "REEL", "STORY", "VIDEO"].map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setUploadDeliverableType(t)}
-                        className={cn(
-                          "flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs transition font-semibold cursor-pointer",
-                          uploadDeliverableType === t
-                            ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary"
-                            : "border-border bg-card hover:bg-secondary/60 text-foreground"
-                        )}
-                      >
-                        <span>{t}</span>
-                      </button>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* File Upload Area */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-foreground">
-                  Upload Deliverable File (Video or Image) <span className="text-red-500">*</span>
+                  Upload {resubmittingSubmission ? "Updated " : ""}Deliverable File (Video or Image) <span className="text-red-500">*</span>
                 </Label>
                 <div className="rounded-2xl border-2 border-dashed border-border/80 bg-secondary/20 p-4 text-center hover:border-primary/50 transition">
                   {uploadFilePreview ? (
@@ -1046,10 +1180,10 @@ export default function CollaborationsPage() {
               {/* Optional Caption / Description */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-foreground">
-                  Caption / Description / Submission Notes (Optional)
+                  {resubmittingSubmission ? "Rework Changes Summary / Notes" : "Caption / Description / Submission Notes (Optional)"}
                 </Label>
                 <Textarea
-                  placeholder="e.g. Here is the first draft of the post/reel focusing on the product..."
+                  placeholder={resubmittingSubmission ? "Describe what you fixed (e.g., 'Added clear brand logo in the first 3 seconds...')" : "e.g. Here is the first draft of the post/reel focusing on the product..."}
                   value={uploadCaption}
                   onChange={(e) => setUploadCaption(e.target.value)}
                   className="text-xs min-h-[70px] rounded-xl resize-none"
@@ -1065,6 +1199,7 @@ export default function CollaborationsPage() {
               className="rounded-full text-xs"
               onClick={() => {
                 setSelectedCollabForUpload(null);
+                setResubmittingSubmission(null);
                 setUploadFile(null);
                 setUploadFilePreview(null);
                 setUploadCaption("");
@@ -1092,17 +1227,30 @@ export default function CollaborationsPage() {
                     formData.append("caption", uploadCaption);
                   }
 
-                  await api.post(`/submissions/${selectedCollabForUpload._id}/submit`, formData, {
-                    headers: {
-                      "Content-Type": "multipart/form-data",
-                    },
-                  });
+                  if (resubmittingSubmission?._id) {
+                    await api.post(`/submissions/${resubmittingSubmission._id}/resubmit`, formData, {
+                      headers: {
+                        "Content-Type": "multipart/form-data",
+                      },
+                    });
+                    toast.success("Reworked deliverable resubmitted successfully! Brand notified.");
+                  } else {
+                    await api.post(`/submissions/${selectedCollabForUpload._id}/submit`, formData, {
+                      headers: {
+                        "Content-Type": "multipart/form-data",
+                      },
+                    });
+                    toast.success("Deliverable submitted successfully! Brand has been notified.");
+                  }
 
-                  toast.success("Deliverable submitted successfully! Brand has been notified.");
                   setSelectedCollabForUpload(null);
+                  setResubmittingSubmission(null);
                   setUploadFile(null);
                   setUploadFilePreview(null);
                   setUploadCaption("");
+                  if (selectedCollabForSubmissions?._id) {
+                    loadSubmissions(selectedCollabForSubmissions._id);
+                  }
                   setRefreshKey((k) => k + 1);
                 } catch (err) {
                   console.error("Submission error:", err);
@@ -1112,7 +1260,11 @@ export default function CollaborationsPage() {
                 }
               }}
             >
-              {submittingUpload ? "Submitting Work..." : "Submit Deliverable"}
+              {submittingUpload
+                ? "Submitting Work..."
+                : resubmittingSubmission
+                ? "Resubmit Rework"
+                : "Submit Deliverable"}
             </Button>
           </DialogFooter>
         </DialogContent>

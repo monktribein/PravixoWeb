@@ -399,16 +399,29 @@ export function NotificationBell({ profileId: propProfileId }) {
                     case "deliverable_submitted":
                     case "deliverable_approved":
                     case "deliverable_rejected":
+                    case "deliverable_resubmitted":
                     case "all_deliverables_approved":
+                      navigate("/collaborations");
+                      break;
                     case "campaign_request_received":
                     case "campaign_request_approved":
-                      navigate(
-                        profile?.role === "brand"
-                          ? "/dashboard/customer"
-                          : "/dashboard/influencer"
-                      );
+                      navigate("/collaborations");
+                      break;
+                    case "campaign_approved":
+                    case "campaign_rejected":
+                    case "campaign_pending_verification":
+                      navigate(profile?.role === "brand" ? "/dashboard/brand?tab=campaigns" : "/collaborations");
+                      break;
+                    case "payment_successful":
+                    case "payment_secured":
+                    case "payment_released":
+                    case "new_payment":
+                      navigate("/collaborations");
                       break;
                     default:
+                      if (event.text?.toLowerCase().includes("deliverable") || event.text?.toLowerCase().includes("post") || event.text?.toLowerCase().includes("reel")) {
+                        navigate("/collaborations");
+                      }
                       break;
                   }
                 };
