@@ -455,16 +455,32 @@ export const getAdminReviews = async (req, res) => {
     const populated = await Promise.all(
       reviews.map(async (rev) => {
         const reviewer = rev.reviewerId ? await Profile.findById(rev.reviewerId).lean() : null;
-        const target = rev.targetId ? await Profile.findById(rev.targetId).lean() : (rev.creatorId ? await Profile.findById(rev.creatorId).lean() : null);
+        const target = rev.targetId ? await Profile.findById(rev.targetId).lean() : (rev.creatorId ? await Profile.findById(rev.creatorId).lean() : (rev.brandId ? await Profile.findById(rev.brandId).lean() : null));
+
+        const reviewerGender = reviewer?.gender || "male";
+        const targetGender = target?.gender || "female";
+        const revName = reviewer?.fullName || reviewer?.companyName || reviewer?.brandName || reviewer?.name || "User";
+        const revRole = rev.reviewerRole || reviewer?.role || "brand";
+        const revAvatar = reviewer?.avatarUrl || reviewer?.logoUrl || null;
+        const tgtName = target?.fullName || target?.companyName || target?.brandName || target?.name || "Target User";
+        const tgtRole = target?.role || (revRole === "brand" ? "creator" : "brand");
+        const tgtAvatar = target?.avatarUrl || target?.logoUrl || null;
 
         return {
           ...rev,
-          reviewerName: reviewer?.fullName || reviewer?.name || "User",
-          reviewerRole: rev.reviewerRole || reviewer?.role || "brand",
-          reviewerAvatar: reviewer?.avatarUrl,
-          targetName: target?.fullName || target?.name || "Target",
-          targetRole: target?.role || "creator",
-          targetAvatar: target?.avatarUrl,
+          feedback: rev.text || rev.content || rev.feedback || "",
+          content: rev.text || rev.content || rev.feedback || "",
+          reviewerName: revName,
+          reviewerRole: revRole,
+          reviewerAvatar: revAvatar,
+          reviewerGender,
+          targetName: tgtName,
+          targetUserName: tgtName,
+          targetRole: tgtRole,
+          targetUserRole: tgtRole,
+          targetAvatar: tgtAvatar,
+          targetUserAvatar: tgtAvatar,
+          targetGender,
         };
       })
     );

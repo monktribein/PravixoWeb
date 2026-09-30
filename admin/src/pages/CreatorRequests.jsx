@@ -111,15 +111,12 @@ function ReviewModal({ creator, onClose, onApprove, onReject, onReset, onSendMes
         <div className="relative bg-gradient-to-r from-violet-500/10 to-primary/10 border-b border-border px-4 sm:px-6 py-4 sm:py-5 shrink-0">
           <div className="flex items-center gap-3 sm:gap-4">
             <img
-              src={
-                creator.avatarUrl ||
-                `https://api.dicebear.com/9.x/avataaars/svg?seed=${creator.fullName}`
-              }
+              src={resolveImageUrl(creator.avatarUrl, creator.fullName || "User", creator.gender, "creator")}
               alt=""
               className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl border-2 border-border object-cover shadow-xs shrink-0"
               onError={(e) => {
                 e.target.onerror = null;
-                e.target.src = `https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback`;
+                e.target.src = resolveImageUrl("", creator.fullName || "User", creator.gender, "creator");
               }}
             />
             <div className="flex-1 min-w-0">
@@ -700,12 +697,12 @@ export default function CreatorRequests() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <img
-                    src={c.avatarUrl || `https://api.dicebear.com/9.x/avataaars/svg?seed=${c.fullName}`}
+                    src={resolveImageUrl(c.avatarUrl, c.fullName || "User", c.gender, "creator")}
                     alt=""
                     className="h-11 w-11 rounded-xl border border-border object-cover shrink-0"
                     onError={(e) => {
                       e.target.onerror = null;
-                      e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                      e.target.src = resolveImageUrl("", c.fullName || "User", c.gender, "creator");
                     }}
                   />
                   <div className="min-w-0">
@@ -874,12 +871,12 @@ export default function CreatorRequests() {
                     <TableCell className="pl-6">
                       <div className="flex items-center gap-3">
                         <img
-                          src={c.avatarUrl || `https://api.dicebear.com/9.x/avataaars/svg?seed=${c.fullName}`}
+                          src={resolveImageUrl(c.avatarUrl, c.fullName || "User", c.gender, "creator")}
                           alt=""
                           className="h-9 w-9 rounded-full border border-border object-cover shrink-0"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                            e.target.src = resolveImageUrl("", c.fullName || "User", c.gender, "creator");
                           }}
                         />
                         <div className="min-w-0">

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { resolveImageUrl } from "@/lib/utils";
 import api from "@/lib/axios";
 import {
   Megaphone,
@@ -513,15 +514,12 @@ export function CampaignsPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <img
-                          src={
-                            camp.brandId?.avatarUrl ||
-                            `https://api.dicebear.com/9.x/avataaars/svg?seed=${camp.brandId?.fullName || "Brand"}`
-                          }
+                          src={resolveImageUrl(camp.brandId?.avatarUrl, camp.brandId?.fullName || "Brand", camp.brandId?.gender, "brand")}
                           alt=""
                           className="h-7 w-7 rounded-lg object-cover border border-border shrink-0"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                            e.target.src = resolveImageUrl("", camp.brandId?.fullName || "Brand", camp.brandId?.gender, "brand");
                           }}
                         />
                         <div className="min-w-0">
@@ -699,12 +697,13 @@ export function CampaignsPage() {
               {/* Brand Header */}
               <div className="flex items-center gap-3 p-3 bg-secondary/15 rounded-2xl border border-border/50">
                 <img
-                  src={
-                    selectedCampaign.brandId?.avatarUrl ||
-                    `https://api.dicebear.com/9.x/avataaars/svg?seed=${selectedCampaign.brandId?.fullName || "Brand"}`
-                  }
+                  src={resolveImageUrl(selectedCampaign.brandId?.avatarUrl, selectedCampaign.brandId?.fullName || "Brand", selectedCampaign.brandId?.gender, "brand")}
                   alt=""
-                  className="h-12 w-12 rounded-xl object-cover border border-border"
+                  className="h-12 w-12 rounded-xl object-cover border border-border shrink-0"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = resolveImageUrl("", selectedCampaign.brandId?.fullName || "Brand", selectedCampaign.brandId?.gender, "brand");
+                  }}
                 />
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-sm text-foreground">

@@ -72,9 +72,9 @@ export const listAllConversations = async (req, res) => {
     }
 
     const conversations = await Conversation.find(filter)
-      .populate("creatorId", "fullName email handle avatarUrl role")
-      .populate("brandId", "fullName email handle avatarUrl role")
-      .populate("adminId", "fullName email handle avatarUrl role")
+      .populate("creatorId", "fullName email handle avatarUrl avatar gender role")
+      .populate("brandId", "fullName email handle avatarUrl avatar gender role companyName brandName")
+      .populate("adminId", "fullName email handle avatarUrl avatar gender role")
       .populate("campaignId", "title budget category")
       .sort({ updatedAt: -1, createdAt: -1 })
       .lean();

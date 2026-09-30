@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { resolveImageUrl } from "@/lib/utils";
 import {
   Tag,
   Trash2,
@@ -287,15 +288,13 @@ export function OffersPage() {
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <img
-                            src={
-                              owner?.avatarUrl ||
-                              owner?.profilePicture ||
-                              `https://api.dicebear.com/7.x/avataaars/svg?seed=${
-                                owner?.fullName || "user"
-                              }`
-                            }
+                            src={resolveImageUrl(owner?.avatarUrl || owner?.profilePicture, owner?.fullName || "user", owner?.gender, isCreator ? "creator" : "brand")}
                             alt=""
-                            className="h-8 w-8 rounded-full object-cover border border-border"
+                            className="h-8 w-8 rounded-full object-cover border border-border shrink-0"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = resolveImageUrl("", owner?.fullName || "user", owner?.gender, isCreator ? "creator" : "brand");
+                            }}
                           />
                           <div>
                             <p className="font-semibold text-foreground">

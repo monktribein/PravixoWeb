@@ -342,14 +342,14 @@ export function ConversationsPage() {
                           src={
                             partyA?.role === "admin"
                               ? "/log.png"
-                              : resolveImageUrl(partyA?.avatarUrl, partyA?.fullName || "User")
+                              : resolveImageUrl(partyA?.avatarUrl, partyA?.fullName || "User", partyA?.gender, partyA?.role)
                           }
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = partyA?.role === "admin" ? "/log.png" : `https://ui-avatars.com/api/?name=${encodeURIComponent(partyA?.fullName || "A")}&background=random`;
+                            e.target.src = partyA?.role === "admin" ? "/log.png" : resolveImageUrl("", partyA?.fullName || "User", partyA?.gender, partyA?.role);
                           }}
                           alt=""
-                          className="h-10 w-10 rounded-full border border-border object-contain bg-white p-0.5"
+                          className="h-10 w-10 rounded-full border border-border object-cover bg-background shrink-0"
                         />
                         <div>
                           <span className="text-sm font-semibold block">
@@ -375,14 +375,16 @@ export function ConversationsPage() {
                       <div className="flex items-center gap-3">
                         <img
                           src={
-                            resolveImageUrl(partyB?.avatarUrl, partyB?.fullName || "User")
+                            partyB?.role === "admin"
+                              ? "/log.png"
+                              : resolveImageUrl(partyB?.avatarUrl, partyB?.fullName || "User", partyB?.gender, partyB?.role)
                           }
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(partyB?.fullName || "B")}&background=random`;
+                            e.target.src = partyB?.role === "admin" ? "/log.png" : resolveImageUrl("", partyB?.fullName || "User", partyB?.gender, partyB?.role);
                           }}
                           alt=""
-                          className="h-9 w-9 rounded-full border border-border object-cover"
+                          className="h-9 w-9 rounded-full border border-border object-cover bg-background shrink-0"
                         />
                         <div>
                           <span className="text-sm font-semibold block">

@@ -351,10 +351,13 @@ export default function ClientReviewsPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <img
-                        src={r.reviewerAvatar || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(r.reviewerName)}`}
+                        src={resolveImageUrl(r.reviewerAvatar, r.reviewerName || "User", r.reviewerGender, r.reviewerRole)}
                         alt=""
-                        className="h-8 w-8 rounded-full border object-cover shrink-0"
-                        onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=User"; }}
+                        className="h-8 w-8 rounded-full border border-border object-cover shrink-0"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = resolveImageUrl("", r.reviewerName || "User", r.reviewerGender, r.reviewerRole);
+                        }}
                       />
                       <div className="min-w-0">
                         <span className="block font-semibold text-xs text-foreground truncate">{r.reviewerName}</span>
@@ -386,11 +389,11 @@ export default function ClientReviewsPage() {
                       <span className="text-[11px] text-foreground ml-1">{r.rating}/5</span>
                     </div>
                     {r.title && <p className="font-semibold text-foreground text-xs">{r.title}</p>}
-                    <p className="text-muted-foreground text-xs leading-relaxed">{r.content || r.feedback}</p>
+                    <p className="text-muted-foreground text-xs leading-relaxed">{r.feedback || r.content || r.text}</p>
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-                    <span>Target: <strong>{r.targetUserName || "User"}</strong> ({r.targetUserRole})</span>
+                    <span>Target: <strong>{r.targetUserName || r.targetName || "User"}</strong> ({r.targetUserRole || r.targetRole || "creator"})</span>
                     <span>{r.createdAt ? format(new Date(r.createdAt), "MMM d, yyyy") : "Recent"}</span>
                   </div>
 
@@ -455,15 +458,18 @@ export default function ClientReviewsPage() {
                         <TableCell className="pl-6 py-4">
                           <div className="flex items-center gap-2.5">
                             <img
-                              src={r.reviewerAvatar || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(r.reviewerName)}`}
+                              src={resolveImageUrl(r.reviewerAvatar, r.reviewerName || "User", r.reviewerGender, r.reviewerRole)}
                               alt=""
-                              className="h-8 w-8 rounded-full border object-cover"
-                              onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=User"; }}
+                              className="h-8 w-8 rounded-full border border-border object-cover shrink-0"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = resolveImageUrl("", r.reviewerName || "User", r.reviewerGender, r.reviewerRole);
+                              }}
                             />
                             <div>
-                              <span className="block font-semibold text-xs text-foreground">{r.reviewerName}</span>
+                              <span className="block font-semibold text-xs text-foreground">{r.reviewerName || "User"}</span>
                               <Badge variant="outline" className="text-[9px] uppercase font-bold px-1.5 py-0">
-                                {r.reviewerRole}
+                                {r.reviewerRole || "user"}
                               </Badge>
                             </div>
                           </div>
@@ -472,15 +478,18 @@ export default function ClientReviewsPage() {
                         <TableCell>
                           <div className="flex items-center gap-2.5">
                             <img
-                              src={r.targetUserAvatar || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(r.targetUserName || "User")}`}
+                              src={resolveImageUrl(r.targetUserAvatar || r.targetAvatar, r.targetUserName || r.targetName || "Target", r.targetGender, r.targetUserRole || r.targetRole)}
                               alt=""
-                              className="h-8 w-8 rounded-full border object-cover"
-                              onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=User"; }}
+                              className="h-8 w-8 rounded-full border border-border object-cover shrink-0"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = resolveImageUrl("", r.targetUserName || r.targetName || "Target", r.targetGender, r.targetUserRole || r.targetRole);
+                              }}
                             />
                             <div>
-                              <span className="block font-semibold text-xs text-foreground">{r.targetUserName}</span>
+                              <span className="block font-semibold text-xs text-foreground">{r.targetUserName || r.targetName || "Target"}</span>
                               <Badge variant="outline" className="text-[9px] uppercase font-bold px-1.5 py-0 text-muted-foreground">
-                                {r.targetUserRole}
+                                {r.targetUserRole || r.targetRole || "creator"}
                               </Badge>
                             </div>
                           </div>
@@ -495,7 +504,7 @@ export default function ClientReviewsPage() {
 
                         <TableCell className="max-w-[280px]">
                           <p className="font-semibold text-xs text-foreground truncate">{r.title || "Feedback"}</p>
-                          <p className="text-muted-foreground text-xs line-clamp-2">{r.content || r.feedback}</p>
+                          <p className="text-muted-foreground text-xs line-clamp-2">{r.feedback || r.content || r.text}</p>
                         </TableCell>
 
                         <TableCell>

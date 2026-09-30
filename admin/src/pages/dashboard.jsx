@@ -443,19 +443,19 @@ import { NotificationBell } from "@/components/notification-bell";
                 >
                   <div className="relative shrink-0">
                     <img
-                      src={resolveImageUrl(c.creator?.avatarUrl, c.creator?.fullName || "C")}
+                      src={resolveImageUrl(c.creator?.avatarUrl, c.creator?.fullName || "C", c.creator?.gender, c.creator?.role || "creator")}
                       onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.creator?.fullName || "C")}&background=random`;
+                        e.target.src = resolveImageUrl("", c.creator?.fullName || "C", c.creator?.gender, c.creator?.role || "creator");
                       }}
                       alt=""
                       className="h-10 w-10 rounded-full border border-border object-cover"
                     />
                     <img
-                      src={resolveImageUrl(c.brand?.avatarUrl, c.brand?.fullName || "B")}
+                      src={c.brand ? resolveImageUrl(c.brand?.avatarUrl, c.brand?.fullName || "B", c.brand?.gender, c.brand?.role || "brand") : "/log.png"}
                       onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.brand?.fullName || "B")}&background=random`;
+                        e.target.src = resolveImageUrl("", c.brand?.fullName || "B", c.brand?.gender, c.brand?.role || "brand");
                       }}
                       alt=""
                       className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-2 border-card object-cover"

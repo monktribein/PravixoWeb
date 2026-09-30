@@ -15,25 +15,27 @@ export function resolveImageUrl(url, fallbackName = "User", gender = "", role = 
       return `https://api.dicebear.com/9.x/identicon/svg?seed=${seed}`;
     }
     if (cleanGender === "female") {
-      return `https://api.dicebear.com/9.x/avataaars/svg?seed=${seed}&top=bigHair,bob,bun,curly,curvy,longButNotTooLong,miaWallace,straight01,straight02,straightAndStrand&accessoriesProbability=15&facialHairProbability=0`;
+      return `https://api.dicebear.com/9.x/lorelei/svg?seed=${seed}`;
     }
-    // Default male / male tops
-    return `https://api.dicebear.com/9.x/avataaars/svg?seed=${seed}&top=shortFlat,shortRound,shortCurly,shortWaved,theCaesar,theCaesarAndSidePart,sides&accessoriesProbability=0&facialHairProbability=20`;
+    if (cleanGender === "male") {
+      return `https://api.dicebear.com/9.x/micah/svg?seed=${seed}`;
+    }
+    return `https://api.dicebear.com/9.x/lorelei/svg?seed=${seed}`;
   };
 
-  if (!url || url === "undefined" || url === "null" || typeof url !== "string") {
+  if (!url || url === "undefined" || url === "null" || typeof url !== "string" || !url.trim()) {
     return getFallbackAvatar();
   }
 
-  // If it's a generic DiceBear avataaars link without top styling, override with gender-specific styles
-  if (url.includes("api.dicebear.com/9.x/avataaars") && !url.includes("top=")) {
-    return getFallbackAvatar();
+  // Clean any legacy broken query params on dicebear lorelei
+  if (url.includes("api.dicebear.com/9.x/lorelei") && url.includes("mouth=")) {
+    return `https://api.dicebear.com/9.x/lorelei/svg?seed=${seed}`;
   }
 
-  if (url.startsWith("http")) return url;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
   let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
   if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
-  return `${apiUrl}${url}`;
+  return `${apiUrl}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 export function resolveFrontendUrl(path = "") {

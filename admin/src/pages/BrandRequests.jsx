@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { resolveImageUrl } from "@/lib/utils";
 import api from "@/lib/axios";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -110,10 +111,13 @@ function BrandReviewModal({ brand, onClose, onApprove, onReject, onReset, onSend
         <div className="relative bg-gradient-to-r from-amber-500/10 to-primary/10 border-b border-border px-4 sm:px-6 py-4 sm:py-5 shrink-0">
           <div className="flex items-center gap-3 sm:gap-4">
             <img
-              src={brand.avatarUrl || `https://api.dicebear.com/9.x/avataaars/svg?seed=${brand.fullName}`}
+              src={resolveImageUrl(brand.avatarUrl, brand.fullName || "Brand", brand.gender, "brand")}
               alt=""
               className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl border-2 border-border object-cover shadow-xs shrink-0"
-              onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback`; }}
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = resolveImageUrl("", brand.fullName || "Brand", brand.gender, "brand");
+              }}
             />
             <div className="flex-1 min-w-0">
               <h3 className="font-display text-lg sm:text-xl font-bold truncate">{brand.fullName}</h3>
@@ -576,12 +580,12 @@ export default function BrandRequests() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <img
-                    src={b.avatarUrl || `https://api.dicebear.com/9.x/avataaars/svg?seed=${b.fullName}`}
+                    src={resolveImageUrl(b.avatarUrl, b.fullName || "Brand", b.gender, "brand")}
                     alt=""
                     className="h-11 w-11 rounded-xl border border-border object-cover shrink-0"
                     onError={(e) => {
                       e.target.onerror = null;
-                      e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                      e.target.src = resolveImageUrl("", b.fullName || "Brand", b.gender, "brand");
                     }}
                   />
                   <div className="min-w-0">
@@ -733,12 +737,12 @@ export default function BrandRequests() {
                     <TableCell className="pl-6">
                       <div className="flex items-center gap-3">
                         <img
-                          src={b.avatarUrl || `https://api.dicebear.com/9.x/avataaars/svg?seed=${b.fullName}`}
+                          src={resolveImageUrl(b.avatarUrl, b.fullName || "Brand", b.gender, "brand")}
                           alt=""
                           className="h-9 w-9 rounded-full border border-border object-cover shrink-0"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback";
+                            e.target.src = resolveImageUrl("", b.fullName || "Brand", b.gender, "brand");
                           }}
                         />
                         <div className="min-w-0">
