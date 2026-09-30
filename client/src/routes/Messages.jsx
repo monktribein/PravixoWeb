@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import {
   MessageSquare,
   Search,
@@ -45,6 +45,8 @@ import {
   AlertCircle,
   Lock,
   Wallet,
+  ArrowUpRight,
+  CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/Badge";
