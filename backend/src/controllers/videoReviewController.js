@@ -113,12 +113,40 @@ export const getVideoReviews = async (req, res) => {
     }
 
     const reviews = await VideoReview.find(filter)
+      .populate("targetId", "fullName name companyName avatar avatarUrl role")
+      .populate("reviewerId", "fullName name companyName avatar avatarUrl role")
       .sort({ createdAt: -1 })
       .lean();
 
+    // Fill targetName and targetAvatar if missing or from populated profile
+    const enhancedReviews = reviews.map((rev) => {
+      const target = rev.targetId;
+      const targetName =
+        rev.targetName ||
+        (target ? (target.fullName || target.name || target.companyName) : "") ||
+        "";
+      const targetAvatar =
+        rev.targetAvatar ||
+        (target ? (target.avatar || target.avatarUrl) : "") ||
+        "";
+
+      const reviewer = rev.reviewerId;
+      const reviewerAvatar =
+        rev.reviewerAvatar ||
+        (reviewer ? (reviewer.avatar || reviewer.avatarUrl) : "") ||
+        "";
+
+      return {
+        ...rev,
+        targetName,
+        targetAvatar,
+        reviewerAvatar,
+      };
+    });
+
     return res.status(200).json({
       success: true,
-      data: reviews,
+      data: enhancedReviews,
     });
   } catch (error) {
     console.error("Get video reviews error:", error);

@@ -34,6 +34,16 @@ const videoReviewSchema = new mongoose.Schema(
       required: false,
     },
 
+    targetName: {
+      type: String,
+      default: "",
+    },
+
+    targetAvatar: {
+      type: String,
+      default: "",
+    },
+
     campaignName: {
       type: String,
       default: "",

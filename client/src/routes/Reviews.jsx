@@ -30,6 +30,7 @@ import {
   Lock,
   UserCheck,
   Quote,
+  Building2,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -251,6 +252,8 @@ export default function Reviews() {
           formData.append("reviewerAvatar", profile?.avatar || "");
           if (chosenCollab) {
             formData.append("targetId", chosenCollab.partnerId || "");
+            formData.append("targetName", chosenCollab.partnerName || "");
+            formData.append("targetAvatar", chosenCollab.partnerAvatar || "");
             formData.append("campaignName", chosenCollab.campaignTitle || "");
           }
           formData.append("video", videoFile);
@@ -288,6 +291,8 @@ export default function Reviews() {
             reviewerId: profile?._id,
             reviewerAvatar: profile?.avatar,
             targetId: chosenCollab?.partnerId,
+            targetName: chosenCollab?.partnerName,
+            targetAvatar: chosenCollab?.partnerAvatar,
             campaignName: chosenCollab?.campaignTitle,
           });
 
@@ -308,6 +313,8 @@ export default function Reviews() {
           reviewerId: profile?._id,
           reviewerAvatar: profile?.avatar,
           targetId: chosenCollab?.partnerId,
+          targetName: chosenCollab?.partnerName,
+          targetAvatar: chosenCollab?.partnerAvatar,
           campaignName: chosenCollab?.campaignTitle,
         });
 
@@ -542,39 +549,51 @@ export default function Reviews() {
                       </div>
                     ) : (
                       /* TEXT REVIEW HEADER CARD */
-                      <div className="p-5 pb-0 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase">
+                      <div className="p-5 pb-0 flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase shrink-0 overflow-hidden">
                             {rev.reviewerAvatar ? (
                               <img
                                 src={resolveMediaUrl(rev.reviewerAvatar)}
                                 alt={rev.reviewerName}
-                                className="h-full w-full rounded-full object-cover"
+                                className="h-full w-full object-cover"
                               />
                             ) : (
                               rev.reviewerName?.slice(0, 2) || "PR"
                             )}
                           </div>
-                          <div>
-                            <h4 className="font-display text-sm font-bold text-foreground line-clamp-1">
+                          <div className="min-w-0">
+                            <h4 className="font-display text-sm font-bold text-foreground truncate">
                               {rev.reviewerName}
                             </h4>
-                            {rev.campaignName && (
-                              <span className="text-[10px] text-muted-foreground truncate block max-w-[150px]">
-                                Collab: {rev.campaignName}
+                            {rev.targetRole === "brand" ? (
+                              <span className="text-[11px] font-medium text-primary flex items-center gap-1 truncate">
+                                <Building2 className="h-3 w-3 shrink-0 text-primary" />
+                                For Brand:{" "}
+                                <strong className="text-foreground">
+                                  {rev.targetName || rev.campaignName || "Brand Partner"}
+                                </strong>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-medium text-accent flex items-center gap-1 truncate">
+                                <UserCheck className="h-3 w-3 shrink-0 text-accent" />
+                                For Creator:{" "}
+                                <strong className="text-foreground">
+                                  {rev.targetName || "Creator Partner"}
+                                </strong>
                               </span>
                             )}
                           </div>
                         </div>
 
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 px-2 py-0.5 text-[9px] font-bold uppercase">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 px-2 py-0.5 text-[9px] font-bold uppercase shrink-0">
                           <CheckCircle2 className="h-3 w-3" /> Verified
                         </span>
                       </div>
                     )}
 
                     {/* REVIEW INFO */}
-                    <div className={isVideoReview ? "space-y-2 p-5 sm:p-6" : "space-y-2 px-5 pb-5 pt-1"}>
+                    <div className={isVideoReview ? "space-y-2 p-5 sm:p-6" : "space-y-2.5 px-5 pb-5 pt-2"}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1 text-amber-400">
                           {Array.from({ length: 5 }).map((_, i) => (
@@ -596,9 +615,28 @@ export default function Reviews() {
                       </div>
 
                       {isVideoReview && (
-                        <h4 className="font-display text-sm font-bold text-foreground">
-                          {rev.reviewerName}
-                        </h4>
+                        <div className="space-y-0.5">
+                          <h4 className="font-display text-sm font-bold text-foreground">
+                            {rev.reviewerName}
+                          </h4>
+                          {rev.targetRole === "brand" ? (
+                            <p className="text-[11px] font-medium text-primary flex items-center gap-1">
+                              <Building2 className="h-3 w-3 shrink-0" />
+                              For Brand:{" "}
+                              <strong className="text-foreground">
+                                {rev.targetName || rev.campaignName || "Brand Partner"}
+                              </strong>
+                            </p>
+                          ) : (
+                            <p className="text-[11px] font-medium text-accent flex items-center gap-1">
+                              <UserCheck className="h-3 w-3 shrink-0" />
+                              For Creator:{" "}
+                              <strong className="text-foreground">
+                                {rev.targetName || "Creator Partner"}
+                              </strong>
+                            </p>
+                          )}
+                        </div>
                       )}
 
                       <div className="relative">
@@ -608,9 +646,11 @@ export default function Reviews() {
                         </p>
                       </div>
 
-                      {rev.campaignName && isVideoReview && (
-                        <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/40">
-                          Campaign: <strong className="text-foreground">{rev.campaignName}</strong>
+                      {rev.campaignName && (
+                        <div className="text-[10px] text-muted-foreground pt-1.5 border-t border-border/40 flex items-center justify-between">
+                          <span>
+                            Campaign: <strong className="text-foreground">{rev.campaignName}</strong>
+                          </span>
                         </div>
                       )}
                     </div>
