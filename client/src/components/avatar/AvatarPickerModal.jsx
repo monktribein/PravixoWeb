@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,12 @@ export function AvatarPickerModal({
 }) {
   const [selectedUrl, setSelectedUrl] = useState(currentAvatar || "");
   const [activeTab, setActiveTab] = useState(role === "brand" ? "categories" : "boys");
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedUrl(currentAvatar || "");
+    }
+  }, [isOpen, currentAvatar]);
 
   const handleApply = () => {
     if (selectedUrl) {

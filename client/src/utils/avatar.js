@@ -45,6 +45,23 @@ export const AVATAR_PRESETS = {
   }
 };
 
+// Helper to resolve avatar and media URLs correctly across public/uploaded assets
+export function resolveAvatarUrl(url) {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) {
+    return url;
+  }
+  // Public assets served by Vite frontend
+  if (url.startsWith("/avatars/") || url.startsWith("/icons/") || url.startsWith("/assets/") || url.startsWith("/favicon")) {
+    return url;
+  }
+  let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
+  if (apiUrl.endsWith("/")) apiUrl = apiUrl.slice(0, -1);
+  const cleanPath = url.startsWith("/") ? url : `/${url}`;
+  return `${apiUrl}${cleanPath}`;
+}
+
 // Helper to generate deterministic, gender-appropriate DiceBear avatars
 export function getGenderAvatar(name = "User", gender = "", role = "creator") {
   const seed = encodeURIComponent((name || "User").trim());

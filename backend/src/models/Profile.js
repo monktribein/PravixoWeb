@@ -81,6 +81,11 @@ const profileSchema = new mongoose.Schema(
       default: "",
     },
 
+    avatar: {
+      type: String,
+      default: "",
+    },
+
     coverUrl: {
       type: String,
       default: "",

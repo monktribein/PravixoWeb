@@ -220,10 +220,13 @@ export function DashboardCustomer() {
 
   const resolveImageUrl = (url) => {
     if (!url) return null;
-    if (url.startsWith("http")) return url;
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url;
+    if (url.startsWith("/avatars/") || url.startsWith("/icons/") || url.startsWith("/assets/")) return url;
     let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
     if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
-    return `${apiUrl}${url}`;
+    if (apiUrl.endsWith("/")) apiUrl = apiUrl.slice(0, -1);
+    const cleanPath = url.startsWith("/") ? url : `/${url}`;
+    return `${apiUrl}${cleanPath}`;
   };
 
   const [requestsRefreshKey, setRequestsRefreshKey] = useState(0);

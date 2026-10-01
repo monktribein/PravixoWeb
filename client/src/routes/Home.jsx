@@ -261,6 +261,9 @@ const resolveImageUrl = (url) => {
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
     return url;
   }
+  if (url.startsWith("/avatars/") || url.startsWith("/icons/") || url.startsWith("/assets/")) {
+    return url;
+  }
   let base = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
   if (base.endsWith("/api")) base = base.slice(0, -4);
   const cleanBase = base.replace(/\/$/, "");
