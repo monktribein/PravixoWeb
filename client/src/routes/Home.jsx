@@ -68,6 +68,7 @@ import {
 import heroBanner from "@/assets/hero-banner.jpg";
 import pravixoFlow from "@/assets/pravixo-flow.jpeg";
 import logoImg from "@/assets/log.png";
+import { SpiritualDestinationsSection } from "@/components/marquee/DestinationMarquee";
 
 
 const CATEGORY_METADATA = {
@@ -1548,6 +1549,11 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* =========================
+          SPIRITUAL & SACRED DESTINATIONS MARQUEE (PURE CSS INFINITE SCROLL)
+      ========================= */}
+      <SpiritualDestinationsSection speed={50} />
 
       {/* =========================
           PRAVIXO FLOW

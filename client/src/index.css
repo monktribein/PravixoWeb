@@ -430,6 +430,41 @@ html.lenis, html.lenis body {
   transform: translateY(1px) scale(0.96);
 }
 
+/* =====================================================
+   INFINITE AUTO-SCROLLING MARQUEE (PURE CSS)
+   ===================================================== */
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 55s linear infinite;
+  will-change: transform;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused !important;
+}
+
+/* Also support reversing or different speeds */
+.marquee-track-reverse {
+  animation-direction: reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none !important;
+    overflow-x: auto;
+  }
+}
+
 /* Smooth hidden scrollbar for horizontal sections */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
