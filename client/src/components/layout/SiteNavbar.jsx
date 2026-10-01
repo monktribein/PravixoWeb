@@ -19,6 +19,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { useTheme } from "../theme/ThemeProvider";
 import { useAuth } from "../auth/AuthProvider";
 import { Button } from "../ui/Button";
@@ -279,9 +280,16 @@ export function SiteNavbar() {
                 </button>
 
                 {/* DROPDOWN MENU */}
-                {isUserDropdownOpen && (
-                  <div className="absolute right-0 top-12 z-50 w-64 rounded-3xl border border-border/80 bg-popover/95 backdrop-blur-xl p-2.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-                    <div className="px-3 py-2 border-b border-border/50 mb-1.5 flex items-center gap-2.5">
+                <AnimatePresence>
+                  {isUserDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.92, y: -6 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.94, y: -6 }}
+                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                      className="absolute right-0 top-12 z-50 w-64 rounded-3xl border border-border/80 bg-popover/95 backdrop-blur-xl p-2.5 shadow-2xl origin-top-right"
+                    >
+                      <div className="px-3 py-2 border-b border-border/50 mb-1.5 flex items-center gap-2.5">
                       <img
                         src={
                           resolveImageUrl(profile?.avatarUrl) ||
@@ -407,8 +415,9 @@ export function SiteNavbar() {
                         <span>Sign Out</span>
                       </button>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
+              </AnimatePresence>
               </div>
             ) : (
               <>
@@ -440,106 +449,125 @@ export function SiteNavbar() {
         </div>
 
         {/* Mobile menu drawer */}
-        {open && (
-          <div className="border-t border-border md:hidden bg-background">
-            <div className="mx-auto max-w-7xl space-y-1 px-4 py-3">
-              {links.map((l) => (
-                <Link
-                  key={l.to}
-                  to={l.to}
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
-                >
-                  {l.label}
-                </Link>
-              ))}
-              {user ? (
-                <div className="pt-2">
-                  <div className="px-3 pb-2 text-xs text-muted-foreground">
-                    Signed in as {profile?.fullName || profile?.name || user.email}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full rounded-full"
-                    onClick={handleSignOut}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" /> Sign out
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex gap-2 pt-2">
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="border-t border-border md:hidden bg-background overflow-hidden"
+            >
+              <div className="mx-auto max-w-7xl space-y-1 px-4 py-3">
+                {links.map((l) => (
                   <Link
-                    to="/login"
-                    className="flex-1"
+                    key={l.to}
+                    to={l.to}
                     onClick={() => setOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
                   >
+                    {l.label}
+                  </Link>
+                ))}
+                {user ? (
+                  <div className="pt-2">
+                    <div className="px-3 pb-2 text-xs text-muted-foreground">
+                      Signed in as {profile?.fullName || profile?.name || user.email}
+                    </div>
                     <Button
                       variant="outline"
                       size="sm"
                       className="w-full rounded-full"
+                      onClick={handleSignOut}
                     >
-                      Sign in
+                      <LogOut className="mr-2 h-4 w-4" /> Sign out
                     </Button>
-                  </Link>
-                  <Link
-                    to="/register"
-                    className="flex-1"
-                    onClick={() => setOpen(false)}
-                  >
-                    <Button
-                      size="sm"
-                      className="w-full rounded-full gradient-sunset border-0 text-white"
+                  </div>
+                ) : (
+                  <div className="flex gap-2 pt-2">
+                    <Link
+                      to="/login"
+                      className="flex-1"
+                      onClick={() => setOpen(false)}
                     >
-                      Get started
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full rounded-full"
+                      >
+                        Sign in
+                      </Button>
+                    </Link>
+                    <Link
+                      to="/register"
+                      className="flex-1"
+                      onClick={() => setOpen(false)}
+                    >
+                      <Button
+                        size="sm"
+                        className="w-full rounded-full gradient-sunset border-0 text-white"
+                      >
+                        Get started
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Logout Modal */}
-      {showLogoutModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
-          <button
-            type="button"
-            aria-label="Close logout confirmation"
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-            onClick={() => setShowLogoutModal(false)}
-          />
-          <div className="relative w-full max-w-sm rounded-3xl border border-border bg-card p-6 text-center shadow-elevated animate-in fade-in zoom-in duration-200">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full gradient-sunset text-white shadow-glow">
-              <LogOut className="h-5 w-5" />
-            </div>
-            <h3 className="font-display text-lg font-bold text-foreground">
-              Are you sure you want to logout?
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              You can sign in again anytime.
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="min-w-24 rounded-full border-primary/30 bg-white/10 text-foreground hover:bg-accent/40"
-                onClick={() => setShowLogoutModal(false)}
-              >
-                No
-              </Button>
-              <Button
-                type="button"
-                className="min-w-24 rounded-full gradient-sunset border-0 text-white shadow-glow hover:opacity-95"
-                onClick={confirmSignOut}
-              >
-                Yes
-              </Button>
-            </div>
+      <AnimatePresence>
+        {showLogoutModal && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              aria-label="Close logout confirmation"
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+              onClick={() => setShowLogoutModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 10 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="relative w-full max-w-sm rounded-3xl border border-border bg-card p-6 text-center shadow-elevated"
+            >
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full gradient-sunset text-white shadow-glow">
+                <LogOut className="h-5 w-5" />
+              </div>
+              <h3 className="font-display text-lg font-bold text-foreground">
+                Are you sure you want to logout?
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                You can sign in again anytime.
+              </p>
+              <div className="mt-6 flex justify-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-w-24 rounded-full border-primary/30 bg-white/10 text-foreground hover:bg-accent/40 cursor-pointer"
+                  onClick={() => setShowLogoutModal(false)}
+                >
+                  No
+                </Button>
+                <Button
+                  type="button"
+                  className="min-w-24 rounded-full gradient-sunset border-0 text-white shadow-glow hover:opacity-95 cursor-pointer"
+                  onClick={confirmSignOut}
+                >
+                  Yes
+                </Button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </>
   );
 }

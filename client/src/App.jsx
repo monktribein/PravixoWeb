@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 
@@ -84,124 +85,134 @@ function Layout() {
       <div className="h-16 shrink-0" />
 
       <main className={`flex-1 ${isMessagesPage ? "flex flex-col" : ""}`}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/addons" element={<Addons />} />
-          <Route path="/blog" element={<Blog />} />
-          <Route path="/blog/:id" element={<BlogDetails />} />
-          <Route path="/browse" element={<Browse />} />
-          <Route path="/categories" element={<CategoriesPage />} />
-          <Route path="/careers" element={<Careers />} />
-          <Route path="/connections" element={<Connections />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/faq" element={<Faq />} />
-          <Route path="/help" element={<Help />} />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            className={`flex-1 ${isMessagesPage ? "flex flex-col h-full" : ""}`}
+          >
+            <Routes location={useLocation()}>
+              <Route path="/" element={<Home />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/addons" element={<Addons />} />
+              <Route path="/blog" element={<Blog />} />
+              <Route path="/blog/:id" element={<BlogDetails />} />
+              <Route path="/browse" element={<Browse />} />
+              <Route path="/categories" element={<CategoriesPage />} />
+              <Route path="/careers" element={<Careers />} />
+              <Route path="/connections" element={<Connections />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/faq" element={<Faq />} />
+              <Route path="/help" element={<Help />} />
 
-          <Route
-            path="/influencer/:id"
-            element={<InfluencerDetails />}
-          />
-
-          <Route
-            path="/influencer/:id/portfolio"
-            element={<PortfolioPage />}
-          />
-
-          <Route
-            path="/brand/:id"
-            element={<InfluencerDetails />}
-          />
-
-          <Route
-            path="/brand/:id/portfolio"
-            element={<PortfolioPage />}
-          />
-
-          <Route
-            path="/c/:handle"
-            element={<CreatorMediaKit />}
-          />
-
-          <Route
-            path="/creator/:handle"
-            element={<CreatorMediaKit />}
-          />
-
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-
-          <Route
-            path="/reset-password"
-            element={<ResetPassword />}
-          />
-
-          <Route path="/messages" element={<Messages />} />
-
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/terms-and-conditions" element={<Terms />} />
-          <Route path="/unsubscribe" element={<Unsubscribe />} />
-
-          <Route
-            path="/protection-info"
-            element={<ProtectionInfo />}
-          />
-
-          <Route path="/reviews" element={<Reviews />} />
-          <Route path="/tips" element={<Tips />} />
-
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/admin/notifications" element={<Notifications />} />
-
-          <Route
-            path="/dashboard/brand"
-            element={<DashboardCustomer />}
-          /> 
-
-          <Route
-            path="/dashboard/creator"
-            element={<DashboardInfluencer />}
-          /> 
-
-          {/* Backwards compatibility & alias redirects */}
-          <Route
-            path="/dashboard/customer"
-            element={<Navigate to="/dashboard/brand" replace />}
-          /> 
-
-          <Route
-            path="/dashboard/influencer"
-            element={<Navigate to="/dashboard/creator" replace />}
-          /> 
-
-          <Route
-            path="/referrals"
-            element={<Referrals />}
-          />
-
-          <Route
-            path="/collaborations"
-            element={<Collaborations />}
-          />
-
-          <Route
-            path="/dashboard"
-            element={
-              <Navigate
-                to="/dashboard/creator"
-                replace
+              <Route
+                path="/influencer/:id"
+                element={<InfluencerDetails />}
               />
-            }
-          />
 
-          <Route
-            path="/oauth/callback"
-            element={<OAuthCallback />}
-          />
+              <Route
+                path="/influencer/:id/portfolio"
+                element={<PortfolioPage />}
+              />
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+              <Route
+                path="/brand/:id"
+                element={<InfluencerDetails />}
+              />
+
+              <Route
+                path="/brand/:id/portfolio"
+                element={<PortfolioPage />}
+              />
+
+              <Route
+                path="/c/:handle"
+                element={<CreatorMediaKit />}
+              />
+
+              <Route
+                path="/creator/:handle"
+                element={<CreatorMediaKit />}
+              />
+
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+
+              <Route
+                path="/reset-password"
+                element={<ResetPassword />}
+              />
+
+              <Route path="/messages" element={<Messages />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/terms-and-conditions" element={<Terms />} />
+              <Route path="/unsubscribe" element={<Unsubscribe />} />
+
+              <Route
+                path="/protection-info"
+                element={<ProtectionInfo />}
+              />
+
+              <Route path="/reviews" element={<Reviews />} />
+              <Route path="/tips" element={<Tips />} />
+
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/admin/notifications" element={<Notifications />} />
+
+              <Route
+                path="/dashboard/brand"
+                element={<DashboardCustomer />}
+              /> 
+
+              <Route
+                path="/dashboard/creator"
+                element={<DashboardInfluencer />}
+              /> 
+
+              {/* Backwards compatibility & alias redirects */}
+              <Route
+                path="/dashboard/customer"
+                element={<Navigate to="/dashboard/brand" replace />}
+              /> 
+
+              <Route
+                path="/dashboard/influencer"
+                element={<Navigate to="/dashboard/creator" replace />}
+              /> 
+
+              <Route
+                path="/referrals"
+                element={<Referrals />}
+              />
+
+              <Route
+                path="/collaborations"
+                element={<Collaborations />}
+              />
+
+              <Route
+                path="/dashboard"
+                element={
+                  <Navigate
+                    to="/dashboard/creator"
+                    replace
+                  />
+                }
+              />
+
+              <Route
+                path="/oauth/callback"
+                element={<OAuthCallback />}
+              />
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {!isMessagesPage && <SiteFooter />}

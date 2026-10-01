@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Slider } from "@/components/ui/Slider";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "motion/react";
 
 import { useAuth } from "@/components/auth/AuthProvider";
 
@@ -1040,9 +1041,12 @@ export default function Browse() {
 
           ) : (
 
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            <motion.div
+              layout
+              className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
+            >
 
-              {filtered.map((item) => {
+              {filtered.map((item, idx) => {
 
                 const itemRole =
                   item.role || role;
@@ -1053,142 +1057,155 @@ export default function Browse() {
                     : `/influencer/${item.id}`;
 
                 return (
-                  <Link
+                  <motion.div
                     key={item.id}
-                    to={targetUrl}
-                    className="group flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-elevated"
+                    layout
+                    initial={{ opacity: 0, y: 16, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{
+                      duration: 0.35,
+                      delay: Math.min((idx % 12) * 0.04, 0.3),
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
+                    whileHover={{ y: -5, transition: { duration: 0.2 } }}
+                    className="h-full"
                   >
+                    <Link
+                      to={targetUrl}
+                      className="group flex flex-col h-full overflow-hidden rounded-3xl border border-border bg-card shadow-card transition-all duration-300 hover:shadow-elevated hover:border-primary/40 card-3d"
+                    >
 
-                    {/* COVER */}
+                      {/* COVER */}
 
-                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted">
+                      <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted">
 
-                      <img
-                        src={item.cover}
-                        alt={item.name}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = DEFAULT_BANNER;
-                        }}
-                      />
+                        <img
+                          src={item.cover}
+                          alt={item.name}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = DEFAULT_BANNER;
+                          }}
+                        />
 
-                      {item.isRecentlyJoined && (
-                        <Badge className="absolute left-3 top-3 rounded-full border-0 gradient-sunset px-2.5 py-0.5 text-[11px] font-bold text-white shadow-glow flex items-center gap-1 z-10">
-                          <Sparkles className="h-3 w-3" /> Recent Joined
+                        {item.isRecentlyJoined && (
+                          <Badge className="absolute left-3 top-3 rounded-full border-0 gradient-sunset px-2.5 py-0.5 text-[11px] font-bold text-white shadow-glow flex items-center gap-1 z-10">
+                            <Sparkles className="h-3 w-3" /> Recent Joined
+                          </Badge>
+                        )}
+
+                        <Badge
+                          variant="secondary"
+                          className="absolute right-3 top-3 border-0 bg-background/90 text-xs font-semibold backdrop-blur z-10"
+                        >
+                          {item.category}
                         </Badge>
-                      )}
-
-                      <Badge
-                        variant="secondary"
-                        className="absolute right-3 top-3 border-0 bg-background/90 text-xs font-semibold backdrop-blur z-10"
-                      >
-                        {item.category}
-                      </Badge>
-
-                    </div>
-
-                    {/* CONTENT */}
-
-                    <div className="-mt-8 flex flex-1 flex-col px-5 pb-5">
-
-                      <img src={item.avatar}
-                        alt={item.name}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        className="relative z-10 h-16 w-16 rounded-full border-4 border-card bg-muted object-cover shadow-elevated"
-                       onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(item.name, item.gender, itemRole); }} />
-
-                      <div className="mt-3 flex items-start justify-between gap-2">
-
-                        <div className="min-w-0">
-
-                          <h3 className="truncate font-display font-semibold text-foreground flex items-center gap-1">
-                            <span>{item.name}</span>
-                            {item.verificationStatus === "verified" && (
-                              <ShieldCheck className="h-4 w-4 text-blue-500 shrink-0 inline-block fill-blue-500/15" title="Verified Profile" />
-                            )}
-                          </h3>
-
-                          <p className="truncate text-xs text-muted-foreground">
-                            {item.handle}
-                          </p>
-
-                        </div>
-
-                        <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-amber-500">
-
-                          <Star className="h-3.5 w-3.5 fill-current" />
-
-                          {item.rating || 5.0}
-
-                        </span>
 
                       </div>
 
-                      <div className="mt-auto pt-4">
+                      {/* CONTENT */}
 
-                        <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
+                      <div className="-mt-8 flex flex-1 flex-col px-5 pb-5">
 
-                          <span className="flex items-center gap-1 truncate">
+                        <img src={item.avatar}
+                          alt={item.name}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="relative z-10 h-16 w-16 rounded-full border-4 border-card bg-muted object-cover shadow-elevated transition-transform duration-300 group-hover:scale-105"
+                         onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(item.name, item.gender, itemRole); }} />
 
-                            <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <div className="mt-3 flex items-start justify-between gap-2">
 
-                            {item.location?.split(",")[0] ||
-                              "India"}
+                          <div className="min-w-0">
 
-                          </span>
-
-                          {role === "creator" && (
-                            <span>
-                              <strong className="text-foreground">
-                                {formatFollowers(
-                                  item.followers ||
-                                    0
-                                )}
-                              </strong>{" "}
-                              followers
-                            </span>
-                          )}
-
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">
-                            {item.isBarterAllowed && (!item.startingPrice || item.startingPrice === 0)
-                              ? "Deal Type"
-                              : "Starting from"}
-                          </span>
-
-                          {item.isBarterAllowed && (!item.startingPrice || item.startingPrice === 0) ? (
-                            <span className="inline-flex items-center gap-1 font-display text-xs font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shadow-xs">
-                              <Handshake className="h-3.5 w-3.5" /> Barter Available
-                            </span>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-display text-sm font-bold text-gradient-sunset">
-                                {formatINR(item.startingPrice || 0)}
-                              </span>
-                              {item.isBarterAllowed && (
-                                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-md">
-                                  <Handshake className="h-2.5 w-2.5" /> Barter
-                                </span>
+                            <h3 className="truncate font-display font-semibold text-foreground flex items-center gap-1 group-hover:text-primary transition-colors">
+                              <span>{item.name}</span>
+                              {item.verificationStatus === "verified" && (
+                                <ShieldCheck className="h-4 w-4 text-blue-500 shrink-0 inline-block fill-blue-500/15" title="Verified Profile" />
                               )}
-                            </div>
-                          )}
+                            </h3>
+
+                            <p className="truncate text-xs text-muted-foreground">
+                              {item.handle}
+                            </p>
+
+                          </div>
+
+                          <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+
+                            <Star className="h-3.5 w-3.5 fill-current" />
+
+                            {item.rating || 5.0}
+
+                          </span>
+
+                        </div>
+
+                        <div className="mt-auto pt-4">
+
+                          <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
+
+                            <span className="flex items-center gap-1 truncate">
+
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+
+                              {item.location?.split(",")[0] ||
+                                "India"}
+
+                            </span>
+
+                            {role === "creator" && (
+                              <span>
+                                <strong className="text-foreground">
+                                  {formatFollowers(
+                                    item.followers ||
+                                      0
+                                  )}
+                                </strong>{" "}
+                                followers
+                              </span>
+                            )}
+
+                          </div>
+
+                          <div className="mt-2 flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {item.isBarterAllowed && (!item.startingPrice || item.startingPrice === 0)
+                                ? "Deal Type"
+                                : "Starting from"}
+                            </span>
+
+                            {item.isBarterAllowed && (!item.startingPrice || item.startingPrice === 0) ? (
+                              <span className="inline-flex items-center gap-1 font-display text-xs font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shadow-xs">
+                                <Handshake className="h-3.5 w-3.5" /> Barter Available
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-display text-sm font-bold text-gradient-sunset">
+                                  {formatINR(item.startingPrice || 0)}
+                                </span>
+                                {item.isBarterAllowed && (
+                                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-md">
+                                    <Handshake className="h-2.5 w-2.5" /> Barter
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
                         </div>
 
                       </div>
 
-                    </div>
-
-                  </Link>
+                    </Link>
+                  </motion.div>
                 );
               })}
 
-            </div>
+            </motion.div>
           )}
 
         </div>

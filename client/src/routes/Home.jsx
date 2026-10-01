@@ -45,6 +45,7 @@ import {
   CarouselItem,
 } from "@/components/ui/Carousel";
 import { Marquee } from "@/components/ui/Marquee";
+import { motion } from "motion/react";
 
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
@@ -974,8 +975,13 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-4 pt-14 pb-12 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-5xl text-center relative">
 
-            {/* Heading */}
-            <h1 className="text-center font-display font-extrabold tracking-tight select-none">
+            {/* Heading with Motion Stagger */}
+            <motion.h1
+              initial={{ opacity: 0, y: 22 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              className="text-center font-display font-extrabold tracking-tight select-none"
+            >
               <span className="block text-[clamp(2.4rem,5.2vw,4.6rem)] leading-[1.08] text-foreground font-black">
                 Find the right influencers
               </span>
@@ -985,15 +991,23 @@ export default function Home() {
               <span className="inline-block text-[clamp(2.1rem,4.6vw,4.2rem)] leading-[1.08] mt-1.5 text-gradient-sunset font-black">
                 in Minutes.
               </span>
-            </h1>
+            </motion.h1>
 
             {/* Description */}
-            <p className="mx-auto mt-5 max-w-2xl text-sm sm:text-base md:text-lg text-muted-foreground font-normal leading-relaxed">
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+              className="mx-auto mt-5 max-w-2xl text-sm sm:text-base md:text-lg text-muted-foreground font-normal leading-relaxed"
+            >
               Connect directly with verified creators and top brands across every niche for barter collaborations and paid campaigns.
-            </p>
+            </motion.p>
 
             {/* Search Input with 3D Glow Container */}
-            <form
+            <motion.form
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
               onSubmit={handleSearch}
               className="mx-auto mt-8 flex max-w-3xl items-center gap-2 rounded-full border border-border/80 bg-card/95 p-2 shadow-2xl backdrop-blur-md focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 transition-all duration-300"
             >
@@ -1012,10 +1026,15 @@ export default function Home() {
               >
                 Search <ArrowRight className="ml-1.5 h-4 w-4" />
               </Button>
-            </form>
+            </motion.form>
 
             {/* Interactive Quick Search Pills */}
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-5 flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto"
+            >
               <span className="text-[11px] font-bold text-muted-foreground mr-1 uppercase tracking-wider">Popular:</span>
               {[
                 { label: "Barter Deals", query: "barter", icon: Handshake, iconColor: "text-emerald-500" },
@@ -1025,45 +1044,58 @@ export default function Home() {
                 { label: "Health & Fitness", query: "fitness", icon: Dumbbell, iconColor: "text-rose-500" },
                 { label: "Travel & Living", query: "travel", icon: Plane, iconColor: "text-sky-500" },
                 { label: "Beauty & Makeup", query: "beauty", icon: Sparkles, iconColor: "text-purple-500" },
-              ].map((pill) => (
-                <button
+              ].map((pill, idx) => (
+                <motion.button
                   key={pill.label}
                   type="button"
+                  whileHover={{ scale: 1.06, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   onClick={() => navigate(`/browse?q=${encodeURIComponent(pill.query)}`)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/80 px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-all duration-200 shadow-xs cursor-pointer hover:scale-105 active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/80 px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-colors shadow-xs cursor-pointer"
                 >
                   <pill.icon className={cn("h-3.5 w-3.5", pill.iconColor || "text-primary")} />
                   <span>{pill.label}</span>
-                </button>
+                </motion.button>
               ))}
-            </div>
+            </motion.div>
 
-            {/* Live Trust Metrics Strip */}
-            <div className="mt-8 pt-6 border-t border-border/40 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto text-center">
-              <div className="space-y-0.5">
-                <div className="text-xl sm:text-2xl font-black font-outfit text-foreground">10,000+</div>
-                <div className="text-xs text-muted-foreground font-medium">Verified Creators</div>
-              </div>
-              <div className="space-y-0.5">
-                <div className="text-xl sm:text-2xl font-black font-outfit text-primary">₹0 Fee</div>
-                <div className="text-xs text-muted-foreground font-medium">Barter Collabs</div>
-              </div>
-              <div className="space-y-0.5">
-                <div className="text-xl sm:text-2xl font-black font-outfit text-emerald-400">100% Secure</div>
-                <div className="text-xs text-muted-foreground font-medium">Direct Deals</div>
-              </div>
-              <div className="space-y-0.5">
-                <div className="text-xl sm:text-2xl font-black font-outfit text-purple-400">&lt; 24 Hours</div>
-                <div className="text-xs text-muted-foreground font-medium">Average Response</div>
-              </div>
-            </div>
+            {/* Live Trust Metrics Strip with Motion */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-8 pt-6 border-t border-border/40 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto text-center"
+            >
+              {[
+                { val: "10,000+", label: "Verified Creators", color: "text-foreground" },
+                { val: "₹0 Fee", label: "Barter Collabs", color: "text-primary" },
+                { val: "100% Secure", label: "Direct Deals", color: "text-emerald-400" },
+                { val: "< 24 Hours", label: "Average Response", color: "text-purple-400" },
+              ].map((stat, i) => (
+                <motion.div
+                  key={stat.label}
+                  whileHover={{ y: -3, scale: 1.03 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-0.5"
+                >
+                  <div className={cn("text-xl sm:text-2xl font-black font-outfit", stat.color)}>{stat.val}</div>
+                  <div className="text-xs text-muted-foreground font-medium">{stat.label}</div>
+                </motion.div>
+              ))}
+            </motion.div>
 
             {/* Payment info buttons */}
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.38 }}
+              className="mt-6 flex flex-wrap justify-center gap-3"
+            >
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5"
+                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5 transition-transform hover:scale-105 active:scale-95"
                 onClick={() =>
                   navigate("/protection-info", {
                     state: { type: "creator" },
@@ -1076,7 +1108,7 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5"
+                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5 transition-transform hover:scale-105 active:scale-95"
                 onClick={() =>
                   navigate("/protection-info", {
                     state: { type: "brand" },
@@ -1086,15 +1118,20 @@ export default function Home() {
                 <Shield className="h-3.5 w-3.5 text-blue-500" />
                 How is my money protected? (Brands)
               </Button>
-            </div>
+            </motion.div>
 
             {/* If logged out CTA Buttons */}
             {!user && (
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.45, delay: 0.42 }}
+                className="mt-6 flex flex-wrap items-center justify-center gap-3"
+              >
                 <Link to="/register?role=brand">
                   <Button
                     size="lg"
-                    className="min-w-[210px] justify-center rounded-full gradient-sunset border-0 text-white shadow-glow transition-transform hover:scale-105 hover:opacity-95 font-bold"
+                    className="min-w-[210px] justify-center rounded-full gradient-sunset border-0 text-white shadow-glow transition-transform hover:scale-105 hover:opacity-95 font-bold cursor-pointer"
                   >
                     I'm a brand
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -1103,13 +1140,13 @@ export default function Home() {
                 <Link to="/register?role=creator">
                   <Button
                     size="lg"
-                    className="min-w-[210px] justify-center rounded-full gradient-sunset border-0 text-white shadow-glow transition-transform hover:scale-105 hover:opacity-95 font-bold"
+                    className="min-w-[210px] justify-center rounded-full gradient-sunset border-0 text-white shadow-glow transition-transform hover:scale-105 hover:opacity-95 font-bold cursor-pointer"
                   >
                     I'm an influencer
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
-              </div>
+              </motion.div>
             )}
           </div>
         </div>
@@ -1345,7 +1382,13 @@ export default function Home() {
       {/* =========================
           PRAVIXO FLOW
       ========================= */}
-      <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
+      <motion.section
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8"
+      >
         <div className="mb-8 text-center">
           <h2 className="font-display text-3xl font-bold sm:text-4xl">
             How Pravixo Works
@@ -1355,19 +1398,29 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="overflow-hidden rounded-[2rem] border border-border bg-card shadow-elevated">
+        <motion.div
+          whileHover={{ scale: 1.015 }}
+          transition={{ duration: 0.35 }}
+          className="overflow-hidden rounded-[2rem] border border-border bg-card shadow-elevated"
+        >
           <img
             src={pravixoFlow}
             alt="Pravixo Flow"
             className="w-full object-cover transition-transform duration-500 hover:scale-[1.02]"
           />
-        </div>
-      </section>
+        </motion.div>
+      </motion.section>
 
       {/* =========================
           CTA
       ========================= */}
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+      <motion.section
+        initial={{ opacity: 0, scale: 0.96, y: 24 }}
+        whileInView={{ opacity: 1, scale: 1, y: 0 }}
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8"
+      >
         <div className="relative overflow-hidden rounded-[2rem] gradient-sunset p-10 text-center text-white shadow-glow sm:p-16">
           <div
             className="absolute inset-0 opacity-30 mix-blend-overlay"
@@ -1391,7 +1444,7 @@ export default function Home() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="rounded-full border-white/40 bg-white/10 text-white backdrop-blur hover:bg-white/20"
+                    className="rounded-full border-white/40 bg-white/10 text-white backdrop-blur hover:bg-white/20 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
                   >
                     Start free
                   </Button>
@@ -1407,7 +1460,7 @@ export default function Home() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="rounded-full border-white/40 bg-white/10 text-white backdrop-blur hover:bg-white/20"
+                    className="rounded-full border-white/40 bg-white/10 text-white backdrop-blur hover:bg-white/20 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
                   >
                     Go to Dashboard
                   </Button>
@@ -1418,7 +1471,7 @@ export default function Home() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="rounded-full border-white/40 bg-white/10 text-white backdrop-blur hover:bg-white/20"
+                  className="rounded-full border-white/40 bg-white/10 text-white backdrop-blur hover:bg-white/20 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
                 >
                   Explore creators
                 </Button>
@@ -1426,7 +1479,7 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
 
 

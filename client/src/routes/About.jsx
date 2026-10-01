@@ -25,6 +25,7 @@ import {
   Globe2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { motion } from "motion/react";
 
 export function About() {
   const [activeTab, setActiveTab] = useState("all");
@@ -191,24 +192,44 @@ export function About() {
         {/* HERO SECTION */}
         {/* ======================================================== */}
         <div className="text-center max-w-4xl mx-auto space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-primary shadow-xs backdrop-blur-md animate-in fade-in zoom-in-95 duration-500">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+            className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-primary shadow-xs backdrop-blur-md"
+          >
             <Sparkles className="h-3.5 w-3.5 text-pink-500" />
             <span>The Modern Creator & Brand Ecosystem</span>
-          </div>
+          </motion.div>
 
-          <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-foreground leading-[1.1]">
+          <motion.h1
+            initial={{ opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+            className="font-display text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-foreground leading-[1.1]"
+          >
             Where Authentic Stories Turn Into{" "}
             <span className="text-gradient-sunset drop-shadow-sm">Measurable Impact</span>
-          </h1>
+          </motion.h1>
 
-          <p className="text-base sm:text-lg lg:text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto font-normal">
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            className="text-base sm:text-lg lg:text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto font-normal"
+          >
             Pravixo bridges top tier brands and verified creators with built-in escrow protection, live audience audits, and automated campaign workflows.
-          </p>
+          </motion.p>
 
-          <div className="pt-4 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.24, ease: [0.16, 1, 0.3, 1] }}
+            className="pt-4 flex flex-wrap items-center justify-center gap-3 sm:gap-4"
+          >
             <Button
               asChild
-              className="rounded-full px-7 h-12 gradient-sunset border-0 text-white font-semibold shadow-glow hover:opacity-95 transition-all text-sm"
+              className="rounded-full px-7 h-12 gradient-sunset border-0 text-white font-semibold shadow-glow hover:opacity-95 transition-all text-sm hover:scale-105 active:scale-95 cursor-pointer"
             >
               <Link to="/browse" className="flex items-center gap-2">
                 Explore Verified Creators
@@ -219,14 +240,19 @@ export function About() {
             <Button
               asChild
               variant="outline"
-              className="rounded-full px-7 h-12 border-border/80 bg-card/60 backdrop-blur-md hover:bg-card text-foreground font-semibold text-sm transition-all"
+              className="rounded-full px-7 h-12 border-border/80 bg-card/60 backdrop-blur-md hover:bg-card text-foreground font-semibold text-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
             >
               <Link to="/register">Register Your Brand</Link>
             </Button>
-          </div>
+          </motion.div>
 
           {/* Quick Trust Chips */}
-          <div className="pt-4 flex flex-wrap justify-center items-center gap-4 sm:gap-8 text-xs text-muted-foreground">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.32 }}
+            className="pt-4 flex flex-wrap justify-center items-center gap-4 sm:gap-8 text-xs text-muted-foreground"
+          >
             <span className="flex items-center gap-1.5 font-medium">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" /> 100% Escrow Protected
             </span>
@@ -236,19 +262,27 @@ export function About() {
             <span className="flex items-center gap-1.5 font-medium">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Zero Fake Followers
             </span>
-          </div>
+          </motion.div>
         </div>
 
         {/* ======================================================== */}
         {/* STATS BENTO ROW */}
         {/* ======================================================== */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
+        >
           {stats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
-              <div
+              <motion.div
                 key={idx}
-                className="group relative rounded-3xl border border-border/70 bg-card/60 p-5 sm:p-6 backdrop-blur-xl shadow-sm hover:shadow-elevated transition-all duration-300 hover:border-primary/40 hover:-translate-y-1"
+                whileHover={{ y: -5, scale: 1.02 }}
+                transition={{ duration: 0.2 }}
+                className="group relative rounded-3xl border border-border/70 bg-card/60 p-5 sm:p-6 backdrop-blur-xl shadow-sm hover:shadow-elevated transition-all duration-300 hover:border-primary/40 card-3d"
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="h-10 w-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -264,10 +298,10 @@ export function About() {
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-1">
                   {stat.label}
                 </p>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
 
         {/* ======================================================== */}
         {/* OUR STORY, MISSION & VISION (BENTO GRID) */}
