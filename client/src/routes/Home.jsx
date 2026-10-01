@@ -44,6 +44,7 @@ import {
   CarouselContent,
   CarouselItem,
 } from "@/components/ui/Carousel";
+import { Marquee } from "@/components/ui/Marquee";
 
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
@@ -1137,115 +1138,63 @@ export default function Home() {
               <span>View all categories</span>
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
-
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
-                onClick={() => categoriesApi?.scrollPrev()}
-                aria-label="Previous categories slide"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
-                onClick={() => categoriesApi?.scrollNext()}
-                aria-label="Next categories slide"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </div>
 
-        <div
-          onMouseEnter={() => setCategoriesHovered(true)}
-          onMouseLeave={() => setCategoriesHovered(false)}
-        >
-          <Carousel
-            setApi={setCategoriesApi}
-            opts={{ loop: true, align: "start" }}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-3 sm:-ml-5">
-              {categories.map((c, i) => {
-                const meta = CATEGORY_METADATA[c.name] || {};
-                const accent = ACCENTS[i % ACCENTS.length];
-                const IconComp = meta.icon || getCategoryIcon(c.name);
+        <Marquee speed={50} gap="gap-5">
+          {categories.map((c, i) => {
+            const meta = CATEGORY_METADATA[c.name] || {};
+            const accent = ACCENTS[i % ACCENTS.length];
+            const IconComp = meta.icon || getCategoryIcon(c.name);
 
-                const creatorCount = (liveCreators || []).filter((p) => {
-                  if (isTestOrDummyProfile(p)) return false;
-                  const cats = (p.category || "").toLowerCase();
-                  return cats.includes(c.name.toLowerCase());
-                }).length;
+            const creatorCount = (liveCreators || []).filter((p) => {
+              if (isTestOrDummyProfile(p)) return false;
+              const cats = (p.category || "").toLowerCase();
+              return cats.includes(c.name.toLowerCase());
+            }).length;
 
-                return (
-                  <CarouselItem
-                    key={c.name}
-                    className="basis-full pl-3 sm:basis-1/2 sm:pl-5 lg:basis-1/3 xl:basis-1/4"
-                  >
-                    <Link
-                      to={`/browse?category=${encodeURIComponent(c.name)}`}
-                      className={cn(
-                        "group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-                        accent.ring
-                      )}
-                    >
-                      {/* Accent line along the top edge */}
-                      <span className={cn("absolute inset-x-0 top-0 h-1 origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100", accent.bar)} />
+            return (
+              <div
+                key={c.name}
+                className="w-[260px] sm:w-[280px] shrink-0"
+              >
+                <Link
+                  to={`/browse?category=${encodeURIComponent(c.name)}`}
+                  className={cn(
+                    "group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                    accent.ring
+                  )}
+                >
+                  {/* Accent line along the top edge */}
+                  <span className={cn("absolute inset-x-0 top-0 h-1 origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100", accent.bar)} />
 
-                      <div className="flex items-start justify-between">
-                        <div className={cn("flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105", accent.tile)}>
-                          <IconComp className="h-7 w-7" strokeWidth={1.8} />
-                        </div>
-                        <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                          {creatorCount > 0
-                            ? `${creatorCount} ${creatorCount === 1 ? "creator" : "creators"}`
-                            : "Coming soon"}
-                        </span>
-                      </div>
+                  <div className="flex items-start justify-between">
+                    <div className={cn("flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105", accent.tile)}>
+                      <IconComp className="h-7 w-7" strokeWidth={1.8} />
+                    </div>
+                    <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                      {creatorCount > 0
+                        ? `${creatorCount} ${creatorCount === 1 ? "creator" : "creators"}`
+                        : "Coming soon"}
+                    </span>
+                  </div>
 
-                      <h3 className="mt-5 font-display text-lg font-semibold leading-snug text-foreground">
-                        {c.name}
-                      </h3>
-                      <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-                        {meta.desc || "Top tier creators & influencers"}
-                      </p>
+                  <h3 className="mt-5 font-display text-lg font-semibold leading-snug text-foreground">
+                    {c.name}
+                  </h3>
+                  <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                    {meta.desc || "Top tier creators & influencers"}
+                  </p>
 
-                      <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-sm font-semibold text-foreground">
-                        <span>Browse creators</span>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary" />
-                      </div>
-                    </Link>
-                  </CarouselItem>
-                );
-              })}
-            </CarouselContent>
-          </Carousel>
-        </div>
-
-        {/* Category Dots */}
-        {categoriesSnaps.length > 1 && (
-          <div className="mt-6 flex justify-center gap-1.5">
-            {categoriesSnaps.map((_, index) => (
-              <button
-                key={index}
-                type="button"
-                className={cn(
-                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
-                  index === categoriesIndex
-                    ? "w-5 bg-primary"
-                    : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                )}
-                onClick={() => categoriesApi?.scrollTo(index)}
-                aria-label={`Go to category slide ${index + 1}`}
-              />
-            ))}
-          </div>
-        )}
+                  <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-sm font-semibold text-foreground">
+                    <span>Browse creators</span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary" />
+                  </div>
+                </Link>
+              </div>
+            );
+          })}
+        </Marquee>
       </section>
 
       {/* =========================
@@ -1281,86 +1230,34 @@ export default function Home() {
               <span>Explore all campaigns</span>
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
-
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
-                onClick={() => campaignsApi?.scrollPrev()}
-                aria-label="Previous campaign slide"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
-                onClick={() => campaignsApi?.scrollNext()}
-                aria-label="Next campaign slide"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </div>
 
-        <div
-          onMouseEnter={() => setCampaignsHovered(true)}
-          onMouseLeave={() => setCampaignsHovered(false)}
-        >
-          <Carousel
-            setApi={setCampaignsApi}
-            opts={{ loop: true, align: "start" }}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-3 sm:-ml-6">
-              {featuredCampaigns.map((camp) => (
-                <CarouselItem
-                  key={camp._id || camp.id}
-                  className="basis-full pl-3 sm:basis-1/2 sm:pl-6 lg:basis-1/3"
-                >
-                  <HomeCampaignCard
-                    camp={camp}
-                    isCreator={profile?.role === "creator"}
-                    onCardClick={() => {
-                      setSelectedCampaignDetail(camp);
-                    }}
-                    onApplyClick={() => {
-                      if (!user) {
-                        setShowCreatorSignupModal(true);
-                      } else if (profile?.role === "creator") {
-                        navigate("/dashboard/creator?tab=campaigns");
-                      } else {
-                        navigate("/dashboard/brand?tab=campaigns");
-                      }
-                    }}
-                  />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
-        </div>
-
-        {/* Campaign Dots */}
-        {campaignsSnaps.length > 1 && (
-          <div className="mt-6 flex justify-center gap-1.5">
-            {campaignsSnaps.map((_, index) => (
-              <button
-                key={index}
-                type="button"
-                className={cn(
-                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
-                  index === campaignsIndex
-                    ? "w-5 bg-pink-500"
-                    : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                )}
-                onClick={() => campaignsApi?.scrollTo(index)}
-                aria-label={`Go to campaign slide ${index + 1}`}
+        <Marquee speed={60} gap="gap-6">
+          {featuredCampaigns.map((camp) => (
+            <div
+              key={camp._id || camp.id}
+              className="w-[320px] sm:w-[360px] shrink-0"
+            >
+              <HomeCampaignCard
+                camp={camp}
+                isCreator={profile?.role === "creator"}
+                onCardClick={() => {
+                  setSelectedCampaignDetail(camp);
+                }}
+                onApplyClick={() => {
+                  if (!user) {
+                    setShowCreatorSignupModal(true);
+                  } else if (profile?.role === "creator") {
+                    navigate("/dashboard/creator?tab=campaigns");
+                  } else {
+                    navigate("/dashboard/brand?tab=campaigns");
+                  }
+                }}
               />
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </Marquee>
       </section>
 
       {/* =========================
@@ -1385,75 +1282,23 @@ export default function Home() {
               <span>View all brands</span>
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
-
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
-                onClick={() => brandsApi?.scrollPrev()}
-                aria-label="Previous slide"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
-                onClick={() => brandsApi?.scrollNext()}
-                aria-label="Next slide"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </div>
 
-        <div
-          onMouseEnter={() => setBrandsHovered(true)}
-          onMouseLeave={() => setBrandsHovered(false)}
-        >
-          <Carousel
-            setApi={setBrandsApi}
-            opts={{ loop: true, align: "start" }}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-3 sm:-ml-6">
-              {featuredBrands.map((brand) => (
-                <CarouselItem
-                  key={brand.id}
-                  className="basis-full pl-3 sm:basis-1/2 sm:pl-6 lg:basis-1/3"
-                >
-                  <FeaturedProfileCard
-                    inf={brand}
-                    user={user}
-                    handleCardClick={handleProfileCardClick}
-                  />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
-        </div>
-
-        {/* Brand Dots */}
-        {brandsSnaps.length > 1 && (
-          <div className="mt-6 flex justify-center gap-1.5">
-            {brandsSnaps.map((_, index) => (
-              <button
-                key={index}
-                type="button"
-                className={cn(
-                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
-                  index === brandsIndex
-                    ? "w-5 bg-primary"
-                    : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                )}
-                onClick={() => brandsApi?.scrollTo(index)}
-                aria-label={`Go to slide ${index + 1}`}
+        <Marquee speed={55} gap="gap-6">
+          {featuredBrands.map((brand) => (
+            <div
+              key={brand.id}
+              className="w-[280px] sm:w-[320px] shrink-0"
+            >
+              <FeaturedProfileCard
+                inf={brand}
+                user={user}
+                handleCardClick={handleProfileCardClick}
               />
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </Marquee>
       </section>
 
       {/* =========================
@@ -1478,75 +1323,23 @@ export default function Home() {
               <span>View all creators</span>
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
-
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
-                onClick={() => creatorsApi?.scrollPrev()}
-                aria-label="Previous slide"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full border-border bg-card hover:bg-accent cursor-pointer"
-                onClick={() => creatorsApi?.scrollNext()}
-                aria-label="Next slide"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </div>
 
-        <div
-          onMouseEnter={() => setCreatorsHovered(true)}
-          onMouseLeave={() => setCreatorsHovered(false)}
-        >
-          <Carousel
-            setApi={setCreatorsApi}
-            opts={{ loop: true, align: "start" }}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-3 sm:-ml-6">
-              {featuredCreators.map((inf) => (
-                <CarouselItem
-                  key={inf.id}
-                  className="basis-full pl-3 sm:basis-1/2 sm:pl-6 lg:basis-1/3"
-                >
-                  <FeaturedProfileCard
-                    inf={inf}
-                    user={user}
-                    handleCardClick={handleProfileCardClick}
-                  />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
-        </div>
-
-        {/* Creator Dots */}
-        {creatorsSnaps.length > 1 && (
-          <div className="mt-6 flex justify-center gap-1.5">
-            {creatorsSnaps.map((_, index) => (
-              <button
-                key={index}
-                type="button"
-                className={cn(
-                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
-                  index === creatorsIndex
-                    ? "w-5 bg-primary"
-                    : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                )}
-                onClick={() => creatorsApi?.scrollTo(index)}
-                aria-label={`Go to slide ${index + 1}`}
+        <Marquee speed={55} gap="gap-6">
+          {featuredCreators.map((inf) => (
+            <div
+              key={inf.id}
+              className="w-[280px] sm:w-[320px] shrink-0"
+            >
+              <FeaturedProfileCard
+                inf={inf}
+                user={user}
+                handleCardClick={handleProfileCardClick}
               />
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </Marquee>
       </section>
 
       {/* =========================
