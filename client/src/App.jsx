@@ -41,11 +41,17 @@ import Collaborations from "./routes/Collaborations";
 import Unsubscribe from "./routes/Unsubscribe";
 import PayoutProcessedModal from "./components/collaboration/PayoutProcessedModal";
 
+import { SmoothScrollProvider } from "./components/layout/SmoothScrollProvider";
+
 function ScrollToTop() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    if (window.__lenis) {
+      window.__lenis.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo(0, 0);
+    }
   }, [pathname]);
 
   return null;
@@ -213,9 +219,11 @@ export default function App() {
       <ScrollToTop />
       <ThemeProvider>
         <AuthProvider>
-          <Layout />
-          <PayoutProcessedModal />
-          <ThemedToaster />
+          <SmoothScrollProvider>
+            <Layout />
+            <PayoutProcessedModal />
+            <ThemedToaster />
+          </SmoothScrollProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
