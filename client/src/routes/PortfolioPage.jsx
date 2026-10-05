@@ -62,6 +62,7 @@ export default function PortfolioPage() {
           // fallback to mock
           prof = influencers.find((item) => String(item.id) === String(id)) ||
             mockBrands.find((item) => String(item.id) === String(id));
+        }
         setProfile(prof);
 
         // Fetch live portfolio (support profile ID, user ID or MongoDB _id)
