@@ -293,18 +293,7 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
       <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
 
       {/* COVER / BANNER */}
-      <div className="relative aspect-[1361/450] w-full overflow-hidden bg-muted">
-        <img
-          src={bannerImg}
-          alt={inf.name}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-108"
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = DEFAULT_BANNER;
-          }}
-        />
+    
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
 
         {/* Category & Badge */}
@@ -1009,7 +998,7 @@ export default function Home() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
               onSubmit={handleSearch}
-              className="mx-auto mt-8 flex max-w-3xl items-center gap-2 rounded-full border border-border/80 bg-card/95 p-2 shadow-2xl backdrop-blur-md focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 transition-all duration-300"
+              className="mx-auto mt-8 flex max-w-3xl items-center gap-2 rounded-full border border-border/80 bg-card/95 p-2 shadow-none backdrop-blur-md focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 transition-all duration-300"
             >
               <Search className="ml-4 h-5 w-5 shrink-0 text-muted-foreground" />
               <input
@@ -1270,31 +1259,56 @@ export default function Home() {
           </div>
         </div>
 
-        <Marquee speed={60} gap="gap-6">
-          {featuredCampaigns.map((camp) => (
-            <div
-              key={camp._id || camp.id}
-              className="w-[320px] sm:w-[360px] shrink-0"
-            >
-              <HomeCampaignCard
-                camp={camp}
-                isCreator={profile?.role === "creator"}
-                onCardClick={() => {
-                  setSelectedCampaignDetail(camp);
-                }}
-                onApplyClick={() => {
-                  if (!user) {
-                    setShowCreatorSignupModal(true);
-                  } else if (profile?.role === "creator") {
-                    navigate("/dashboard/creator?tab=campaigns");
-                  } else {
-                    navigate("/dashboard/brand?tab=campaigns");
-                  }
-                }}
-              />
-            </div>
-          ))}
-        </Marquee>
+        {featuredCampaigns.length <= 3 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featuredCampaigns.map((camp) => (
+              <div key={camp._id || camp.id} className="w-full">
+                <HomeCampaignCard
+                  camp={camp}
+                  isCreator={profile?.role === "creator"}
+                  onCardClick={() => {
+                    setSelectedCampaignDetail(camp);
+                  }}
+                  onApplyClick={() => {
+                    if (!user) {
+                      setShowCreatorSignupModal(true);
+                    } else if (profile?.role === "creator") {
+                      navigate("/dashboard/creator?tab=campaigns");
+                    } else {
+                      navigate("/dashboard/brand?tab=campaigns");
+                    }
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Marquee speed={60} gap="gap-6">
+            {featuredCampaigns.map((camp) => (
+              <div
+                key={camp._id || camp.id}
+                className="w-[320px] sm:w-[360px] shrink-0"
+              >
+                <HomeCampaignCard
+                  camp={camp}
+                  isCreator={profile?.role === "creator"}
+                  onCardClick={() => {
+                    setSelectedCampaignDetail(camp);
+                  }}
+                  onApplyClick={() => {
+                    if (!user) {
+                      setShowCreatorSignupModal(true);
+                    } else if (profile?.role === "creator") {
+                      navigate("/dashboard/creator?tab=campaigns");
+                    } else {
+                      navigate("/dashboard/brand?tab=campaigns");
+                    }
+                  }}
+                />
+              </div>
+            ))}
+          </Marquee>
+        )}
       </section>
 
       {/* =========================

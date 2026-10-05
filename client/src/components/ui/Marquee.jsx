@@ -15,16 +15,21 @@ export function Marquee({
   pauseOnHover = true,
   className = "",
   gap = "gap-6",
+  withFade = false,
 }) {
   return (
     <div
       className={`group relative w-full overflow-hidden py-3 select-none ${className}`}
-      style={{
-        maskImage:
-          "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
-        WebkitMaskImage:
-          "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
-      }}
+      style={
+        withFade
+          ? {
+              maskImage:
+                "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
+              WebkitMaskImage:
+                "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
+            }
+          : {}
+      }
     >
       <div
         className={`flex w-max ${gap} marquee-track will-change-transform ${
