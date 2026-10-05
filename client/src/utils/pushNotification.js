@@ -75,6 +75,24 @@ export async function subscribeToPush(apiBaseUrl, authToken) {
   return { success: true };
 }
 
+export async function unsubscribeFromPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return { success: false, reason: 'unsupported' };
+  }
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      await subscription.unsubscribe();
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("Unsubscribe error:", err);
+    return { success: false, error: err.message };
+  }
+}
+
 if (typeof window !== "undefined") {
   window.subscribeToPush = subscribeToPush;
+  window.unsubscribeFromPush = unsubscribeFromPush;
 }

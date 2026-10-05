@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import {
   Bell,
   BellRing,
+  BellOff,
   CheckCircle,
   X,
   Trash2,
@@ -21,7 +22,7 @@ import {
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { toast } from "sonner";
-import { subscribeToPush } from "@/utils/pushNotification";
+import { subscribeToPush, unsubscribeFromPush } from "@/utils/pushNotification";
 
 function getNotificationIcon(type) {
   switch (type) {
@@ -105,20 +106,40 @@ export function NotificationBell({ profileId: propProfileId }) {
   const [enablingPush, setEnablingPush] = useState(false);
   const panelRef = useRef(null);
 
-  const handleEnableWebPush = async () => {
+  const [isPushActive, setIsPushActive] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("pravixo_push_enabled");
+      if (stored !== null) return stored === "true";
+      return "Notification" in window && Notification.permission === "granted";
+    }
+    return false;
+  });
+
+  const handleTogglePush = async () => {
     setEnablingPush(true);
     try {
-      const res = await subscribeToPush();
-      if (res.success) {
-        setPushStatus("granted");
-        toast.success("Push notifications enabled! You will get instant alerts.");
-      } else if (res.reason === "denied") {
-        setPushStatus("denied");
-        toast.error("Notification permission denied in browser settings.");
+      if (isPushActive) {
+        await unsubscribeFromPush();
+        setIsPushActive(false);
+        localStorage.setItem("pravixo_push_enabled", "false");
+        toast.info("Web push notifications turned off");
+      } else {
+        const res = await subscribeToPush();
+        if (res.success) {
+          setPushStatus("granted");
+          setIsPushActive(true);
+          localStorage.setItem("pravixo_push_enabled", "true");
+          toast.success("Web push notifications turned on!");
+        } else if (res.reason === "denied") {
+          setPushStatus("denied");
+          toast.error("Notification permission blocked in your browser settings.");
+        } else {
+          toast.error("Could not activate push notifications.");
+        }
       }
     } catch (err) {
-      console.error("Push subscribe error:", err);
-      toast.error("Failed to enable notifications.");
+      console.error("Push toggle error:", err);
+      toast.error("Failed to update push notifications.");
     } finally {
       setEnablingPush(false);
     }
@@ -271,46 +292,70 @@ export function NotificationBell({ profileId: propProfileId }) {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {/* Compact Push Notifications Icon Toggle */}
+              <div className="relative group">
+                <button
+                  type="button"
+                  onClick={handleTogglePush}
+                  disabled={enablingPush}
+                  className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-all border ${
+                    isPushActive && pushStatus === "granted"
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/25"
+                      : "bg-muted/60 border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                  aria-label="Toggle Web Push Notifications"
+                >
+                  {enablingPush ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                  ) : isPushActive && pushStatus === "granted" ? (
+                    <BellRing className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <BellOff className="h-3.5 w-3.5" />
+                  )}
+                  {isPushActive && pushStatus === "granted" && (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                  )}
+                </button>
+
+                {/* Hover Tooltip explaining status & click behavior */}
+                <div className="pointer-events-none absolute right-0 top-full mt-2 hidden group-hover:flex flex-col items-center z-50 w-44 rounded-lg bg-popover/95 backdrop-blur-sm px-2.5 py-1.5 text-center text-[10px] text-popover-foreground shadow-xl border border-border transition-all">
+                  <span className="font-bold flex items-center gap-1">
+                    {isPushActive && pushStatus === "granted" ? (
+                      <span className="text-emerald-500 font-semibold">● Web Push: ON</span>
+                    ) : (
+                      <span className="text-muted-foreground font-semibold">○ Web Push: OFF</span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground text-[9px] mt-0.5">
+                    {isPushActive && pushStatus === "granted"
+                      ? "Click to turn off instant browser alerts"
+                      : "Click to enable instant browser alerts"}
+                  </span>
+                </div>
+              </div>
+
               <button
                 onClick={() => fetchActivity(true)}
                 disabled={refreshing}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
                 title="Refresh notifications"
               >
                 <RefreshCw
-                  className={`h-3 w-3 ${refreshing ? "animate-spin text-primary" : ""}`}
+                  className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-primary" : ""}`}
                 />
-                Refresh
               </button>
               <button
                 onClick={() => setOpen(false)}
-                className="text-muted-foreground hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                title="Close"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-          </div>
-
-          {/* Push Notification Permission Quick-Action */}
-          <div className="bg-gradient-to-r from-blue-600/10 via-indigo-600/10 to-blue-600/10 border-b border-blue-500/20 px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0">
-            <div className="flex items-center gap-2 text-xs">
-              <BellRing className={`h-4 w-4 shrink-0 ${pushStatus === "granted" ? "text-emerald-500" : "text-blue-500 animate-bounce"}`} />
-              <span className="text-[11px] font-medium text-foreground">
-                {pushStatus === "granted" ? "Web Push Alerts: Active ✓" : "Enable Web Push Notifications"}
-              </span>
-            </div>
-            <button
-              onClick={handleEnableWebPush}
-              disabled={enablingPush}
-              className={`shrink-0 rounded-full font-bold text-[10px] px-3 py-1 shadow-sm transition-all ${
-                pushStatus === "granted"
-                  ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/20"
-                  : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}
-            >
-              {enablingPush ? "Enabling..." : pushStatus === "granted" ? "Re-sync Push" : "Enable"}
-            </button>
           </div>
 
           {/* Bulk actions */}
