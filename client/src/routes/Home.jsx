@@ -293,7 +293,18 @@ function FeaturedProfileCard({ inf, user, handleCardClick }) {
       <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.04] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-20" />
 
       {/* COVER / BANNER */}
-    
+      <div className="relative aspect-[1361/450] w-full overflow-hidden bg-muted">
+        <img
+          src={bannerImg}
+          alt={inf.name}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-108"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = DEFAULT_BANNER;
+          }}
+        />
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
 
         {/* Category & Badge */}
