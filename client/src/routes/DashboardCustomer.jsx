@@ -626,6 +626,7 @@ export function DashboardCustomer() {
   const [openBasicSection, setOpenBasicSection] = useState(true);
   const [openKycSection, setOpenKycSection] = useState(false);
   const [openSocialSection, setOpenSocialSection] = useState(false);
+  const [activeSocialTab, setActiveSocialTab] = useState("instagram");
   const [openPortfolioSection, setOpenPortfolioSection] = useState(false);
 
   // Campaign Pagination State
@@ -2594,8 +2595,9 @@ const [submittingVerification, setSubmittingVerification] =
 
                 {openSocialSection && (
                   <div className="p-5 pt-3 border-t border-border/40 space-y-5">
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {[
+                    {/* Interactive Platform Selector Pills */}
+                    {(() => {
+                      const platformsList = [
                         {
                           id: "instagram",
                           name: "Instagram",
@@ -2680,74 +2682,106 @@ const [submittingVerification, setSubmittingVerification] =
                           setFollowers: setQuoraFollowers,
                           prefix: "q/",
                         },
-                      ].map((plat) => {
-                        const Icon = plat.icon;
-                        const hasData = Boolean(plat.handle || plat.followers > 0);
-                        return (
-                          <div
-                            key={plat.id}
-                            className={cn(
-                              "group/card relative rounded-2xl border p-4.5 transition-all duration-300 flex flex-col justify-between overflow-hidden",
-                              "bg-gradient-to-b bg-card/90 hover:-translate-y-0.5 hover:shadow-lg",
-                              hasData ? "border-border/90" : "border-border/60 opacity-90 hover:opacity-100"
-                            )}
-                          >
-                            <div className={cn("absolute inset-0 bg-gradient-to-br opacity-60 pointer-events-none", plat.gradient)} />
+                      ];
 
-                            <div className="relative z-10 space-y-3.5">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="h-8 w-8 rounded-xl bg-background/90 border border-border/80 shadow-xs flex items-center justify-center shrink-0">
-                                    <Icon className={cn("h-4 w-4", plat.iconColor)} />
+                      const currentPlat = platformsList.find((p) => p.id === activeSocialTab) || platformsList[0];
+                      const Icon = currentPlat.icon;
+                      const hasData = Boolean(currentPlat.handle || currentPlat.followers > 0);
+
+                      return (
+                        <div className="space-y-4">
+                          {/* Horizontal Platform Selector Tabs */}
+                          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                            {platformsList.map((plat) => {
+                              const PIcon = plat.icon;
+                              const isSelected = activeSocialTab === plat.id;
+                              const isPlatSet = Boolean((plat.handle && plat.handle.trim()) || Number(plat.followers) > 0);
+
+                              return (
+                                <button
+                                  key={plat.id}
+                                  type="button"
+                                  onClick={() => setActiveSocialTab(plat.id)}
+                                  className={cn(
+                                    "flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-semibold shrink-0 transition-all border cursor-pointer",
+                                    isSelected
+                                      ? "gradient-sunset text-white border-transparent shadow-glow font-bold scale-[1.02]"
+                                      : isPlatSet
+                                      ? "bg-card border-border/80 text-foreground"
+                                      : "bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                                  )}
+                                >
+                                  <PIcon className={cn("h-3.5 w-3.5", isSelected ? "text-white" : plat.iconColor)} />
+                                  <span>{plat.name}</span>
+                                  {isPlatSet && (
+                                    <span className={cn("h-1.5 w-1.5 rounded-full", isSelected ? "bg-white" : "bg-primary")} />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Selected Platform Detail Form Card */}
+                          <div className="relative rounded-3xl border border-border/80 p-5 sm:p-6 transition-all overflow-hidden bg-card/90 shadow-sm">
+                            <div className={cn("absolute inset-0 bg-gradient-to-br opacity-50 pointer-events-none", currentPlat.gradient)} />
+
+                            <div className="relative z-10 space-y-4">
+                              <div className="flex items-center justify-between pb-3 border-b border-border/40">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-10 w-10 rounded-2xl bg-background/90 border border-border/80 shadow-xs flex items-center justify-center shrink-0">
+                                    <Icon className={cn("h-5 w-5", currentPlat.iconColor)} />
                                   </div>
-                                  <span className="text-sm font-bold text-foreground tracking-tight">
-                                    {plat.name}
-                                  </span>
+                                  <div>
+                                    <h4 className="text-base font-bold text-foreground tracking-tight">
+                                      {currentPlat.name} Profile
+                                    </h4>
+                                    <p className="text-xs text-muted-foreground">
+                                      Enter your official {currentPlat.name} handle and audience reach
+                                    </p>
+                                  </div>
                                 </div>
-                                <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", plat.badgeColor)}>
+                                <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full border shrink-0", currentPlat.badgeColor)}>
                                   {hasData ? "Connected" : "Not Set"}
                                 </span>
                               </div>
 
-                              <div className="space-y-2.5">
-                                <div className="space-y-1">
-                                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                                     <span>Handle / Username</span>
                                   </Label>
-                                  <div className="relative">
-                                    <Input
-                                      value={plat.handle}
-                                      onChange={(e) => plat.setHandle(e.target.value)}
-                                      placeholder={plat.placeholder}
-                                      className="h-9 text-xs rounded-xl bg-background/70 border-border/80 focus:bg-background focus:border-primary transition-all font-medium"
-                                    />
-                                  </div>
+                                  <Input
+                                    value={currentPlat.handle}
+                                    onChange={(e) => currentPlat.setHandle(e.target.value)}
+                                    placeholder={currentPlat.placeholder}
+                                    className="h-10 text-sm rounded-2xl bg-background/70 border-border/80 focus:bg-background focus:border-primary transition-all font-medium"
+                                  />
                                 </div>
 
-                                <div className="space-y-1">
-                                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                                    <span>Followers / Audience</span>
-                                    {plat.followers > 0 && (
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                                    <span>Followers / Audience Count</span>
+                                    {Number(currentPlat.followers) > 0 && (
                                       <span className="text-primary font-bold lowercase">
-                                        {Number(plat.followers).toLocaleString()} fans
+                                        {Number(currentPlat.followers).toLocaleString()} fans
                                       </span>
                                     )}
                                   </Label>
                                   <Input
                                     type="number"
                                     min="0"
-                                    value={plat.followers || ""}
-                                    onChange={(e) => plat.setFollowers(Number(e.target.value))}
+                                    value={currentPlat.followers || ""}
+                                    onChange={(e) => currentPlat.setFollowers(Number(e.target.value))}
                                     placeholder="0"
-                                    className="h-9 text-xs rounded-xl bg-background/70 border-border/80 focus:bg-background focus:border-primary transition-all font-medium"
+                                    className="h-10 text-sm rounded-2xl bg-background/70 border-border/80 focus:bg-background focus:border-primary transition-all font-medium"
                                   />
                                 </div>
                               </div>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/40">
                       <p className="text-xs text-muted-foreground text-center sm:text-left">

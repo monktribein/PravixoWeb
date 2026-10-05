@@ -660,6 +660,7 @@ export function DashboardInfluencer() {
   };
 
   // Campaign Discovery Modal & Join Request States
+  const [activeSocialTab, setActiveSocialTab] = useState("instagram");
   const [selectedCampaignForDiscovery, setSelectedCampaignForDiscovery] = useState(null);
   const [selectedTierForJoin, setSelectedTierForJoin] = useState(null);
   const [joinPitch, setJoinPitch] = useState("");
@@ -2759,8 +2760,9 @@ const CAMPAIGNS_PER_PAGE = 6;
                           </span>
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {[
+                        {/* Interactive Platform Selector Pills */}
+                        {(() => {
+                          const platformsList = [
                             {
                               id: "instagram",
                               name: "Instagram",
@@ -2873,148 +2875,190 @@ const CAMPAIGNS_PER_PAGE = 6;
                               setFollowers: setQuoraFollowers,
                               oauth: false,
                             },
-                          ].map((plat) => {
-                            const Icon = plat.icon;
-                            const conn = connections?.find((c) => c.platform === plat.id);
-                            const isVerified = conn?.verified;
-                            const hasData = Boolean((plat.handle && plat.handle.trim()) || Number(plat.followers) > 0);
+                          ];
 
-                            return (
+                          const currentPlat = platformsList.find((p) => p.id === activeSocialTab) || platformsList[0];
+                          const Icon = currentPlat.icon;
+                          const conn = connections?.find((c) => c.platform === currentPlat.id);
+                          const isVerified = conn?.verified;
+                          const hasData = Boolean((currentPlat.handle && currentPlat.handle.trim()) || Number(currentPlat.followers) > 0);
+
+                          return (
+                            <div className="space-y-4">
+                              {/* Horizontal Platform Selector Tabs */}
+                              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                                {platformsList.map((plat) => {
+                                  const PIcon = plat.icon;
+                                  const isSelected = activeSocialTab === plat.id;
+                                  const platConn = connections?.find((c) => c.platform === plat.id);
+                                  const isPlatVerified = platConn?.verified;
+                                  const isPlatSet = Boolean((plat.handle && plat.handle.trim()) || Number(plat.followers) > 0);
+
+                                  return (
+                                    <button
+                                      key={plat.id}
+                                      type="button"
+                                      onClick={() => setActiveSocialTab(plat.id)}
+                                      className={cn(
+                                        "flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-semibold shrink-0 transition-all border cursor-pointer",
+                                        isSelected
+                                          ? "gradient-sunset text-white border-transparent shadow-glow font-bold scale-[1.02]"
+                                          : isPlatVerified
+                                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                                          : isPlatSet
+                                          ? "bg-card border-border/80 text-foreground"
+                                          : "bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                                      )}
+                                    >
+                                      <PIcon className={cn("h-3.5 w-3.5", isSelected ? "text-white" : plat.iconColor)} />
+                                      <span>{plat.name}</span>
+                                      {isPlatVerified ? (
+                                        <span className={cn("text-[9px] font-bold px-1 rounded-full", isSelected ? "bg-white/20 text-white" : "bg-emerald-500/20 text-emerald-600")}>✓</span>
+                                      ) : isPlatSet ? (
+                                        <span className={cn("h-1.5 w-1.5 rounded-full", isSelected ? "bg-white" : "bg-primary")} />
+                                      ) : null}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Selected Platform Detail Form Card */}
                               <div
-                                key={plat.id}
                                 className={cn(
-                                  "group/card relative rounded-2xl border p-4.5 transition-all duration-300 flex flex-col justify-between overflow-hidden",
-                                  "bg-gradient-to-b bg-card/90 hover:-translate-y-0.5 hover:shadow-lg",
-                                  hasData ? "border-border/90 shadow-sm" : "border-border/60 opacity-90 hover:opacity-100"
+                                  "relative rounded-3xl border p-5 sm:p-6 transition-all overflow-hidden bg-card/90 shadow-sm",
+                                  "border-border/80"
                                 )}
                               >
-                                <div className={cn("absolute inset-0 bg-gradient-to-br opacity-60 pointer-events-none", plat.gradient)} />
+                                <div className={cn("absolute inset-0 bg-gradient-to-br opacity-50 pointer-events-none", currentPlat.gradient)} />
 
-                                <div className="relative z-10 space-y-3.5">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="relative z-10 space-y-5">
+                                  <div className="flex items-center justify-between pb-3 border-b border-border/40">
+                                    <div className="flex items-center gap-3 min-w-0">
                                       <a
                                         href={
-                                          plat.handle
-                                            ? (plat.id === "linkedin" ? `https://linkedin.com/${plat.handle}` : plat.id === "quora" ? `https://quora.com/profile/${plat.handle}` : `https://${plat.id}.com/${plat.handle.replace('@', '')}`)
-                                            : `https://${plat.id}.com`
+                                          currentPlat.handle
+                                            ? (currentPlat.id === "linkedin" ? `https://linkedin.com/${currentPlat.handle}` : currentPlat.id === "quora" ? `https://quora.com/profile/${currentPlat.handle}` : `https://${currentPlat.id}.com/${currentPlat.handle.replace('@', '')}`)
+                                            : `https://${currentPlat.id}.com`
                                         }
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="h-8 w-8 rounded-xl bg-background/90 border border-border/80 shadow-xs flex items-center justify-center shrink-0 hover:scale-105 transition-transform"
+                                        className="h-10 w-10 rounded-2xl bg-background/90 border border-border/80 shadow-xs flex items-center justify-center shrink-0 hover:scale-105 transition-transform"
                                       >
-                                        <Icon className={cn("h-4 w-4", plat.iconColor)} />
+                                        <Icon className={cn("h-5 w-5", currentPlat.iconColor)} />
                                       </a>
-                                      <div className="min-w-0">
-                                        <span className="text-sm font-bold text-foreground tracking-tight block truncate">
-                                          {plat.name}
-                                        </span>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <h4 className="text-base font-bold text-foreground tracking-tight">
+                                            {currentPlat.name} Details
+                                          </h4>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                          Enter your {currentPlat.name} username and audience count
+                                        </p>
                                       </div>
                                     </div>
 
                                     {isVerified ? (
                                       <Badge
                                         variant="secondary"
-                                        className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-1 shrink-0 px-2 py-0.5"
+                                        className="text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-1.5 shrink-0 px-3 py-1"
                                       >
-                                        <CheckCircle2 className="h-3 w-3" />
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
                                         Verified
                                       </Badge>
                                     ) : (
-                                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0", plat.badgeColor)}>
+                                      <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full border shrink-0", currentPlat.badgeColor)}>
                                         {hasData ? "Connected" : "Not Set"}
                                       </span>
                                     )}
                                   </div>
 
-                                  <div className="space-y-2.5">
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                                  <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                                         <span>Handle / Username</span>
                                       </Label>
-                                      <div className="relative">
-                                        <Input
-                                          value={plat.handle}
-                                          onChange={(e) => plat.setHandle(e.target.value)}
-                                          placeholder={plat.placeholder}
-                                          className="h-9 text-xs rounded-xl bg-background/70 border-border/80 focus:bg-background focus:border-primary transition-all font-medium"
-                                        />
-                                      </div>
+                                      <Input
+                                        value={currentPlat.handle}
+                                        onChange={(e) => currentPlat.setHandle(e.target.value)}
+                                        placeholder={currentPlat.placeholder}
+                                        className="h-10 text-sm rounded-2xl bg-background/70 border-border/80 focus:bg-background focus:border-primary transition-all font-medium"
+                                      />
                                     </div>
 
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                                        <span>Followers / Audience</span>
-                                        {Number(plat.followers) > 0 && (
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                                        <span>Followers / Audience Count</span>
+                                        {Number(currentPlat.followers) > 0 && (
                                           <span className="text-primary font-bold lowercase">
-                                            {Number(plat.followers).toLocaleString()} fans
+                                            {Number(currentPlat.followers).toLocaleString()} fans
                                           </span>
                                         )}
                                       </Label>
                                       <Input
                                         type="number"
                                         min="0"
-                                        value={plat.followers || ""}
-                                        onChange={(e) => plat.setFollowers(Number(e.target.value))}
+                                        value={currentPlat.followers || ""}
+                                        onChange={(e) => currentPlat.setFollowers(Number(e.target.value))}
                                         placeholder="0"
-                                        className="h-9 text-xs rounded-xl bg-background/70 border-border/80 focus:bg-background focus:border-primary transition-all font-medium"
+                                        className="h-10 text-sm rounded-2xl bg-background/70 border-border/80 focus:bg-background focus:border-primary transition-all font-medium"
                                       />
                                     </div>
                                   </div>
 
-                                  <div className="pt-2 border-t border-border/40 flex flex-col gap-1.5">
-                                    {isVerified ? (
-                                      <div className="flex items-center gap-1.5 w-full">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="flex-1 text-[11px] h-7.5 rounded-lg border-sky-500/30 bg-sky-500/5 hover:bg-sky-500/15 text-sky-500 gap-1.5 font-semibold transition-all cursor-pointer"
-                                          disabled={syncingPlatform === plat.id}
-                                          onClick={() => handleLiveReSync(conn?._id, plat.id)}
-                                        >
-                                          <RotateCw className={cn("h-3 w-3", syncingPlatform === plat.id && "animate-spin")} />
-                                          {syncingPlatform === plat.id ? "Syncing..." : "Live Sync"}
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="text-[11px] h-7.5 px-2.5 text-red-500/80 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
-                                          onClick={() => handleDisconnect(conn?._id, plat.id)}
-                                          title="Disconnect verified account"
-                                        >
-                                          Disconnect
-                                        </Button>
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center gap-1.5 w-full">
-                                        <Button
-                                          size="sm"
-                                          className="flex-1 text-[11px] h-7.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-1.5 shadow-xs transition-all cursor-pointer"
-                                          disabled={syncingPlatform === plat.id}
-                                          onClick={() => handleQuickVerify(plat.id, plat.handle, plat.followers)}
-                                        >
-                                          <ShieldCheck className="h-3.5 w-3.5" />
-                                          {syncingPlatform === plat.id ? "Auditing..." : "Quick Verify"}
-                                        </Button>
-                                        {plat.oauth && (
+                                  <div className="pt-3 border-t border-border/40 flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                      {isVerified ? (
+                                        <>
                                           <Button
                                             size="sm"
                                             variant="outline"
-                                            className="text-[11px] h-7.5 px-2.5 border-border hover:border-primary/40 text-muted-foreground hover:text-foreground rounded-lg transition-all cursor-pointer"
-                                            onClick={() => handleOAuthConnect(plat.id)}
-                                            title="OAuth Login verification"
+                                            className="text-xs h-9 px-4 rounded-full border-sky-500/30 bg-sky-500/5 hover:bg-sky-500/15 text-sky-500 gap-1.5 font-semibold transition-all cursor-pointer"
+                                            disabled={syncingPlatform === currentPlat.id}
+                                            onClick={() => handleLiveReSync(conn?._id, currentPlat.id)}
                                           >
-                                            OAuth
+                                            <RotateCw className={cn("h-3.5 w-3.5", syncingPlatform === currentPlat.id && "animate-spin")} />
+                                            {syncingPlatform === currentPlat.id ? "Syncing..." : "Live Sync Metrics"}
                                           </Button>
-                                        )}
-                                      </div>
-                                    )}
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="text-xs h-9 px-3 text-red-500/80 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all cursor-pointer"
+                                            onClick={() => handleDisconnect(conn?._id, currentPlat.id)}
+                                          >
+                                            Disconnect
+                                          </Button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            className="text-xs h-9 px-4 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-1.5 shadow-xs transition-all cursor-pointer"
+                                            disabled={syncingPlatform === currentPlat.id}
+                                            onClick={() => handleQuickVerify(currentPlat.id, currentPlat.handle, currentPlat.followers)}
+                                          >
+                                            <ShieldCheck className="h-4 w-4" />
+                                            {syncingPlatform === currentPlat.id ? "Auditing..." : "Quick Verify"}
+                                          </Button>
+                                          {currentPlat.oauth && (
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="text-xs h-9 px-4 border-border hover:border-primary/40 text-muted-foreground hover:text-foreground rounded-full transition-all cursor-pointer"
+                                              onClick={() => handleOAuthConnect(currentPlat.id)}
+                                            >
+                                              OAuth Connect
+                                            </Button>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          );
+                        })()}
 
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/40">
                           <p className="text-xs text-muted-foreground text-center sm:text-left">
