@@ -397,7 +397,7 @@ export default function Connections() {
               return (
                 <div
                   key={connection._id}
-                  className="flex flex-col justify-between rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-elevated"
+                  className="flex flex-col justify-between rounded-3xl border border-border bg-card p-5 shadow-sm transition-all hover:shadow-elevated min-w-0"
                 >
                   {/* PROFILE */}
 
@@ -412,10 +412,10 @@ export default function Connections() {
                           className="h-12 w-12 flex-shrink-0 rounded-2xl border border-border/50 object-cover shadow-sm"
                          onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(partner.fullName || "User", partner.gender, partner.role || "creator"); }} />
 
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <Link
                             to={`/influencer/${partner._id}`}
-                            className="flex items-center gap-1 font-display text-sm font-bold hover:text-primary truncate"
+                            className="flex items-center gap-1 font-display text-sm font-bold hover:text-primary"
                           >
                             <span className="truncate">{partner.fullName}</span>
                             {isPartnerVerified && (
@@ -423,7 +423,7 @@ export default function Connections() {
                             )}
                           </Link>
 
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
                             {partner.category || "General"} ·{" "}
                             {partner.location || "India"}
                           </p>
@@ -460,7 +460,7 @@ export default function Connections() {
 
                     {/* PITCH */}
 
-                    <div className="mt-4 rounded-2xl border border-border/40 bg-secondary/40 p-3.5 text-xs italic leading-relaxed text-muted-foreground/95">
+                    <div className="mt-4 rounded-2xl border border-border/40 bg-secondary/40 p-3.5 text-xs italic leading-relaxed text-muted-foreground/95 break-words">
                       "{connection.pitch || "No pitch provided."}"
                     </div>
                   </div>

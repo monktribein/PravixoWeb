@@ -1982,8 +1982,8 @@ export default function InfluencerDetails() {
 
             </div>
 
-            {/* ACTIONS (Single Clean Unified Row on Mobile & Desktop) */}
-            <div className="flex items-center justify-center sm:justify-end gap-1.5 sm:gap-2 pb-1 flex-nowrap shrink-0 overflow-x-auto max-w-full">
+            {/* ACTIONS (Single Clean Unified Responsive Row on Mobile & Desktop) */}
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-1.5 sm:gap-2 pb-1 shrink-0 w-full sm:w-auto">
               {myProfile?.role === "brand" && (
                 <Button
                   variant="outline"
@@ -2014,9 +2014,10 @@ export default function InfluencerDetails() {
                 variant="outline"
                 size="icon"
                 className="rounded-full h-8 w-8 sm:h-9 sm:w-9 shrink-0"
+                title="Share profile"
                 onClick={() => {
                   navigator.clipboard?.writeText(window.location.href);
-                  toast("Link copied");
+                  toast("Link copied to clipboard!");
                 }}
               >
                 <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
