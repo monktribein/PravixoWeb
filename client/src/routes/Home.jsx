@@ -1022,31 +1022,32 @@ export default function Home() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="mt-5 flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto"
+              className="mt-4 flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto"
             >
               <span className="text-[11px] font-bold text-muted-foreground mr-1 uppercase tracking-wider">Popular:</span>
-              {[
-                { label: "Barter Deals", query: "barter", icon: Handshake, iconColor: "text-emerald-500" },
-                { label: "Fashion & Style", query: "fashion", icon: Shirt, iconColor: "text-pink-500" },
-                { label: "Tech & Gadgets", query: "tech", icon: Laptop, iconColor: "text-blue-500" },
-                { label: "Food & Beverage", query: "food", icon: UtensilsCrossed, iconColor: "text-amber-500" },
-                { label: "Health & Fitness", query: "fitness", icon: Dumbbell, iconColor: "text-rose-500" },
-                { label: "Travel & Living", query: "travel", icon: Plane, iconColor: "text-sky-500" },
-                { label: "Beauty & Makeup", query: "beauty", icon: Sparkles, iconColor: "text-purple-500" },
-              ].map((pill, idx) => (
-                <motion.button
-                  key={pill.label}
-                  type="button"
-                  whileHover={{ scale: 1.06, y: -2 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                  onClick={() => navigate(`/browse?q=${encodeURIComponent(pill.query)}`)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/80 px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-colors shadow-xs cursor-pointer"
-                >
-                  <pill.icon className={cn("h-3.5 w-3.5", pill.iconColor || "text-primary")} />
-                  <span>{pill.label}</span>
-                </motion.button>
-              ))}
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.06, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                onClick={() => navigate("/browse?q=barter")}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/80 px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-colors shadow-xs cursor-pointer"
+              >
+                <Handshake className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Barter Deals</span>
+              </motion.button>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.06, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                onClick={() => navigate("/categories")}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/80 px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-colors shadow-xs cursor-pointer"
+              >
+                <Compass className="h-3.5 w-3.5 text-primary" />
+                <span>Other Categories</span>
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+              </motion.button>
             </motion.div>
 
             {/* Live Trust Metrics Strip with Motion */}
@@ -1054,7 +1055,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
-              className="mt-8 pt-6 border-t border-border/40 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto text-center"
+              className="mt-6 pt-5 border-t border-border/40 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto text-center"
             >
               {[
                 { val: "10,000+", label: "Verified Creators", color: "text-foreground" },
@@ -1079,12 +1080,12 @@ export default function Home() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.38 }}
-              className="mt-6 flex flex-wrap justify-center gap-3"
+              className="mt-5 flex flex-row flex-wrap justify-center gap-2 sm:gap-3"
             >
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5 transition-transform hover:scale-105 active:scale-95"
+                className="rounded-full text-[11px] sm:text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5 transition-transform hover:scale-105 active:scale-95 px-3 py-1.5 h-auto"
                 onClick={() =>
                   navigate("/protection-info", {
                     state: { type: "creator" },
@@ -1097,7 +1098,7 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5 transition-transform hover:scale-105 active:scale-95"
+                className="rounded-full text-[11px] sm:text-xs font-semibold border-border/80 bg-background/60 backdrop-blur hover:bg-accent hover:border-primary/40 shadow-xs gap-1.5 transition-transform hover:scale-105 active:scale-95 px-3 py-1.5 h-auto"
                 onClick={() =>
                   navigate("/protection-info", {
                     state: { type: "brand" },
@@ -1109,30 +1110,30 @@ export default function Home() {
               </Button>
             </motion.div>
 
-            {/* If logged out CTA Buttons */}
+            {/* If logged out CTA Buttons - Side by Side on Mobile */}
             {!user && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.45, delay: 0.42 }}
-                className="mt-6 flex flex-wrap items-center justify-center gap-3"
+                className="mt-5 flex flex-row items-center justify-center gap-2 sm:gap-4 w-full max-w-lg mx-auto"
               >
-                <Link to="/register?role=brand">
+                <Link to="/register?role=brand" className="flex-1 min-w-0">
                   <Button
                     size="lg"
-                    className="min-w-[210px] justify-center rounded-full gradient-sunset border-0 text-white shadow-glow transition-transform hover:scale-105 hover:opacity-95 font-bold cursor-pointer"
+                    className="w-full justify-center rounded-full gradient-sunset border-0 text-white shadow-glow transition-transform hover:scale-105 hover:opacity-95 font-bold text-xs sm:text-base px-2 sm:px-6 py-2.5 sm:py-3.5 h-11 sm:h-12 cursor-pointer truncate"
                   >
                     I'm a brand
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    <ArrowRight className="ml-1 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                   </Button>
                 </Link>
-                <Link to="/register?role=creator">
+                <Link to="/register?role=creator" className="flex-1 min-w-0">
                   <Button
                     size="lg"
-                    className="min-w-[210px] justify-center rounded-full gradient-sunset border-0 text-white shadow-glow transition-transform hover:scale-105 hover:opacity-95 font-bold cursor-pointer"
+                    className="w-full justify-center rounded-full gradient-sunset border-0 text-white shadow-glow transition-transform hover:scale-105 hover:opacity-95 font-bold text-xs sm:text-base px-2 sm:px-6 py-2.5 sm:py-3.5 h-11 sm:h-12 cursor-pointer truncate"
                   >
                     I'm an influencer
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    <ArrowRight className="ml-1 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                   </Button>
                 </Link>
               </motion.div>
@@ -1144,25 +1145,25 @@ export default function Home() {
       {/* =========================
           BROWSE BY CATEGORY
       ========================= */}
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-2xl">
-            <h2 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-row items-center justify-between gap-2">
+          <div className="max-w-2xl min-w-0">
+            <h2 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-4xl truncate sm:overflow-visible">
               Find creators by category
             </h2>
-            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            <p className="mt-1 hidden sm:block text-sm text-muted-foreground sm:text-base">
               Every creator is verified and grouped by niche, so you can shortlist
               the right audience for your campaign in minutes.
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="shrink-0">
             <Link
               to="/categories"
-              className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-5 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
+              className="group inline-flex items-center gap-1.5 rounded-full gradient-sunset px-3.5 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
             >
-              <span>View all categories</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              <span>View all</span>
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </Link>
           </div>
         </div>
@@ -1227,22 +1228,17 @@ export default function Home() {
           RECENT & NEW CAMPAIGNS
       ========================= */}
       <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center gap-1 rounded-full bg-pink-500/10 px-2.5 py-0.5 text-[11px] font-bold text-pink-500 border border-pink-500/20">
-                <Megaphone className="h-3 w-3" /> Live Opportunities
-              </span>
-            </div>
-            <h2 className="font-display text-3xl font-bold sm:text-4xl text-foreground">
+        <div className="mb-8 flex flex-row items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="font-display text-2xl font-bold sm:text-4xl text-foreground truncate sm:overflow-visible">
               Recent & New Campaigns
             </h2>
-            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            <p className="mt-1 hidden sm:block text-sm text-muted-foreground sm:text-base">
               Explore active paid deals and barter collaboration briefs posted by verified brands.
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="shrink-0">
             <Link
               to={
                 user
@@ -1251,10 +1247,10 @@ export default function Home() {
                     : "/dashboard/brand?tab=campaigns")
                   : "/dashboard/creator?tab=campaigns"
               }
-              className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
+              className="group inline-flex items-center gap-1.5 rounded-full gradient-sunset px-3.5 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
             >
-              <span>Explore all campaigns</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              <span>Explore all</span>
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </Link>
           </div>
         </div>
@@ -1315,23 +1311,23 @@ export default function Home() {
           FEATURED BRANDS
       ========================= */}
       <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-        <div className="mb-10 flex items-end justify-between">
-          <div>
-            <h2 className="font-display text-3xl font-bold sm:text-4xl">
+        <div className="mb-8 flex flex-row items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="font-display text-2xl font-bold sm:text-4xl truncate sm:overflow-visible">
               Featured brands
             </h2>
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-1 hidden sm:block text-muted-foreground">
               Vetted brands hiring creators today.
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="shrink-0">
             <Link
               to="/browse?role=brand"
-              className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
+              className="group inline-flex items-center gap-1.5 rounded-full gradient-sunset px-3.5 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
             >
-              <span>View all brands</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              <span>View all</span>
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </Link>
           </div>
         </div>
@@ -1356,23 +1352,23 @@ export default function Home() {
           FEATURED CREATORS
       ========================= */}
       <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-        <div className="mb-10 flex items-end justify-between">
-          <div>
-            <h2 className="font-display text-3xl font-bold sm:text-4xl">
+        <div className="mb-8 flex flex-row items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="font-display text-2xl font-bold sm:text-4xl truncate sm:overflow-visible">
               Featured creators
             </h2>
-            <p className="mt-2 text-muted-foreground">
+            <p className="mt-1 hidden sm:block text-muted-foreground">
               Hand-picked by our team this week.
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="shrink-0">
             <Link
               to="/browse?role=creator"
-              className="group inline-flex items-center gap-2 rounded-full gradient-sunset px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95"
+              className="group inline-flex items-center gap-1.5 rounded-full gradient-sunset px-3.5 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-bold text-white shadow-glow transition-all hover:scale-105 active:scale-95 whitespace-nowrap"
             >
-              <span>View all creators</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              <span>View all</span>
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </Link>
           </div>
         </div>
