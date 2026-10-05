@@ -257,20 +257,10 @@ export default function Register() {
     setSubmitting(true);
 
     try {
-      console.log(
-        "Sending OTP to:",
-        email
-      );
-
       const response =
         await authApi.sendOtp(
           email.trim().toLowerCase()
         );
-
-      console.log(
-        "Send OTP response:",
-        response
-      );
 
       if (response?.success === false) {
         throw new Error(
@@ -315,20 +305,10 @@ export default function Register() {
     setSubmitting(true);
 
     try {
-      console.log(
-        "Resending OTP to:",
-        email
-      );
-
       const response =
         await authApi.sendOtp(
           email.trim().toLowerCase()
         );
-
-      console.log(
-        "Resend OTP response:",
-        response
-      );
 
       if (response?.success === false) {
         throw new Error(
@@ -372,11 +352,6 @@ export default function Register() {
     setVerifying(true);
 
     try {
-      console.log(
-        "Verifying OTP:",
-        code
-      );
-
       // =====================================
       // STEP 1: VERIFY OTP
       // =====================================
@@ -386,11 +361,6 @@ export default function Register() {
           email.trim().toLowerCase(),
           code
         );
-
-      console.log(
-        "OTP verification response:",
-        verifyResponse
-      );
 
       if (!verifyResponse?.success) {
         throw new Error(
@@ -407,22 +377,6 @@ export default function Register() {
       // STEP 2: REGISTER
       // =====================================
 
-      console.log(
-        "Registering user..."
-      );
-
-      /*
-        IMPORTANT:
-        Use AuthProvider.register()
-        instead of authApi.register()
-
-        This automatically updates:
-        - user
-        - profile
-        - token
-        - localStorage
-      */
-
   const registerResponse = await registerUser({
     role,
     email,
@@ -435,11 +389,6 @@ export default function Register() {
   });
 
   localStorage.removeItem("previxo_ref_code");
-  
-      console.log(
-        "Register response:",
-        registerResponse
-      );
 
       if (!registerResponse?.success) {
         throw new Error(
@@ -447,39 +396,6 @@ export default function Register() {
             "Registration failed."
         );
       }
-
-      // =====================================
-      // SUCCESS
-      // =====================================
-
-      console.log(
-        "================================="
-      );
-
-      console.log(
-        "REGISTER SUCCESS"
-      );
-
-      console.log(
-        "USER:",
-        registerResponse?.user
-      );
-
-      console.log(
-        "PROFILE:",
-        registerResponse?.profile
-      );
-
-      console.log(
-        "TOKEN:",
-        registerResponse?.token
-          ? "Present"
-          : "Missing"
-      );
-
-      console.log(
-        "================================="
-      );
 
       toast.success(
         "Account created successfully!"

@@ -400,9 +400,6 @@ export function DashboardInfluencer() {
     }
   };
 
-  console.log("DASHBOARD PROFILE:", profile);
-  console.log("DASHBOARD MONGO PROFILE ID:", mongoProfileId);
-
   // =====================================================
   // PROFILE-DEPENDENT QUERIES
   // =====================================================
@@ -1878,8 +1875,6 @@ const CAMPAIGNS_PER_PAGE = 6;
   const creatorGender = profile?.gender || gender || "male";
   const avatarUrl = resolveImageUrl(profile?.avatarUrl) || getGenderAvatar(profile?.fullName || displayName, creatorGender, "creator");
   const status = profile?.verificationStatus || user?.verificationStatus || "unverified";
-  console.log("PROFILE FROM API:", profile);
-  console.log("Verification Status:", status);
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
