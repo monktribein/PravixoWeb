@@ -1,0 +1,49 @@
+name: Pravixo CI Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-verify:
+    name: Build & Verify Frontend & Admin
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout repository code
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Setup Node.js environment
+      - name: ⚙️ Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            client/package-lock.json
+            admin/package-lock.json
+
+      # Step 3: Test & Build Client
+      - name: 📦 Install Client Dependencies
+        run: |
+          cd client
+          npm ci || npm install
+
+      - name: 🔨 Build Client (Vite)
+        run: |
+          cd client
+          npm run build
+
+      # Step 4: Test & Build Admin Panel
+      - name: 📦 Install Admin Dependencies
+        run: |
+          cd admin
+          npm ci || npm install
+
+      - name: 🔨 Build Admin (Vite)
+        run: |
+          cd admin
+          npm run build

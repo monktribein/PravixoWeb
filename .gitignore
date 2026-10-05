@@ -6,6 +6,7 @@
 # ================================
 # ALLOW SPECIFIC FOLDERS
 # ================================
+!/.github/
 !/client/
 !/backend/
 !/admin/
