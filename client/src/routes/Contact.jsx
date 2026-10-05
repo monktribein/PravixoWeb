@@ -148,11 +148,19 @@ export function Contact() {
 
       <div className="mx-auto max-w-7xl space-y-16 px-4 sm:px-6 lg:px-8">
         {/* HERO SECTION */}
-        <div className="mx-auto max-w-3xl space-y-4 text-center">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
-            <Sparkles className="h-3.5 w-3.5" />
-            Contact Us
-          </div>
+        <div className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full border border-primary/30 bg-gradient-to-r from-primary/15 via-primary/10 to-primary/20 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-primary shadow-[0_0_20px_-4px] shadow-primary/40 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-primary/60 hover:shadow-[0_0_28px_-2px] hover:shadow-primary/60">
+  {/* Shine sweep effect on hover */}
+  <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+
+  {/* Pulsing dot */}
+  <span className="relative flex h-2 w-2">
+    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+    <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+  </span>
+
+  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+  <span className="relative">Contact Us</span>
+</div>
 
           <h1 className="font-display text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
             Get in Touch with{" "}
