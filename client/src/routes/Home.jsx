@@ -948,17 +948,6 @@ export default function Home() {
 
       {/* HERO */}
       <section className="relative overflow-hidden pt-6 pb-12 sm:pb-16">
-        {/* Background Banner Image */}
-        <div className="absolute inset-0 -z-10">
-          <img
-            src={heroBanner}
-            alt="Featured creators across fashion, fitness, tech, beauty, travel and food"
-            className="h-full w-full scale-105 object-cover blur-xs"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/85 via-background/80 to-background" />
-          <div className="absolute inset-0 bg-background/30" />
-        </div>
-
         {/* 3D Ambient Gradient Blobs */}
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute -left-32 -top-40 h-[32rem] w-[32rem] rounded-full gradient-warm opacity-25 blur-3xl animate-blob" />
