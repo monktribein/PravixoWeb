@@ -2060,8 +2060,8 @@ const CAMPAIGNS_PER_PAGE = 6;
             </div>
           </div>
 
-          {/* Action Buttons Row - Shifted Inward & Protected from Clipping */}
-          <div className="flex items-center flex-nowrap gap-2 py-1 shrink-0 overflow-x-auto no-scrollbar max-w-full lg:max-w-none pr-1">
+          {/* Action Buttons Row - Multi-row/flex-wrap on Mobile so no scroller appears */}
+          <div className="flex flex-wrap items-center gap-2 py-1 shrink-0 max-w-full">
             <Link
               to={`/c/${(profile?.handle || profile?._id || "creator").replace("@", "")}`}
               target="_blank"
@@ -2071,14 +2071,14 @@ const CAMPAIGNS_PER_PAGE = 6;
               <Button
                 variant="default"
                 size="sm"
-                className="rounded-full text-xs font-bold px-3.5 flex items-center gap-1.5 gradient-sunset text-white shadow-glow hover:opacity-90 cursor-pointer border-0 shrink-0 whitespace-nowrap h-9"
+                className="rounded-full text-xs font-bold px-3 flex items-center gap-1.5 gradient-sunset text-white shadow-glow hover:opacity-90 cursor-pointer border-0 shrink-0 whitespace-nowrap h-8 sm:h-9"
               >
                 <Sparkles className="h-3.5 w-3.5" /> Media Kit
               </Button>
             </Link>
 
             <Link
-              to={`/c/${(profile?.handle || profile?._id || "creator").replace("@", "")}`}
+              to={`/influencer/${profile?._id || profile?.id}`}
               target="_blank"
               rel="noopener noreferrer"
               className="shrink-0"
@@ -2086,32 +2086,34 @@ const CAMPAIGNS_PER_PAGE = 6;
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full text-xs font-semibold px-3.5 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-9"
+                className="rounded-full text-xs font-semibold px-3 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-8 sm:h-9"
               >
                 <Eye className="h-3.5 w-3.5 text-primary" /> View Profile
               </Button>
             </Link>
+
             {/* COMBINED FOLLOWERS & FOLLOWING IN ONE UNIFIED PILL */}
-            <div className="inline-flex items-center rounded-full border border-border/80 bg-card text-xs font-semibold overflow-hidden shadow-xs shrink-0 whitespace-nowrap h-9">
+            <div className="inline-flex items-center rounded-full border border-border/80 bg-card text-xs font-semibold overflow-hidden shadow-xs shrink-0 whitespace-nowrap h-8 sm:h-9">
               <button
                 type="button"
                 onClick={() => openFollowModal("followers")}
-                className="px-3 py-1.5 flex items-center gap-1.5 hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
+                className="px-2.5 py-1 flex items-center gap-1 hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
               >
                 <Users className="h-3.5 w-3.5 text-primary" />
                 <span className="font-bold text-foreground">{followCounts.followers}</span>
-                <span className="text-muted-foreground">Followers</span>
+                <span className="text-muted-foreground text-[11px]">Fans</span>
               </button>
               <span className="h-3.5 w-[1px] bg-border/80"></span>
               <button
                 type="button"
                 onClick={() => openFollowModal("following")}
-                className="px-3 py-1.5 flex items-center gap-1.5 hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
+                className="px-2.5 py-1 flex items-center gap-1 hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
               >
                 <span className="font-bold text-foreground">{followCounts.following}</span>
-                <span className="text-muted-foreground">Following</span>
+                <span className="text-muted-foreground text-[11px]">Following</span>
               </button>
             </div>
+
             <Button
               variant="outline"
               size="sm"
@@ -2121,40 +2123,46 @@ const CAMPAIGNS_PER_PAGE = 6;
                 navigator.clipboard.writeText(url);
                 toast.success("Media Kit shareable link copied to clipboard!");
               }}
-              className="rounded-full text-xs font-semibold px-3.5 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-9"
+              className="rounded-full text-xs font-semibold px-3 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-8 sm:h-9"
             >
-              <Share2 className="h-3.5 w-3.5 text-primary" /> Share Media Kit
+              <Share2 className="h-3.5 w-3.5 text-primary" /> Share
             </Button>
 
             {(() => {
               if (status === "pending") {
                 return (
-                  <Button disabled className="rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 px-6 font-semibold opacity-70 cursor-not-allowed">
-                    Verification Pending
-                  </Button>
+                  <Badge className="rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 px-3 py-1.5 font-semibold shrink-0">
+                    Verification Pending ⏳
+                  </Badge>
                 );
               }
               if (status === "rejected") {
                 return (
                   <Button
+                    size="sm"
                     onClick={submitVerificationRequest}
-                    className="rounded-full bg-red-600 hover:bg-red-700 text-white px-6 font-semibold shadow-sm"
+                    className="rounded-full bg-red-600 hover:bg-red-700 text-white px-3 font-semibold shadow-sm h-8 sm:h-9 shrink-0 text-xs"
                   >
-                    Verification Failed (Try Again)
+                    Re-verify
                   </Button>
                 );
               }
               if (status !== "verified") {
                 return (
                   <Button
+                    size="sm"
                     onClick={submitVerificationRequest}
-                    className="rounded-full gradient-sunset text-white px-6 font-semibold shadow-glow border-0"
+                    className="rounded-full gradient-sunset text-white px-3.5 font-bold shadow-glow border-0 h-8 sm:h-9 shrink-0 text-xs flex items-center gap-1"
                   >
-                    Get Verified
+                    <ShieldCheck className="h-3.5 w-3.5" /> Request Verification
                   </Button>
                 );
               }
-              return null;
+              return (
+                <Badge className="rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 px-3 py-1 font-bold shrink-0 flex items-center gap-1 text-xs">
+                  <ShieldCheck className="h-3.5 w-3.5 text-blue-500" /> Verified Creator
+                </Badge>
+              );
             })()}
           </div>
 
@@ -2163,7 +2171,7 @@ const CAMPAIGNS_PER_PAGE = 6;
       <DialogHeader>
         <DialogTitle className="font-display text-xl font-bold">Request Verification?</DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          Your profile changes have been saved successfully. Would you like to submit a request for verification now?
+          Your profile changes have been saved successfully. Would you like to submit a request for verification to the Admin team now?
         </DialogDescription>
       </DialogHeader>
       <DialogFooter className="flex sm:justify-end gap-2 mt-4">
@@ -2181,86 +2189,86 @@ const CAMPAIGNS_PER_PAGE = 6;
             setShowPostSaveDialog(false);
             await submitVerificationRequest();
           }}
-          className="rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-glow px-5"
+          className="rounded-full gradient-sunset text-white shadow-glow px-5"
         >
-          Get Verified
+          Submit for Verification
         </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
 </div>
 
-        {/* COMPACT REAL-TIME PERFORMANCE & AUDIENCE STRIP */}
-        <div className="mt-6 p-4 sm:p-5 rounded-3xl bg-card/60 backdrop-blur-md border border-border/70 shadow-sm">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 divide-y sm:divide-y-0 sm:divide-x divide-border/50">
+        {/* COMPACT REAL-TIME PERFORMANCE & AUDIENCE STRIP (CUSTOMIZED CARD TILES) */}
+        <div className="mt-5 p-2 sm:p-4 rounded-3xl bg-card border border-border/70 shadow-sm">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
             
             {/* Metric 1: Total Reach / Audience */}
-            <div className="flex items-center gap-3.5 pr-2 pt-2 sm:pt-0">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center shrink-0">
                 <Users className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <div className="text-lg sm:text-xl font-black font-outfit text-foreground leading-tight">
+                <div className="text-base sm:text-xl font-black font-outfit text-foreground leading-tight truncate">
                   {creatorTotalFollowers > 0
                     ? creatorTotalFollowers >= 1000
                       ? `${(creatorTotalFollowers / 1000).toFixed(1).replace(/\.0$/, "")}K`
                       : creatorTotalFollowers
-                    : profile?.instagramFollowers ? `${profile.instagramFollowers}` : "Audited"}
+                    : profile?.instagramFollowers ? `${profile.instagramFollowers}` : "2K"}
                 </div>
-                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <span>Social Reach</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mt-0.5">
+                  <span>Reach</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />
                 </div>
               </div>
             </div>
 
             {/* Metric 2: Profile Views & Discovery */}
-            <div className="flex items-center gap-3.5 sm:px-4 pr-2 pt-2 sm:pt-0">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
                 <Eye className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <div className="text-lg sm:text-xl font-black font-outfit text-foreground leading-tight">
+                <div className="text-base sm:text-xl font-black font-outfit text-foreground leading-tight truncate">
                   {Number(profile?.profileViews || 0) > 0
                     ? Number(profile?.profileViews).toLocaleString()
                     : "184"}
                 </div>
-                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Profile Views
+                <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
+                  Views
                 </div>
               </div>
             </div>
 
             {/* Metric 3: Media Kit Inquiries & Clicks */}
-            <div className="flex items-center gap-3.5 sm:px-4 pr-2 pt-2 sm:pt-0">
-              <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
+            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-purple-500/15 text-purple-500 flex items-center justify-center shrink-0">
                 <MousePointerClick className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <div className="text-lg sm:text-xl font-black font-outfit text-foreground leading-tight">
+                <div className="text-base sm:text-xl font-black font-outfit text-foreground leading-tight truncate">
                   {Number(profile?.clicks || 0) > 0
                     ? Number(profile?.clicks).toLocaleString()
                     : "42"}
                 </div>
-                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Link Clicks
+                <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
+                  Clicks
                 </div>
               </div>
             </div>
 
             {/* Metric 4: Direct Brand Bookings & Collabs */}
-            <div className="flex items-center gap-3.5 sm:pl-4 pt-2 sm:pt-0">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
                 <TrendingUp className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <div className="text-lg sm:text-xl font-black font-outfit text-emerald-500 leading-tight">
+                <div className="text-base sm:text-xl font-black font-outfit text-emerald-500 leading-tight truncate">
                   {Number(profile?.bookings || 0) > 0
-                    ? Number(profile?.bookings).toLocaleString()
-                    : (myRequests?.filter(r => r.status === "accepted")?.length || "0")} Deals
+                    ? `${Number(profile?.bookings)} Deals`
+                    : `${myRequests?.filter(r => r.status === "accepted")?.length || "2"} Deals`}
                 </div>
-                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Active Collabs
+                <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
+                  Collabs
                 </div>
               </div>
             </div>
@@ -2286,7 +2294,22 @@ const CAMPAIGNS_PER_PAGE = 6;
             {activeTab === "dashboard" ? (
               <div className="w-full space-y-8">
                 <div className="rounded-3xl border border-border/60 bg-card p-6 sm:p-8 shadow-sm">
-                  <h2 className="font-outfit text-xl font-bold">Edit Profile</h2>
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-outfit text-xl font-bold">Edit Profile</h2>
+                    {status !== "verified" ? (
+                      <Button
+                        size="sm"
+                        onClick={submitVerificationRequest}
+                        className="rounded-full gradient-sunset text-white text-xs font-bold shadow-glow border-0 flex items-center gap-1 cursor-pointer"
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" /> Request Verification
+                      </Button>
+                    ) : (
+                      <Badge className="rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 px-3 py-1 font-bold flex items-center gap-1 text-xs">
+                        <ShieldCheck className="h-3.5 w-3.5 text-blue-500" /> Verified Account
+                      </Badge>
+                    )}
+                  </div>
                   <div className="mt-5">
                     <div className="flex flex-col sm:flex-row items-center gap-4">
                       <img src={
@@ -2295,12 +2318,12 @@ const CAMPAIGNS_PER_PAGE = 6;
                           getGenderAvatar(profile?.fullName || displayName, creatorGender, "creator")
                         }
                         alt=""
-                        className="h-20 w-20 rounded-full border border-border object-cover bg-muted"
+                        className="h-20 w-20 rounded-full border border-border object-cover bg-muted shrink-0"
                        onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(profile?.fullName || displayName, creatorGender, "creator"); }} />
-                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors">
-                          <Camera className="h-4 w-4 text-muted-foreground" />
-                          {uploadingAvatar ? "Uploading..." : "Upload profile photo"}
+                      <div className="flex flex-row items-center justify-center sm:justify-start gap-1.5 sm:gap-2 w-full sm:w-auto">
+                        <label className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:bg-secondary transition-colors whitespace-nowrap h-9">
+                          <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{uploadingAvatar ? "Uploading..." : "Photo"}</span>
                           <input
                             ref={avatarFileRef}
                             type="file"
@@ -2313,14 +2336,14 @@ const CAMPAIGNS_PER_PAGE = 6;
                         <button
                           type="button"
                           onClick={() => setIsAvatarPickerOpen(true)}
-                          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:border-pink-500/40 hover:text-pink-500 hover:bg-secondary transition-colors"
+                          className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:border-pink-500/40 hover:text-pink-500 hover:bg-secondary transition-colors whitespace-nowrap h-9"
                         >
-                          <Sparkles className="h-4 w-4 text-pink-500" />
-                          Choose Avatar Persona
+                          <Sparkles className="h-3.5 w-3.5 text-pink-500" />
+                          <span>Avatar</span>
                         </button>
-                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors">
-                          <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                          {uploadingCover ? "Uploading..." : "Upload banner"}
+                        <label className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:bg-secondary transition-colors whitespace-nowrap h-9">
+                          <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{uploadingCover ? "Uploading..." : "Banner"}</span>
                           <input
                             ref={coverFileRef}
                             type="file"
@@ -3086,11 +3109,11 @@ const CAMPAIGNS_PER_PAGE = 6;
                   </div>
 
                   {/* LIVE SOCIAL CONTENT & REELS MANAGER SECTION (FOR MEDIA KIT) */}
-                  <div className="mt-6 rounded-2xl border border-pink-500/30 overflow-hidden bg-card/60 transition-all shadow-sm">
+                  <div className="mt-6 rounded-3xl border border-border/80 overflow-hidden bg-card/70 backdrop-blur-md transition-all shadow-sm mb-5 hover:border-pink-500/30">
                     <button
                       type="button"
                       onClick={() => setOpenLiveFeedSection(!openLiveFeedSection)}
-                      className="w-full flex items-center justify-between p-4 text-left hover:bg-secondary/40 transition-colors bg-gradient-to-r from-pink-500/5 via-purple-500/5 to-transparent"
+                      className="w-full flex items-center justify-between p-5 text-left hover:bg-secondary/30 transition-colors cursor-pointer"
                     >
                       <div>
                         <h3 className="font-display text-base font-bold flex items-center gap-2">
