@@ -1926,56 +1926,42 @@ export default function InfluencerDetails() {
                   {inf.handle}
                 </p>
 
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-2.5 gap-y-1.5 text-sm text-muted-foreground">
-
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground pt-1">
                   <Badge
                     variant="secondary"
-                    className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                    className="rounded-full px-2.5 py-0.5 text-[11px] sm:text-xs font-semibold bg-muted/80"
                   >
                     {inf.category}
                   </Badge>
 
-                  <span className="text-border hidden sm:inline">
-                    •
-                  </span>
-
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {inf.location}
-                  </span>
-
-                  <span className="text-border">
-                    •
-                  </span>
-
-                  <span className="flex items-center gap-1.5 font-bold text-amber-500">
-                    <Star className="h-4 w-4 fill-current" />
-
-                    {rating}
-
-                    <span className="text-muted-foreground font-medium text-xs">
-                      ({reviewsCount} reviews)
+                  {inf.location && (
+                    <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs bg-muted/50 px-2 py-0.5 rounded-full border border-border/40">
+                      <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
+                      {inf.location}
                     </span>
-                  </span>
-
-                  {(inf.startingPrice > 0 || inf.isBarterAllowed) && (
-                    <>
-                      <span className="text-border hidden sm:inline">•</span>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {inf.startingPrice > 0 && (
-                          <span className="font-bold text-xs text-foreground bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full">
-                            Starting ₹{Number(inf.startingPrice).toLocaleString("en-IN")}
-                          </span>
-                        )}
-                        {inf.isBarterAllowed && (
-                          <span className="font-bold text-xs text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Handshake className="h-3 w-3" /> Barter Allowed
-                          </span>
-                        )}
-                      </div>
-                    </>
                   )}
 
+                  <span className="inline-flex items-center gap-1 font-bold text-[11px] sm:text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-current" />
+                    <span>{rating}</span>
+                    {reviewsCount > 0 && (
+                      <span className="text-muted-foreground/80 font-normal text-[10px] sm:text-[11px]">
+                        ({reviewsCount})
+                      </span>
+                    )}
+                  </span>
+
+                  {inf.startingPrice > 0 && (
+                    <span className="font-bold text-[11px] sm:text-xs text-primary bg-primary/10 border border-primary/25 px-2 py-0.5 rounded-full">
+                      ₹{Number(inf.startingPrice).toLocaleString("en-IN")}+
+                    </span>
+                  )}
+
+                  {inf.isBarterAllowed && (
+                    <span className="font-bold text-[11px] sm:text-xs text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                      <Handshake className="h-3 w-3" /> Barter
+                    </span>
+                  )}
                 </div>
 
               </div>
@@ -1983,7 +1969,7 @@ export default function InfluencerDetails() {
             </div>
 
             {/* ACTIONS (Single Clean Unified Responsive Row on Mobile & Desktop) */}
-            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-1.5 sm:gap-2 pb-1 shrink-0 w-full sm:w-auto">
+            <div className="flex items-center justify-center sm:justify-end gap-1.5 sm:gap-2 pt-1 pb-1 shrink-0 w-full sm:w-auto">
               {myProfile?.role === "brand" && (
                 <Button
                   variant="outline"
@@ -2003,7 +1989,7 @@ export default function InfluencerDetails() {
                 <Link to={`/c/${inf.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
                   <Button
                     variant="outline"
-                    className="rounded-full h-8 sm:h-9 px-2.5 sm:px-3.5 flex items-center gap-1 text-[11px] sm:text-xs font-bold bg-amber-500/10 border-amber-500/30 text-amber-600 hover:text-amber-700 hover:bg-amber-500/20 shrink-0 whitespace-nowrap"
+                    className="rounded-full h-8 sm:h-9 px-2.5 sm:px-3 flex items-center gap-1 text-[11px] sm:text-xs font-semibold bg-amber-500/10 border-amber-500/30 text-amber-600 hover:text-amber-700 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-none"
                   >
                     <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-500" /> Media Kit
                   </Button>
