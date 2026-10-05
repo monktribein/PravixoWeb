@@ -34,13 +34,17 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { getGenderAvatar, resolveAvatarUrl } from "@/utils/avatar";
 
 const resolveMediaUrl = (url) => {
   if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+  if (url.startsWith("/avatars/") || url.startsWith("/icons/") || url.startsWith("/assets/")) return url;
   let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
   if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
-  return `${apiUrl}${url}`;
+  if (apiUrl.endsWith("/")) apiUrl = apiUrl.slice(0, -1);
+  const cleanPath = url.startsWith("/") ? url : `/${url}`;
+  return `${apiUrl}${cleanPath}`;
 };
 
 const isDirectVideo = (url) => {
@@ -249,11 +253,11 @@ export default function Reviews() {
           formData.append("targetRole", formRole);
           formData.append("reviewType", "video");
           formData.append("reviewerId", profile?._id || "");
-          formData.append("reviewerAvatar", profile?.avatar || "");
+          formData.append("reviewerAvatar", profile?.avatarUrl || profile?.avatar || "");
           if (chosenCollab) {
             formData.append("targetId", chosenCollab.partnerId || "");
             formData.append("targetName", chosenCollab.partnerName || "");
-            formData.append("targetAvatar", chosenCollab.partnerAvatar || "");
+            formData.append("targetAvatar", chosenCollab.partnerAvatar || chosenCollab.partnerAvatarUrl || "");
             formData.append("campaignName", chosenCollab.campaignTitle || "");
           }
           formData.append("video", videoFile);
@@ -289,10 +293,10 @@ export default function Reviews() {
             targetRole: formRole,
             reviewType: "video",
             reviewerId: profile?._id,
-            reviewerAvatar: profile?.avatar,
+            reviewerAvatar: profile?.avatarUrl || profile?.avatar,
             targetId: chosenCollab?.partnerId,
             targetName: chosenCollab?.partnerName,
-            targetAvatar: chosenCollab?.partnerAvatar,
+            targetAvatar: chosenCollab?.partnerAvatar || chosenCollab?.partnerAvatarUrl,
             campaignName: chosenCollab?.campaignTitle,
           });
 
@@ -311,10 +315,10 @@ export default function Reviews() {
           targetRole: formRole,
           reviewType: "text",
           reviewerId: profile?._id,
-          reviewerAvatar: profile?.avatar,
+          reviewerAvatar: profile?.avatarUrl || profile?.avatar,
           targetId: chosenCollab?.partnerId,
           targetName: chosenCollab?.partnerName,
-          targetAvatar: chosenCollab?.partnerAvatar,
+          targetAvatar: chosenCollab?.partnerAvatar || chosenCollab?.partnerAvatarUrl,
           campaignName: chosenCollab?.campaignTitle,
         });
 
@@ -374,12 +378,7 @@ export default function Reviews() {
         {/* HERO SECTION */}
         <div className="flex flex-col items-center justify-between gap-6 border-b border-border/40 pb-6 md:flex-row">
           <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Verified Partner Reviews
-            </div>
-
-            <h1 className="mt-2 font-display text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+            <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
               What Our{" "}
               <span className="text-gradient-sunset">
                 Partners Say
@@ -552,15 +551,18 @@ export default function Reviews() {
                       <div className="p-5 pb-0 flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase shrink-0 overflow-hidden">
-                            {rev.reviewerAvatar ? (
-                              <img
-                                src={resolveMediaUrl(rev.reviewerAvatar)}
-                                alt={rev.reviewerName}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              rev.reviewerName?.slice(0, 2) || "PR"
-                            )}
+                            <img
+                              src={
+                                resolveMediaUrl(rev.reviewerAvatar) ||
+                                getGenderAvatar(rev.reviewerName || "User", "", rev.targetRole === "brand" ? "creator" : "brand")
+                              }
+                              alt={rev.reviewerName || "User"}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = getGenderAvatar(rev.reviewerName || "User", "", rev.targetRole === "brand" ? "creator" : "brand");
+                              }}
+                            />
                           </div>
                           <div className="min-w-0">
                             <h4 className="font-display text-sm font-bold text-foreground truncate">

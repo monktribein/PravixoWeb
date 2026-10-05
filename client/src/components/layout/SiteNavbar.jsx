@@ -456,35 +456,169 @@ export function SiteNavbar() {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="border-t border-border md:hidden bg-background overflow-hidden"
+              className="border-t border-border/80 md:hidden bg-popover/95 backdrop-blur-xl overflow-hidden shadow-2xl"
             >
-              <div className="mx-auto max-w-7xl space-y-1 px-4 py-3">
-                {links.map((l) => (
-                  <Link
-                    key={l.to}
-                    to={l.to}
-                    onClick={() => setOpen(false)}
-                    className="block rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
-                  >
-                    {l.label}
-                  </Link>
-                ))}
-                {user ? (
-                  <div className="pt-2">
-                    <div className="px-3 pb-2 text-xs text-muted-foreground">
-                      Signed in as {profile?.fullName || profile?.name || user.email}
+              <div className="mx-auto max-w-7xl p-3.5 space-y-2">
+                {/* User Profile Header Card if logged in */}
+                {user && (
+                  <div className="rounded-2xl border border-border/60 bg-card/60 p-3 mb-2 flex items-center gap-3">
+                    <img
+                      src={
+                        resolveImageUrl(profile?.avatarUrl) ||
+                        getGenderAvatar(profile?.fullName || profile?.name || user?.email, profile?.gender, profile?.role)
+                      }
+                      alt=""
+                      className="h-10 w-10 rounded-full object-cover border border-border/60"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = getGenderAvatar(profile?.fullName || profile?.name || user?.email, profile?.gender, profile?.role);
+                      }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-foreground truncate">
+                        {profile?.fullName || profile?.name || "User"}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
+                        <span className="capitalize font-semibold text-primary">{profile?.role || "Brand"}</span>
+                        <span>•</span>
+                        <span>@{profile?.handle?.replace("@", "") || "user"}</span>
+                      </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full rounded-full"
-                      onClick={handleSignOut}
+                  </div>
+                )}
+
+                {/* Base Navigation Links */}
+                <div className="grid grid-cols-2 gap-1 pb-1">
+                  {baseLinks.map((l) => {
+                    const active = pathname === l.to;
+                    return (
+                      <Link
+                        key={l.to}
+                        to={l.to}
+                        onClick={() => setOpen(false)}
+                        className={`block rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+                          active
+                            ? "bg-secondary text-foreground font-bold"
+                            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                        }`}
+                      >
+                        {l.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                {/* Authenticated Dashboard & Feature Links */}
+                {user ? (
+                  <div className="space-y-0.5 border-t border-border/50 pt-2 text-xs font-medium">
+                    <Link
+                      to={dashboardBaseUrl}
+                      onClick={() => {
+                        setOpen(false);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
                     >
-                      <LogOut className="mr-2 h-4 w-4" /> Sign out
-                    </Button>
+                      <LayoutDashboard className="h-4 w-4 text-primary" />
+                      <span>Overview Dashboard</span>
+                    </Link>
+
+                    {profile?.role === "creator" ? (
+                      <Link
+                        to="/collaborations"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors font-semibold"
+                      >
+                        <Briefcase className="h-4 w-4 text-purple-500" />
+                        <span>My Work & Deliverables</span>
+                      </Link>
+                    ) : (
+                      <Link
+                        to="/collaborations"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors font-semibold"
+                      >
+                        <Briefcase className="h-4 w-4 text-purple-500" />
+                        <span>Campaign Work & Deliverables</span>
+                      </Link>
+                    )}
+
+                    <Link
+                      to={`${dashboardBaseUrl}?tab=subscription`}
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                    >
+                      <Star className="h-4 w-4 text-amber-500" />
+                      <span>{profile?.role === "brand" ? "Add-on Services & Packages" : "Packages & Plan"}</span>
+                    </Link>
+
+                    <Link
+                      to={`${dashboardBaseUrl}?tab=offers`}
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                    >
+                      <Sparkles className="h-4 w-4 text-pink-500" />
+                      <span>Special Offers & Deals</span>
+                    </Link>
+
+                    <Link
+                      to={`${dashboardBaseUrl}?tab=wallet`}
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                    >
+                      <Wallet className="h-4 w-4 text-emerald-500" />
+                      <span>My Wallet</span>
+                    </Link>
+
+                    {profile?.role === "creator" ? (
+                      <Link
+                        to={`${dashboardBaseUrl}?tab=campaigns`}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                      >
+                        <Megaphone className="h-4 w-4 text-blue-500" />
+                        <span>Find Campaigns</span>
+                      </Link>
+                    ) : (
+                      <Link
+                        to={`${dashboardBaseUrl}?tab=campaigns`}
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                      >
+                        <Megaphone className="h-4 w-4 text-blue-500" />
+                        <span>Campaigns & Escrow</span>
+                      </Link>
+                    )}
+
+                    {profile?.handle && (
+                      <Link
+                        to={`/c/${profile.handle.replace("@", "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary/80 transition-colors"
+                      >
+                        <Sparkles className="h-4 w-4 text-purple-500" />
+                        <span>Public Media Kit</span>
+                      </Link>
+                    )}
+
+                    <div className="my-1 border-t border-border/50" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        handleSignOut();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-destructive hover:bg-destructive/10 transition-colors text-left"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Sign Out</span>
+                    </button>
                   </div>
                 ) : (
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2 border-t border-border/50">
                     <Link
                       to="/login"
                       className="flex-1"

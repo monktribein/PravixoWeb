@@ -380,7 +380,7 @@ export default function Connections() {
           )}
         </div>
       ) : (
-        <div className="max-h-[680px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="w-full">
           <div className="grid gap-4 md:grid-cols-2">
             {filteredConnections.map((connection) => {
               const partner = connection.otherProfile;

@@ -510,40 +510,31 @@ export default function Addons() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-6 border-b border-border/40">
 
           <div>
-
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-bold uppercase tracking-wider">
-
-              <Sparkles className="h-3.5 w-3.5" />
-
-              Marketplace Add-ons
-
-            </div>
-
-            <h1 className="font-display text-4xl font-extrabold tracking-tight mt-2 text-foreground">
+            <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
               Add-on Services &{" "}
               <span className="text-gradient-sunset">
                 Rentals
               </span>
             </h1>
 
-            <p className="text-sm text-muted-foreground mt-2 max-w-xl">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-2 max-w-xl">
               Rent high-end equipment, podcast recording studios, hire videographers, video editors, or dedicated support staff for your next campaign.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-row items-center gap-1.5 sm:gap-3 w-full md:w-auto justify-start sm:justify-end overflow-x-auto no-scrollbar py-1">
             {/* Tab switch */}
-            <div className="flex rounded-full bg-secondary/30 p-1.5 border border-border/40 text-xs font-semibold shadow-inner">
+            <div className="inline-flex items-center shrink-0 rounded-full bg-secondary/30 p-1 border border-border/40 text-[11px] sm:text-xs font-semibold shadow-inner">
               <button
                 type="button"
                 onClick={() => setActiveTab("services")}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-200 ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full transition-all duration-200 whitespace-nowrap ${
                   activeTab === "services"
                     ? "gradient-sunset text-white shadow-glow border-0 font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <ShoppingBag className="h-3.5 w-3.5" />
+                <ShoppingBag className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 Services & Rentals
               </button>
 
@@ -553,17 +544,17 @@ export default function Addons() {
                   setActiveTab("bookings");
                   fetchBookings();
                 }}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-200 relative ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full transition-all duration-200 relative whitespace-nowrap ${
                   activeTab === "bookings"
                     ? "gradient-sunset text-white shadow-glow border-0 font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <ClipboardList className="h-3.5 w-3.5" />
-                {isAdmin ? "Booking Requests" : "My Bookings"}
+                <ClipboardList className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                {isAdmin ? "Bookings" : "My Bookings"}
                 {bookings.length > 0 && (
                   <span
-                    className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold ${
                       activeTab === "bookings"
                         ? "bg-white/25 text-white"
                         : "bg-primary/20 text-primary"
@@ -578,10 +569,10 @@ export default function Addons() {
             {(isAdmin || isCreator) && activeTab === "services" && (
               <Button
                 onClick={handleOpenCreate}
-                className="btn-bouncy rounded-full gradient-sunset border-0 text-white font-semibold shadow-glow hover:opacity-95"
+                className="btn-bouncy shrink-0 rounded-full gradient-sunset border-0 text-white font-semibold shadow-glow hover:opacity-95 text-[11px] sm:text-xs h-9 sm:h-10 px-3.5 sm:px-4 flex items-center whitespace-nowrap"
               >
-                <Plus className="h-4.5 w-4.5 mr-2" />
-                {isCreator ? "Offer My Add-on Service" : "Add Service"}
+                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
+                {isCreator ? "Offer My Add-on" : "Add Service"}
               </Button>
             )}
           </div>
