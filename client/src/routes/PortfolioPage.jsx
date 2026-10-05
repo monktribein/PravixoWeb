@@ -62,21 +62,25 @@ export default function PortfolioPage() {
           // fallback to mock
           prof = influencers.find((item) => String(item.id) === String(id)) ||
             mockBrands.find((item) => String(item.id) === String(id));
-        }
         setProfile(prof);
 
-        // Fetch live portfolio
+        // Fetch live portfolio (support profile ID, user ID or MongoDB _id)
+        const targetProfileId = prof?._id || prof?.id || id;
         try {
-          const pRes = await api.get(`/portfolio/profile/${id}`);
+          const pRes = await api.get(`/portfolio/profile/${targetProfileId}`);
           const pData = pRes.data?.data || pRes.data;
-          if (Array.isArray(pData)) {
+          if (Array.isArray(pData) && pData.length > 0) {
             setPortfolio(pData);
-          } else if (prof?.gallery && Array.isArray(prof.gallery)) {
+          } else if (prof?.gallery && Array.isArray(prof.gallery) && prof.gallery.length > 0) {
             setPortfolio(prof.gallery);
+          } else if (prof?.portfolioImages && Array.isArray(prof.portfolioImages) && prof.portfolioImages.length > 0) {
+            setPortfolio(prof.portfolioImages);
           }
         } catch {
           if (prof?.gallery && Array.isArray(prof.gallery)) {
             setPortfolio(prof.gallery);
+          } else if (prof?.portfolioImages && Array.isArray(prof.portfolioImages)) {
+            setPortfolio(prof.portfolioImages);
           }
         }
       } catch (err) {
@@ -261,7 +265,7 @@ export default function PortfolioPage() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                {profileHandle} · {portfolio.length} total deliverables
+                {profileHandle} · {portfolio.length} {portfolio.length === 1 ? "creative item" : "creative items"}
               </p>
             </div>
           </div>
@@ -324,15 +328,15 @@ export default function PortfolioPage() {
       {filtered.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-border rounded-3xl bg-muted/10 p-8">
           <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-40" />
-          <h3 className="text-base font-bold text-foreground">No deliverables published yet</h3>
+          <h3 className="text-base font-bold text-foreground">No portfolio items published yet</h3>
           <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-            There are no {portfolioTab === "all" ? "portfolio items" : portfolioTab + "s"} available in this category.
+            There are no {portfolioTab === "all" ? "creative items" : portfolioTab + "s"} available in this category.
           </p>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setPortfolioTab("all")}
-            className="mt-4 rounded-full"
+            className="mt-4 rounded-full cursor-pointer"
           >
             Show All
           </Button>

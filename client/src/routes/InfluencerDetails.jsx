@@ -1982,21 +1982,19 @@ export default function InfluencerDetails() {
 
             </div>
 
-            {/* ACTIONS (Single Clean Unified Row) */}
-
-            <div className="flex items-center justify-center sm:justify-end gap-2 pb-1 flex-wrap sm:flex-nowrap shrink-0">
-
+            {/* ACTIONS (Single Clean Unified Row on Mobile & Desktop) */}
+            <div className="flex items-center justify-center sm:justify-end gap-1.5 sm:gap-2 pb-1 flex-nowrap shrink-0 overflow-x-auto max-w-full">
               {myProfile?.role === "brand" && (
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-full h-9 w-9 shrink-0 ${
+                  className={`rounded-full h-8 w-8 sm:h-9 sm:w-9 shrink-0 ${
                     isFavorite ? "border-red-500 bg-red-50 text-red-500" : ""
                   }`}
                   onClick={handleToggleFavorite}
                 >
                   <Heart
-                    className={`h-4 w-4 ${isFavorite ? "fill-current text-red-500" : ""}`}
+                    className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isFavorite ? "fill-current text-red-500" : ""}`}
                   />
                 </Button>
               )}
@@ -2005,9 +2003,9 @@ export default function InfluencerDetails() {
                 <Link to={`/c/${inf.handle.replace("@", "")}`} target="_blank" rel="noopener noreferrer" className="shrink-0">
                   <Button
                     variant="outline"
-                    className="rounded-full h-9 px-3.5 flex items-center gap-1.5 text-xs font-bold bg-amber-500/10 border-amber-500/30 text-amber-600 hover:text-amber-700 hover:bg-amber-500/20 shrink-0"
+                    className="rounded-full h-8 sm:h-9 px-2.5 sm:px-3.5 flex items-center gap-1 text-[11px] sm:text-xs font-bold bg-amber-500/10 border-amber-500/30 text-amber-600 hover:text-amber-700 hover:bg-amber-500/20 shrink-0 whitespace-nowrap"
                   >
-                    <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Media Kit
+                    <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-500" /> Media Kit
                   </Button>
                 </Link>
               )}
@@ -2015,13 +2013,13 @@ export default function InfluencerDetails() {
               <Button
                 variant="outline"
                 size="icon"
-                className="rounded-full h-9 w-9 shrink-0"
+                className="rounded-full h-8 w-8 sm:h-9 sm:w-9 shrink-0"
                 onClick={() => {
                   navigator.clipboard?.writeText(window.location.href);
                   toast("Link copied");
                 }}
               >
-                <Share2 className="h-4 w-4" />
+                <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
 
               {/* FOLLOW BUTTON (Only shown across roles: Brand to Creator or Creator to Brand, or Guest) */}
@@ -2038,16 +2036,16 @@ export default function InfluencerDetails() {
                     size="sm"
                     onClick={handleToggleFollow}
                     disabled={followingLoading}
-                    className={`rounded-full px-3.5 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap ${
+                    className={`rounded-full px-2.5 sm:px-3.5 h-8 sm:h-9 flex items-center gap-1 text-[11px] sm:text-xs font-semibold shrink-0 whitespace-nowrap ${
                       isFollowing
                         ? "border-primary/50 text-primary hover:bg-primary/10"
                         : "gradient-sunset border-0 text-white shadow-glow"
                     }`}
                   >
-                    <Users className="h-4 w-4" />
+                    <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     <span>{isFollowing ? "Following" : "Follow"}</span>
                     {followFollowersCount > 0 && (
-                      <span className="ml-0.5 rounded-full bg-black/20 px-1.5 py-0.2 text-[10px] font-bold">
+                      <span className="ml-0.5 rounded-full bg-black/20 px-1.5 py-0.2 text-[9px] sm:text-[10px] font-bold">
                         {followFollowersCount}
                       </span>
                     )}
@@ -2058,10 +2056,10 @@ export default function InfluencerDetails() {
               {/* HIRE BUTTON (When logged in as brand) */}
               {myProfile?.role === "brand" && (
                 <Button
-                  className="rounded-full gradient-sunset border-0 text-white shadow-glow px-4 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap"
+                  className="rounded-full gradient-sunset border-0 text-white shadow-glow px-3 sm:px-4 h-8 sm:h-9 flex items-center gap-1 text-[11px] sm:text-xs font-semibold shrink-0 whitespace-nowrap"
                   onClick={handleHire}
                 >
-                  <MessageCircle className="h-4 w-4" />
+                  <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   Hire {inf.name.split(" ")[0]}
                 </Button>
               )}
@@ -2070,19 +2068,19 @@ export default function InfluencerDetails() {
               {myProfile?.role === "creator" && inf.role === "brand" && (
                 <>
                   <Button
-                    className="rounded-full gradient-sunset border-0 text-white shadow-glow px-4 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap"
+                    className="rounded-full gradient-sunset border-0 text-white shadow-glow px-3 sm:px-4 h-8 sm:h-9 flex items-center gap-1 text-[11px] sm:text-xs font-semibold shrink-0 whitespace-nowrap"
                     onClick={() => {
                       setSelectedCampaign(null);
                       setIsConnectionModalOpen(true);
                     }}
                   >
-                    <UserPlus className="h-4 w-4" />
+                    <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     Connect With Brand
                   </Button>
 
                   <Button
                     variant="outline"
-                    className="rounded-full px-3.5 h-9 text-xs font-semibold shrink-0 whitespace-nowrap"
+                    className="rounded-full px-2.5 sm:px-3.5 h-8 sm:h-9 text-[11px] sm:text-xs font-semibold shrink-0 whitespace-nowrap"
                     onClick={() => {
                       document.getElementById("open-campaigns")?.scrollIntoView({
                         behavior: "smooth",
@@ -2097,14 +2095,14 @@ export default function InfluencerDetails() {
               {/* SIGN IN TO CONNECT (When guest / not logged in) */}
               {!user && (
                 <Button
-                  className="rounded-full gradient-sunset border-0 text-white shadow-glow px-4 h-9 flex items-center gap-1.5 text-xs font-semibold shrink-0 whitespace-nowrap"
+                  className="rounded-full gradient-sunset border-0 text-white shadow-glow px-3 sm:px-4 h-8 sm:h-9 flex items-center gap-1 text-[11px] sm:text-xs font-semibold shrink-0 whitespace-nowrap"
                   onClick={() =>
                     navigate("/login", {
                       state: { from: `/influencer/${inf?.id || profileId}` },
                     })
                   }
                 >
-                  <MessageCircle className="h-4 w-4" />
+                  <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   Sign In to Connect
                 </Button>
               )}
