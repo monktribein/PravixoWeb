@@ -999,6 +999,7 @@ const [panFile, setPanFile] =
 const [verificationUploading, setVerificationUploading] =
   useState(false);
 const [showPostSaveDialog, setShowPostSaveDialog] = useState(false);
+const [openBasicSection, setOpenBasicSection] = useState(true);
 const [openKycSection, setOpenKycSection] = useState(false);
 const [openSocialSection, setOpenSocialSection] = useState(false);
 const [openPortfolioSection, setOpenPortfolioSection] = useState(false);
@@ -2064,7 +2065,6 @@ const CAMPAIGNS_PER_PAGE = 6;
             </div>
 
             <div className="flex flex-col gap-0.5 pt-8 sm:pt-14 min-w-0">
-             
               <h1 className="font-display text-xl font-bold sm:text-3xl lg:text-4xl flex items-center gap-1.5 sm:gap-2 truncate">
                 {displayName}
                 {status === "verified" && (
@@ -2388,281 +2388,304 @@ const CAMPAIGNS_PER_PAGE = 6;
                       </div>
                     </div>
                   </div>
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>Display name</Label>
-                      <Input
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        className="mt-1.5"
-                      />
-                    </div>
-                    <div>
-                      <Label>Handle</Label>
-                      <Input
-                        value={handle}
-                        onChange={(e) => setHandle(e.target.value)}
-                        placeholder="@yourname"
-                        className="mt-1.5"
-                      />
-                    </div>
-                    <div>
-                      <Label>Gender</Label>
-                      <div className="grid grid-cols-3 gap-2 mt-1.5">
-                        {[
-                          { value: "male", label: "Male" },
-                          { value: "female", label: "Female" },
-                          { value: "other", label: "Other" },
-                        ].map((item) => (
-                          <button
-                            key={item.value}
-                            type="button"
-                            onClick={() => setGender(item.value)}
-                            className={`py-2 px-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
-                              gender === item.value
-                                ? "border-pink-500 bg-pink-500/10 text-pink-500 ring-1 ring-pink-500 font-bold"
-                                : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Category</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className="flex min-h-[2.5rem] w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-left mt-1.5 cursor-pointer"
-                          >
-                            <div className="flex flex-wrap gap-1">
-                              {selectedCategories.length === 0 ? (
-                                <span className="text-muted-foreground">
-                                  Select categories...
-                                </span>
-                              ) : (
-                                selectedCategories.map((cat) => (
-                                  <Badge
-                                    key={cat}
-                                    variant="secondary"
-                                    className="rounded-sm px-1.5 py-0.5 font-normal text-xs flex items-center gap-1"
-                                  >
-                                    {cat}
-                                    <span
-                                      role="button"
-                                      tabIndex={0}
-                                      className="rounded-full outline-none hover:bg-muted p-0.5 cursor-pointer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleSelectCategory(cat);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter" || e.key === " ") {
-                                          e.stopPropagation();
-                                          handleSelectCategory(cat);
-                                        }
-                                      }}
-                                    >
-                                      <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                                    </span>
-                                  </Badge>
-                                ))
-                              )}
-                            </div>
-                            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
-                          </div>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="w-[var(--radix-popover-trigger-width)] p-0"
-                          align="start"
-                        >
-                          <Command className="w-full">
-                            <CommandInput
-                              placeholder="Search categories..."
-                              className="h-9"
-                            />
-                            <CommandList>
-                              <CommandEmpty>No category found.</CommandEmpty>
-                              <CommandGroup className="max-h-64 overflow-auto">
-                                {CATEGORY_OPTIONS.map((cat) => {
-                                  const isSelected =
-                                    selectedCategories.includes(cat);
-                                  return (
-                                    <CommandItem
-                                      key={cat}
-                                      value={cat}
-                                      onSelect={() => handleSelectCategory(cat)}
-                                      className="cursor-pointer"
-                                    >
-                                      <div
-                                        className={cn(
-                                          "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                                          isSelected
-                                            ? "bg-primary text-primary-foreground"
-                                            : "opacity-50 [&_svg]:invisible",
-                                        )}
-                                      >
-                                        <Check className="h-4 w-4" />
-                                      </div>
-                                      <span>{cat}</span>
-                                    </CommandItem>
-                                  );
-                                })}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Location</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className="flex min-h-[2.5rem] w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-left mt-1.5 cursor-pointer"
-                          >
-                            <div className="flex flex-wrap gap-1">
-                              {selectedLocations.length === 0 ? (
-                                <span className="text-muted-foreground">
-                                  Select locations...
-                                </span>
-                              ) : (
-                                selectedLocations.map((loc) => (
-                                  <Badge
-                                    key={loc}
-                                    variant="secondary"
-                                    className="rounded-sm px-1.5 py-0.5 font-normal text-xs flex items-center gap-1"
-                                  >
-                                    {loc}
-                                    <span
-                                      role="button"
-                                      tabIndex={0}
-                                      className="rounded-full outline-none hover:bg-muted p-0.5 cursor-pointer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleSelectLocation(loc);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter" || e.key === " ") {
-                                          e.stopPropagation();
-                                          handleSelectLocation(loc);
-                                        }
-                                      }}
-                                    >
-                                      <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                                    </span>
-                                  </Badge>
-                                ))
-                              )}
-                            </div>
-                            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
-                          </div>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="w-[var(--radix-popover-trigger-width)] p-0"
-                          align="start"
-                        >
-                          <Command className="w-full">
-                            <CommandInput
-                              placeholder="Search locations..."
-                              className="h-9"
-                            />
-                            <CommandList>
-                              <CommandEmpty>No location found.</CommandEmpty>
-                              <CommandGroup className="max-h-64 overflow-auto">
-                                {LOCATION_OPTIONS.map((loc) => {
-                                  const isSelected =
-                                    selectedLocations.includes(loc);
-                                  return (
-                                    <CommandItem
-                                      key={loc}
-                                      value={loc}
-                                      onSelect={() => handleSelectLocation(loc)}
-                                      className="cursor-pointer"
-                                    >
-                                      <div
-                                        className={cn(
-                                          "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                                          isSelected
-                                            ? "bg-primary text-primary-foreground"
-                                            : "opacity-50 [&_svg]:invisible",
-                                        )}
-                                      >
-                                        <Check className="h-4 w-4" />
-                                      </div>
-                                      <span>{loc}</span>
-                                    </CommandItem>
-                                  );
-                                })}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div>
-                      <Label>Phone number</Label>
-                      <Input
-                        type="text"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="mt-1.5"
-                        placeholder="e.g. +91 9876543210"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <Label>Starting price (₹)</Label>
-                        <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-pink-500 select-none">
-                          <input
-                            type="checkbox"
-                            checked={isBarterAllowed}
-                            onChange={(e) => setIsBarterAllowed(e.target.checked)}
-                            className="rounded border-border text-pink-500 accent-pink-500 focus:ring-pink-500 h-3.5 w-3.5"
-                          />
-                          <span>Barter Allowed</span>
-                        </label>
-                      </div>
-                      <Input
-                        type="text"
-                        value={startingPrice}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "");
-                          setStartingPrice(val === "" ? "" : Number(val));
-                        }}
-                        placeholder={isBarterAllowed ? "0 (Barter accepted)" : "e.g. 5000"}
-                        className="mt-1.5"
-                      />
-                      {isBarterAllowed && (
-                        <p className="text-[11px] text-emerald-600 font-medium mt-1">
-                          ✓ Open to product perks, gifting, or service exchange (Barter deals).
-                        </p>
-                      )}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <Label>Bio</Label>
-                      <Textarea
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        className="mt-1.5"
-                        rows={3}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex justify-end">
-                    <Button
-                      onClick={saveProfileDetails}
-                      disabled={saving}
-                      className="rounded-full gradient-sunset border-0 text-white shadow-glow"
+                  {/* 1. BASIC DETAILS ACCORDION */}
+                  <div className="rounded-2xl border border-border/70 overflow-hidden bg-card/60 transition-all mb-4 mt-5">
+                    <button
+                      type="button"
+                      onClick={() => setOpenBasicSection(!openBasicSection)}
+                      className="w-full flex items-center justify-between p-4 text-left hover:bg-secondary/40 transition-colors cursor-pointer"
                     >
-                      {saving ? "Saving..." : "Save"}
-                    </Button>
+                      <div>
+                        <h3 className="font-display text-base font-bold flex items-center gap-2">
+                          <User className="h-4 w-4 text-primary" /> Basic Information
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Display name, handle, gender, category, location, phone, and starting price
+                        </p>
+                      </div>
+                      <ChevronRight className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openBasicSection && "rotate-90 text-primary")} />
+                    </button>
+
+                    {openBasicSection && (
+                      <div className="p-4 pt-2 border-t border-border/40">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <Label>Display name</Label>
+                            <Input
+                              value={fullName}
+                              onChange={(e) => setFullName(e.target.value)}
+                              className="mt-1.5"
+                            />
+                          </div>
+                          <div>
+                            <Label>Handle</Label>
+                            <Input
+                              value={handle}
+                              onChange={(e) => setHandle(e.target.value)}
+                              placeholder="@yourname"
+                              className="mt-1.5"
+                            />
+                          </div>
+                          <div>
+                            <Label>Gender</Label>
+                            <div className="grid grid-cols-3 gap-2 mt-1.5">
+                              {[
+                                { value: "male", label: "Male" },
+                                { value: "female", label: "Female" },
+                                { value: "other", label: "Other" },
+                              ].map((item) => (
+                                <button
+                                  key={item.value}
+                                  type="button"
+                                  onClick={() => setGender(item.value)}
+                                  className={`py-2 px-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                                    gender === item.value
+                                      ? "border-pink-500 bg-pink-500/10 text-pink-500 ring-1 ring-pink-500 font-bold"
+                                      : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
+                                  }`}
+                                >
+                                  {item.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <Label>Category</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  className="flex min-h-[2.5rem] w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-left mt-1.5 cursor-pointer"
+                                >
+                                  <div className="flex flex-wrap gap-1">
+                                    {selectedCategories.length === 0 ? (
+                                      <span className="text-muted-foreground">
+                                        Select categories...
+                                      </span>
+                                    ) : (
+                                      selectedCategories.map((cat) => (
+                                        <Badge
+                                          key={cat}
+                                          variant="secondary"
+                                          className="rounded-sm px-1.5 py-0.5 font-normal text-xs flex items-center gap-1"
+                                        >
+                                          {cat}
+                                          <span
+                                            role="button"
+                                            tabIndex={0}
+                                            className="rounded-full outline-none hover:bg-muted p-0.5 cursor-pointer"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleSelectCategory(cat);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter" || e.key === " ") {
+                                                e.stopPropagation();
+                                                handleSelectCategory(cat);
+                                              }
+                                            }}
+                                          >
+                                            <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                          </span>
+                                        </Badge>
+                                      ))
+                                    )}
+                                  </div>
+                                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+                                </div>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                className="w-[var(--radix-popover-trigger-width)] p-0"
+                                align="start"
+                              >
+                                <Command className="w-full">
+                                  <CommandInput
+                                    placeholder="Search categories..."
+                                    className="h-9"
+                                  />
+                                  <CommandList>
+                                    <CommandEmpty>No category found.</CommandEmpty>
+                                    <CommandGroup className="max-h-64 overflow-auto">
+                                      {CATEGORY_OPTIONS.map((cat) => {
+                                        const isSelected =
+                                          selectedCategories.includes(cat);
+                                        return (
+                                          <CommandItem
+                                            key={cat}
+                                            value={cat}
+                                            onSelect={() => handleSelectCategory(cat)}
+                                            className="cursor-pointer"
+                                          >
+                                            <div
+                                              className={cn(
+                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                                isSelected
+                                                  ? "bg-primary text-primary-foreground"
+                                                  : "opacity-50 [&_svg]:invisible",
+                                              )}
+                                            >
+                                              <Check className="h-4 w-4" />
+                                            </div>
+                                            <span>{cat}</span>
+                                          </CommandItem>
+                                        );
+                                      })}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <Label>Location</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  className="flex min-h-[2.5rem] w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-left mt-1.5 cursor-pointer"
+                                >
+                                  <div className="flex flex-wrap gap-1">
+                                    {selectedLocations.length === 0 ? (
+                                      <span className="text-muted-foreground">
+                                        Select locations...
+                                      </span>
+                                    ) : (
+                                      selectedLocations.map((loc) => (
+                                        <Badge
+                                          key={loc}
+                                          variant="secondary"
+                                          className="rounded-sm px-1.5 py-0.5 font-normal text-xs flex items-center gap-1"
+                                        >
+                                          {loc}
+                                          <span
+                                            role="button"
+                                            tabIndex={0}
+                                            className="rounded-full outline-none hover:bg-muted p-0.5 cursor-pointer"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleSelectLocation(loc);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter" || e.key === " ") {
+                                                e.stopPropagation();
+                                                handleSelectLocation(loc);
+                                              }
+                                            }}
+                                          >
+                                            <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                                          </span>
+                                        </Badge>
+                                      ))
+                                    )}
+                                  </div>
+                                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+                                </div>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                className="w-[var(--radix-popover-trigger-width)] p-0"
+                                align="start"
+                              >
+                                <Command className="w-full">
+                                  <CommandInput
+                                    placeholder="Search locations..."
+                                    className="h-9"
+                                  />
+                                  <CommandList>
+                                    <CommandEmpty>No location found.</CommandEmpty>
+                                    <CommandGroup className="max-h-64 overflow-auto">
+                                      {LOCATION_OPTIONS.map((loc) => {
+                                        const isSelected =
+                                          selectedLocations.includes(loc);
+                                        return (
+                                          <CommandItem
+                                            key={loc}
+                                            value={loc}
+                                            onSelect={() => handleSelectLocation(loc)}
+                                            className="cursor-pointer"
+                                          >
+                                            <div
+                                              className={cn(
+                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                                isSelected
+                                                  ? "bg-primary text-primary-foreground"
+                                                  : "opacity-50 [&_svg]:invisible",
+                                              )}
+                                            >
+                                              <Check className="h-4 w-4" />
+                                            </div>
+                                            <span>{loc}</span>
+                                          </CommandItem>
+                                        );
+                                      })}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div>
+                            <Label>Phone number</Label>
+                            <Input
+                              type="text"
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value)}
+                              className="mt-1.5"
+                              placeholder="e.g. +91 9876543210"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <Label>Starting price (₹)</Label>
+                              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-pink-500 select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isBarterAllowed}
+                                  onChange={(e) => setIsBarterAllowed(e.target.checked)}
+                                  className="rounded border-border text-pink-500 accent-pink-500 focus:ring-pink-500 h-3.5 w-3.5"
+                                />
+                                <span>Barter Allowed</span>
+                              </label>
+                            </div>
+                            <Input
+                              type="text"
+                              value={startingPrice}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, "");
+                                setStartingPrice(val === "" ? "" : Number(val));
+                              }}
+                              placeholder={isBarterAllowed ? "0 (Barter accepted)" : "e.g. 5000"}
+                              className="mt-1.5"
+                            />
+                            {isBarterAllowed && (
+                              <p className="text-[11px] text-emerald-600 font-medium mt-1">
+                                ✓ Open to product perks, gifting, or service exchange (Barter deals).
+                              </p>
+                            )}
+                          </div>
+                          <div className="sm:col-span-2">
+                            <Label>Bio</Label>
+                            <Textarea
+                              value={bio}
+                              onChange={(e) => setBio(e.target.value)}
+                              className="mt-1.5"
+                              rows={3}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex justify-end">
+                          <Button
+                            onClick={saveProfileDetails}
+                            disabled={saving}
+                            className="btn-bouncy rounded-full gradient-sunset border-0 text-white shadow-glow px-7 font-bold text-xs h-9"
+                          >
+                            {saving ? "Saving..." : "Save Basic Details"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-8 rounded-2xl border border-border/70 overflow-hidden bg-card/60 transition-all">
