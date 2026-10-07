@@ -3732,18 +3732,18 @@ const [submittingVerification, setSubmittingVerification] =
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-2.5 border-t border-border/40">
+                      <div className="flex items-center justify-between gap-1.5 mt-3 pt-2.5 border-t border-border/40">
                         {(() => {
                           const reqsCount = (pendingRequests || []).filter(
                             (r) => String(r.campaignId?._id || r.campaignId) === String(camp._id)
                           ).length;
                           return (
-                            <div className="flex flex-wrap items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <Button
                                 size="sm"
                                 variant={reqsCount > 0 ? "default" : "outline"}
                                 className={cn(
-                                  "btn-bouncy h-7 sm:h-8 rounded-full text-[11px] sm:text-xs px-2.5 sm:px-3.5 flex items-center gap-1 sm:gap-1.5 font-bold shrink-0",
+                                  "btn-bouncy h-7 sm:h-8 rounded-full text-[11px] sm:text-xs px-2.5 sm:px-3.5 flex items-center gap-1 font-bold shrink-0",
                                   reqsCount > 0
                                     ? "gradient-sunset border-0 text-white shadow-glow"
                                     : "border-border text-muted-foreground hover:text-foreground"
@@ -3751,7 +3751,7 @@ const [submittingVerification, setSubmittingVerification] =
                                 onClick={() => setSelectedCampaignForRequests(camp)}
                               >
                                 <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                Requests {reqsCount > 0 && <span className="ml-0.5 px-1.5 py-0.2 bg-white text-black rounded-full text-[10px] font-bold">{reqsCount}</span>}
+                                <span>Requests</span> {reqsCount > 0 && <span className="ml-0.5 px-1.5 py-0.2 bg-white text-black rounded-full text-[10px] font-bold">{reqsCount}</span>}
                               </Button>
 
                               <Button
@@ -3783,28 +3783,30 @@ const [submittingVerification, setSubmittingVerification] =
                                 }}
                               >
                                 <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-primary animate-pulse" />
-                                AI Matches
+                                <span>AI Matches</span>
                               </Button>
                             </div>
                           );
                         })()}
 
-                        <div className="flex items-center gap-1 shrink-0 ml-auto">
+                        <div className="flex items-center gap-1 shrink-0">
                           <Button
-                            size="sm"
+                            size="icon"
                             variant="ghost"
-                            className="btn-bouncy h-7 sm:h-8 rounded-full text-[11px] sm:text-xs hover:bg-secondary px-2.5 sm:px-3 flex items-center gap-1 font-semibold"
+                            className="btn-bouncy h-7 w-7 sm:h-8 sm:w-8 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground"
                             onClick={() => openEditCampaignModal(camp)}
+                            title="Edit Campaign"
                           >
-                            <Edit2 className="h-3 w-3" /> Edit
+                            <Edit2 className="h-3.5 w-3.5" />
                           </Button>
                           <Button
-                            size="sm"
+                            size="icon"
                             variant="ghost"
-                            className="btn-bouncy h-7 sm:h-8 rounded-full text-[11px] sm:text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2.5 sm:px-3 flex items-center gap-1 font-semibold"
+                            className="btn-bouncy h-7 w-7 sm:h-8 sm:w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                             onClick={() => handleDeleteCampaign(camp._id)}
+                            title="Delete Campaign"
                           >
-                            <Trash2 className="h-3 w-3" /> Delete
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
