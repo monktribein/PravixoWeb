@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Lock, Mail, Sparkles } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Briefcase, Camera, Eye, EyeOff, Lock, Mail, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/Button";
@@ -10,8 +10,10 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile, login } = useAuth();
 
+  const [role, setRole] = useState("creator");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,14 +23,22 @@ export default function Login() {
     document.title = "Login — Pravixo";
   }, []);
 
+  // Read role from URL query param if present (?role=brand or ?role=creator)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const selectedRole = params.get("role");
+    if (selectedRole === "brand" || selectedRole === "creator") {
+      setRole(selectedRole);
+    }
+  }, [location.search]);
+
   useEffect(() => {
     if (user || profile) {
-      const role = profile?.role || user?.role;
-
+      const userRole = profile?.role || user?.role;
       navigate(
-        role === "creator"
-          ? "/dashboard/influencer"
-          : "/dashboard/customer",
+        userRole === "creator"
+          ? "/dashboard/creator"
+          : "/dashboard/brand",
         { replace: true }
       );
     }
@@ -47,18 +57,23 @@ export default function Login() {
     try {
       const data = await login(email, password);
 
-      toast.success("Login successful!");
-
-      const role =
+      const actualRole =
         data?.profile?.role ||
         data?.user?.role ||
         data?.data?.profile?.role ||
-        data?.data?.user?.role;
+        data?.data?.user?.role ||
+        role;
+
+      toast.success(
+        actualRole === "creator"
+          ? "Welcome back, Creator!"
+          : "Welcome back, Brand partner!"
+      );
 
       navigate(
-        role === "creator"
-          ? "/dashboard/influencer"
-          : "/dashboard/customer",
+        actualRole === "creator"
+          ? "/dashboard/creator"
+          : "/dashboard/brand",
         { replace: true }
       );
     } catch (error) {
@@ -91,13 +106,84 @@ export default function Login() {
           </h1>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to your Pravixo account.
+            Sign in as <span className="font-semibold text-foreground capitalize">{role}</span> to access your dashboard.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+        {/* ROLE SELECTOR TABS */}
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          {/* CREATOR */}
+          <button
+            type="button"
+            onClick={() => setRole("creator")}
+            className={`rounded-2xl border p-3.5 text-left transition-all cursor-pointer ${
+              role === "creator"
+                ? "border-primary bg-accent/40 shadow-sm ring-1 ring-primary/60"
+                : "border-border hover:bg-secondary/60 text-muted-foreground"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-xl ${
+                  role === "creator"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                <Camera className="h-4 w-4" />
+              </div>
+              <div>
+                <div
+                  className={`text-sm font-semibold leading-tight ${
+                    role === "creator" ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  Creator
+                </div>
+                <div className="text-[11px] text-muted-foreground">Influencer</div>
+              </div>
+            </div>
+          </button>
+
+          {/* BRAND */}
+          <button
+            type="button"
+            onClick={() => setRole("brand")}
+            className={`rounded-2xl border p-3.5 text-left transition-all cursor-pointer ${
+              role === "brand"
+                ? "border-primary bg-accent/40 shadow-sm ring-1 ring-primary/60"
+                : "border-border hover:bg-secondary/60 text-muted-foreground"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-xl ${
+                  role === "brand"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                <Briefcase className="h-4 w-4" />
+              </div>
+              <div>
+                <div
+                  className={`text-sm font-semibold leading-tight ${
+                    role === "brand" ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  Brand
+                </div>
+                <div className="text-[11px] text-muted-foreground">Client / Agency</div>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">
+              {role === "brand" ? "Brand or Business Email" : "Creator Email"}
+            </Label>
 
             <div className="relative mt-1.5">
               <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -107,7 +193,9 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@email.com"
+                placeholder={
+                  role === "brand" ? "brand@company.com" : "creator@email.com"
+                }
                 className="pl-10"
                 autoComplete="email"
                 required
@@ -144,7 +232,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -160,17 +248,19 @@ export default function Login() {
             disabled={loading}
             className="w-full rounded-full gradient-sunset border-0 text-white shadow-glow"
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading
+              ? "Signing in..."
+              : `Sign in as ${role === "creator" ? "Creator" : "Brand"}`}
           </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Don't have an account?{" "}
           <Link
-            to="/register"
+            to={`/register?role=${role}`}
             className="font-medium text-primary hover:underline"
           >
-            Create account
+            Create {role === "creator" ? "Creator" : "Brand"} account
           </Link>
         </p>
       </div>
