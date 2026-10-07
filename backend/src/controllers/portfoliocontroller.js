@@ -30,8 +30,11 @@ export const getByProfile = async (req, res) => {
     const commentUserNames = [];
     images.forEach((img) => {
       (img.comments || []).forEach((c) => {
-        if (c.userId && mongoose.Types.ObjectId.isValid(c.userId)) {
-          commentUserIds.push(new mongoose.Types.ObjectId(c.userId));
+        if (c.userId) {
+          if (mongoose.Types.ObjectId.isValid(c.userId)) {
+            commentUserIds.push(new mongoose.Types.ObjectId(c.userId));
+          }
+          commentUserNames.push(String(c.userId).trim());
         }
         if (c.userName) {
           commentUserNames.push(c.userName.trim());
@@ -42,26 +45,37 @@ export const getByProfile = async (req, res) => {
     const userProfiles = await Profile.find({
       $or: [
         { _id: { $in: commentUserIds } },
-        { fullName: { $in: commentUserNames } },
+        { userId: { $in: commentUserNames } },
+        { fullName: { $in: commentUserNames.map((n) => new RegExp(`^${n}$`, "i")) } },
+        { handle: { $in: commentUserNames.map((n) => new RegExp(`^${n.replace(/^@/, "")}$`, "i")) } },
       ],
     })
-      .select("_id fullName avatarUrl avatar gender role")
+      .select("_id userId fullName handle avatarUrl avatar gender role")
       .lean();
 
     const profileById = new Map();
     const profileByName = new Map();
     userProfiles.forEach((p) => {
       profileById.set(p._id.toString(), p);
+      if (p.userId) {
+        profileById.set(p.userId.toString(), p);
+      }
       if (p.fullName) {
         profileByName.set(p.fullName.trim().toLowerCase(), p);
+      }
+      if (p.handle) {
+        profileByName.set(p.handle.trim().toLowerCase().replace(/^@/, ""), p);
       }
     });
 
     const results = images.map((image) => {
       const enrichedComments = (image.comments || []).map((comm) => {
+        const uId = comm.userId ? comm.userId.toString() : "";
+        const uName = comm.userName ? comm.userName.trim().toLowerCase() : "";
         const pMatch =
-          (comm.userId && profileById.get(comm.userId.toString())) ||
-          (comm.userName && profileByName.get(comm.userName.trim().toLowerCase()));
+          (uId && profileById.get(uId)) ||
+          (uName && profileByName.get(uName)) ||
+          (uName && profileByName.get(uName.replace(/^@/, "")));
 
         const avatar =
           pMatch?.avatarUrl ||
@@ -283,19 +297,35 @@ export const addComment = async (req, res) => {
     let finalUserName = userName || req.user?.fullName || req.user?.name || "Pravixo User";
     let finalGender = userGender || "";
     let finalRole = userRole || req.user?.role || "creator";
+    let finalUserId = userId;
 
+    const lookupQuery = [];
     if (userId && mongoose.Types.ObjectId.isValid(userId)) {
-      const p = await Profile.findById(userId).select("avatarUrl avatar fullName gender role").lean();
+      lookupQuery.push({ _id: userId });
+    }
+    if (req.user?._id) {
+      lookupQuery.push({ _id: req.user._id });
+    }
+    if (finalUserName) {
+      lookupQuery.push({ fullName: new RegExp(`^${finalUserName.trim()}$`, "i") });
+      lookupQuery.push({ handle: new RegExp(`^${finalUserName.trim().replace(/^@/, "")}$`, "i") });
+    }
+
+    if (lookupQuery.length > 0) {
+      const p = await Profile.findOne({ $or: lookupQuery })
+        .select("_id avatarUrl avatar fullName gender role")
+        .lean();
       if (p) {
         freshAvatar = p.avatarUrl || p.avatar || freshAvatar;
         finalUserName = p.fullName || finalUserName;
         finalGender = p.gender || finalGender;
         finalRole = p.role || finalRole;
+        finalUserId = p._id;
       }
     }
 
     const newComment = {
-      userId: userId && mongoose.Types.ObjectId.isValid(userId) ? userId : undefined,
+      userId: finalUserId && mongoose.Types.ObjectId.isValid(finalUserId) ? finalUserId : undefined,
       userName: finalUserName,
       userAvatar: freshAvatar,
       userGender: finalGender,

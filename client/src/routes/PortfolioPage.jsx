@@ -132,13 +132,15 @@ export default function PortfolioPage() {
     setSubmittingPortfolioComment(true);
     try {
       const commenterAvatar =
-        resolveImageUrl(myProfile?.avatarUrl) ||
+        myProfile?.avatarUrl ||
+        myProfile?.avatar ||
         (myProfile?.fullName
           ? getGenderAvatar(myProfile.fullName, myProfile.gender, myProfile.role || "creator")
           : "");
       const res = await api.post(`/portfolio/${selectedPortfolioPost._id}/comments`, {
         text: portfolioCommentText.trim(),
-        userName: myProfile?.fullName || user?.email?.split("@")[0] || "Guest",
+        userId: myProfile?._id || user?._id || user?.id,
+        userName: myProfile?.fullName || user?.fullName || user?.email?.split("@")[0] || "Guest",
         userAvatar: commenterAvatar,
         userGender: myProfile?.gender || "",
         userRole: myProfile?.role || "creator",

@@ -592,16 +592,26 @@ export function DashboardInfluencer() {
     );
   }, [profile]);
 
-  // Track campaign IDs applied by creator from connections / requests
-  const { userRequestedCampaignIds, userApprovedCampaignIds } = useMemo(() => {
+  // Track campaign IDs applied by creator from connections / requests & their completion status
+  const { userRequestedCampaignIds, userApprovedCampaignIds, userCompletedCampaignIds } = useMemo(() => {
     const requested = new Set();
     const approved = new Set();
+    const completed = new Set();
 
     if (Array.isArray(myRequests)) {
       myRequests.forEach((req) => {
         const campId = req.campaign?._id || req.campaignId || req.campaign;
         if (campId) {
-          if (req.status === "accepted") {
+          const isCampCompleted =
+            req.allDeliverablesCompleted ||
+            req.paymentReleaseStatus === "RELEASED" ||
+            req.status === "completed" ||
+            req.campaign?.status === "CLOSED" ||
+            (req.deliverablesTracking && req.deliverablesTracking.length > 0 && req.deliverablesTracking.every((d) => d.status === "COMPLETED" || d.status === "APPROVED"));
+
+          if (isCampCompleted) {
+            completed.add(String(campId));
+          } else if (req.status === "accepted") {
             approved.add(String(campId));
           } else {
             requested.add(String(campId));
@@ -612,15 +622,26 @@ export function DashboardInfluencer() {
 
     if (Array.isArray(discoverableCampaigns)) {
       discoverableCampaigns.forEach((camp) => {
-        if (camp.isParticipating || camp.requestStatus === "accepted") {
-          approved.add(String(camp._id));
+        const isCampFinished =
+          camp.status === "CLOSED" ||
+          camp.isCompleted ||
+          (camp.endDate && Number(camp.endDate) < Date.now() && (camp.isParticipating || camp.requestStatus === "accepted"));
+
+        if (isCampFinished && (camp.isParticipating || camp.requestStatus === "accepted" || completed.has(String(camp._id)))) {
+          completed.add(String(camp._id));
+        } else if (camp.isParticipating || camp.requestStatus === "accepted") {
+          if (!completed.has(String(camp._id))) {
+            approved.add(String(camp._id));
+          }
         } else if (camp.isRequested || camp.requestStatus === "pending") {
-          requested.add(String(camp._id));
+          if (!completed.has(String(camp._id))) {
+            requested.add(String(camp._id));
+          }
         }
       });
     }
 
-    return { userRequestedCampaignIds: requested, userApprovedCampaignIds: approved };
+    return { userRequestedCampaignIds: requested, userApprovedCampaignIds: approved, userCompletedCampaignIds: completed };
   }, [myRequests, discoverableCampaigns]);
 
   const handleRefreshDiscover = async () => {
@@ -1986,9 +2007,9 @@ const CAMPAIGNS_PER_PAGE = 6;
         </section>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-        <div className="flex flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-5 -mt-12 sm:-mt-20 z-10 min-w-0">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-0 pb-4 sm:py-6">
+        <div className="flex flex-row items-start justify-between gap-3 sm:gap-4 relative">
+          <div className="flex items-center gap-3 sm:gap-5 -mt-10 sm:-mt-20 z-10 min-w-0">
             {/* AVATAR WITH INSTA-STYLE HOVER/CLICK ACTIONS */}
             <div className="relative group shrink-0">
               <img
@@ -2058,7 +2079,7 @@ const CAMPAIGNS_PER_PAGE = 6;
           </div>
 
           {/* Clean Three-Dots Action Menu - Positioned Right under the banner across all screens */}
-          <div className="flex items-center shrink-0 self-start sm:self-center mt-1 sm:mt-0">
+          <div className="flex items-center shrink-0 pt-2.5 sm:pt-4">
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -4450,7 +4471,15 @@ const CAMPAIGNS_PER_PAGE = 6;
                                   >
                                     View Details
                                   </Button>
-                                  {userApprovedCampaignIds.has(String(camp._id)) ? (
+                                  {userCompletedCampaignIds.has(String(camp._id)) ? (
+                                    <Button
+                                      size="sm"
+                                      disabled
+                                      className="flex-1 rounded-full text-xs h-8 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold"
+                                    >
+                                      Completed ✓
+                                    </Button>
+                                  ) : userApprovedCampaignIds.has(String(camp._id)) ? (
                                     <Button
                                       size="sm"
                                       disabled
@@ -5978,7 +6007,11 @@ const CAMPAIGNS_PER_PAGE = 6;
                   Close
                 </Button>
 
-                {selectedCampaignForDiscovery.isParticipating || userApprovedCampaignIds.has(String(selectedCampaignForDiscovery._id)) ? (
+                {userCompletedCampaignIds.has(String(selectedCampaignForDiscovery._id)) ? (
+                  <Button disabled className="rounded-full flex-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-semibold">
+                    Completed ✓
+                  </Button>
+                ) : selectedCampaignForDiscovery.isParticipating || userApprovedCampaignIds.has(String(selectedCampaignForDiscovery._id)) ? (
                   <Button disabled className="rounded-full flex-1 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs font-semibold">
                     Approved ✓ Participating
                   </Button>
@@ -7650,7 +7683,9 @@ const CAMPAIGNS_PER_PAGE = 6;
                   <Button variant="outline" className="flex-1 rounded-full text-xs" onClick={() => setSelectedCampaignDetail(null)}>
                     Close
                   </Button>
-                  {userApprovedCampaignIds.has(String(selectedCampaignDetail._id)) ? (
+                  {userCompletedCampaignIds.has(String(selectedCampaignDetail._id)) ? (
+                    <Button disabled className="flex-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-bold">Completed ✓</Button>
+                  ) : userApprovedCampaignIds.has(String(selectedCampaignDetail._id)) ? (
                     <Button disabled className="flex-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs font-bold">Approved ✓</Button>
                   ) : userRequestedCampaignIds.has(String(selectedCampaignDetail._id)) ? (
                     <Button disabled className="flex-1 rounded-full bg-secondary text-muted-foreground text-xs font-semibold">Applied ✓</Button>
