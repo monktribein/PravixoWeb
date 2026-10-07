@@ -2110,8 +2110,8 @@ const [submittingVerification, setSubmittingVerification] =
             <div className="w-full space-y-8 font-jakarta">
               {/* EDIT SECTIONS */}
               <div className="space-y-6 w-full min-w-0">
-            {/* STATS PREVIEW CARDS */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {/* STATS PREVIEW CARDS - Sleek Compact Layout */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
               {stats.map((s) => {
                 const isClickable =
                   s.label === "Creators Hired" ||
@@ -2135,9 +2135,9 @@ const [submittingVerification, setSubmittingVerification] =
                       key={s.label}
                       onClick={isClickable ? handleClick : undefined}
                       className={cn(
-                        "stat-card-3d flex h-28 flex-col items-center justify-center rounded-3xl border border-border/60 bg-gradient-to-b from-card to-card/70 p-4 text-center shadow-soft transition-all duration-200",
+                        "stat-card-3d flex h-20 sm:h-24 flex-col items-center justify-center rounded-2xl border border-border/60 bg-gradient-to-b from-card to-card/70 p-3 text-center shadow-soft transition-all duration-200",
                         isClickable &&
-                          "cursor-pointer hover:border-primary/50 hover:shadow-glow hover:-translate-y-1 group active:scale-95"
+                          "cursor-pointer hover:border-primary/50 hover:shadow-glow hover:-translate-y-0.5 group active:scale-95"
                       )}
                       title={
                         isClickable
@@ -2145,10 +2145,10 @@ const [submittingVerification, setSubmittingVerification] =
                           : undefined
                       }
                     >
-                      <div className="font-outfit text-2xl font-black tracking-tight text-foreground group-hover:text-primary transition-colors">
+                      <div className="font-outfit text-xl sm:text-2xl font-black tracking-tight text-foreground group-hover:text-primary transition-colors">
                         {s.value}
                       </div>
-                      <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mt-1.5 font-jakarta flex items-center gap-1 group-hover:text-foreground">
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mt-1 font-jakarta flex items-center gap-1 group-hover:text-foreground">
                         {s.label}
                         {isClickable && (
                           <span className="text-primary text-[10px] opacity-70 group-hover:opacity-100 font-normal">
@@ -2162,23 +2162,23 @@ const [submittingVerification, setSubmittingVerification] =
               </div>
 
             {/* BRAND PROFILE FORM & ACCORDIONS */}
-            <div className="card-3d rounded-3xl border border-border/60 bg-card p-6 shadow-sm">
-              <h2 className="font-outfit text-xl font-bold mb-5 flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" /> Edit Brand Details
+            <div className="card-3d rounded-2xl sm:rounded-3xl border border-border/60 bg-card p-4 sm:p-6 shadow-sm">
+              <h2 className="font-outfit text-lg sm:text-xl font-bold mb-4 flex items-center gap-2">
+                <Building2 className="h-4.5 w-4.5 text-primary" /> Edit Brand Details
               </h2>
 
-              <div className="mb-6">
-                <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="mb-4">
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
                   <img src={
                       resolveImageUrl(profile?.avatarUrl) ||
                       profile?.avatar ||
                       getGenderAvatar(profile?.fullName || fullName || displayName, "male", "brand")
                     }
                     alt=""
-                    className="h-20 w-20 rounded-full border border-border object-cover bg-muted shrink-0"
+                    className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border border-border object-cover bg-muted shrink-0"
                    onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(profile?.fullName || fullName || displayName, "male", "brand"); }} />
                   <div className="flex flex-row items-center justify-center sm:justify-start gap-1.5 sm:gap-2 w-full sm:w-auto">
-                    <label className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:bg-secondary transition-colors whitespace-nowrap h-9">
+                    <label className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-1.5 text-xs font-semibold hover:bg-secondary transition-colors whitespace-nowrap h-8 sm:h-9">
                       <Camera className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{uploadingAvatar ? "Uploading..." : "Photo"}</span>
                       <input
@@ -2193,12 +2193,12 @@ const [submittingVerification, setSubmittingVerification] =
                     <button
                       type="button"
                       onClick={() => setIsAvatarPickerOpen(true)}
-                      className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:border-pink-500/40 hover:text-pink-500 hover:bg-secondary transition-colors whitespace-nowrap h-9"
+                      className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-1.5 text-xs font-semibold hover:border-pink-500/40 hover:text-pink-500 hover:bg-secondary transition-colors whitespace-nowrap h-8 sm:h-9"
                     >
                       <Sparkles className="h-3.5 w-3.5 text-pink-500" />
                       <span>Avatar</span>
                     </button>
-                    <label className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:bg-secondary transition-colors whitespace-nowrap h-9">
+                    <label className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-1.5 text-xs font-semibold hover:bg-secondary transition-colors whitespace-nowrap h-8 sm:h-9">
                       <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{uploadingCover ? "Uploading..." : "Banner"}</span>
                       <input
@@ -3732,32 +3732,32 @@ const [submittingVerification, setSubmittingVerification] =
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 mt-4 pt-2 border-t border-border/40 justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-2.5 border-t border-border/40">
                         {(() => {
                           const reqsCount = (pendingRequests || []).filter(
                             (r) => String(r.campaignId?._id || r.campaignId) === String(camp._id)
                           ).length;
                           return (
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <Button
                                 size="sm"
                                 variant={reqsCount > 0 ? "default" : "outline"}
                                 className={cn(
-                                  "btn-bouncy h-8 rounded-full text-xs px-3.5 flex items-center gap-1.5 font-bold",
+                                  "btn-bouncy h-7 sm:h-8 rounded-full text-[11px] sm:text-xs px-2.5 sm:px-3.5 flex items-center gap-1 sm:gap-1.5 font-bold shrink-0",
                                   reqsCount > 0
                                     ? "gradient-sunset border-0 text-white shadow-glow"
                                     : "border-border text-muted-foreground hover:text-foreground"
                                 )}
                                 onClick={() => setSelectedCampaignForRequests(camp)}
                               >
-                                <Users className="h-3.5 w-3.5" />
+                                <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                 Requests {reqsCount > 0 && <span className="ml-0.5 px-1.5 py-0.2 bg-white text-black rounded-full text-[10px] font-bold">{reqsCount}</span>}
                               </Button>
 
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="btn-bouncy h-8 rounded-full text-xs px-3 flex items-center gap-1 font-bold border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 shadow-xs"
+                                className="btn-bouncy h-7 sm:h-8 rounded-full text-[11px] sm:text-xs px-2.5 sm:px-3 flex items-center gap-1 font-bold border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 shadow-xs shrink-0"
                                 onClick={async () => {
                                   setSelectedCampaignForAiMatches(camp);
                                   setAiMatchesModalOpen(true);
@@ -3782,18 +3782,18 @@ const [submittingVerification, setSubmittingVerification] =
                                   }
                                 }}
                               >
-                                <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+                                <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-primary animate-pulse" />
                                 AI Matches
                               </Button>
                             </div>
                           );
                         })()}
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 shrink-0 ml-auto">
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="btn-bouncy h-8 rounded-full text-xs hover:bg-secondary px-3 flex items-center gap-1.5 font-semibold"
+                            className="btn-bouncy h-7 sm:h-8 rounded-full text-[11px] sm:text-xs hover:bg-secondary px-2.5 sm:px-3 flex items-center gap-1 font-semibold"
                             onClick={() => openEditCampaignModal(camp)}
                           >
                             <Edit2 className="h-3 w-3" /> Edit
@@ -3801,7 +3801,7 @@ const [submittingVerification, setSubmittingVerification] =
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="btn-bouncy h-8 rounded-full text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-3 flex items-center gap-1.5 font-semibold"
+                            className="btn-bouncy h-7 sm:h-8 rounded-full text-[11px] sm:text-xs text-destructive hover:bg-destructive/10 hover:text-destructive px-2.5 sm:px-3 flex items-center gap-1 font-semibold"
                             onClick={() => handleDeleteCampaign(camp._id)}
                           >
                             <Trash2 className="h-3 w-3" /> Delete
