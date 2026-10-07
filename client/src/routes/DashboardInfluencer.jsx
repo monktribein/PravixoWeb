@@ -70,13 +70,6 @@ import {
 
 
 import { Button } from "@/components/ui/Button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/DropdownMenu";
 import { CATEGORY_OPTIONS } from "@/data/influencer";
 import { Switch } from "@/components/ui/Switch";
 import { SubscriptionTab } from "../components/subscription/SubscriptionTab";
@@ -2066,8 +2059,8 @@ const CAMPAIGNS_PER_PAGE = 6;
 
           {/* Clean Three-Dots Action Menu */}
           <div className="flex items-center gap-2 py-1 shrink-0">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <Popover>
+              <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   size="icon"
@@ -2076,111 +2069,114 @@ const CAMPAIGNS_PER_PAGE = 6;
                 >
                   <MoreVertical className="h-4 w-4 text-foreground" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 shadow-xl border-border/60 bg-popover/95 backdrop-blur-md">
-                <DropdownMenuItem asChild>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 rounded-2xl p-2 shadow-xl border-border/60 bg-popover/95 backdrop-blur-md">
+                <div className="flex flex-col gap-1">
                   <Link
                     to={`/c/${(profile?.handle || profile?._id || "creator").replace("@", "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors"
+                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors text-foreground"
                   >
                     <Sparkles className="h-4 w-4 text-amber-500" />
                     <span>Media Kit</span>
                   </Link>
-                </DropdownMenuItem>
 
-                <DropdownMenuItem asChild>
                   <Link
                     to={`/influencer/${profile?._id || profile?.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors"
+                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors text-foreground"
                   >
                     <Eye className="h-4 w-4 text-blue-500" />
                     <span>View Profile</span>
                   </Link>
-                </DropdownMenuItem>
 
-                <DropdownMenuSeparator className="my-1 bg-border/50" />
+                  <div className="my-1 h-px bg-border/50" />
 
-                <DropdownMenuItem
-                  onClick={() => openFollowModal("followers")}
-                  className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs rounded-xl hover:bg-secondary transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users className="h-4 w-4 text-primary" />
-                    <span>Fans / Followers</span>
-                  </div>
-                  <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
-                    {followCounts.followers}
-                  </span>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  onClick={() => openFollowModal("following")}
-                  className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs rounded-xl hover:bg-secondary transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <span>Following</span>
-                  </div>
-                  <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
-                    {followCounts.following}
-                  </span>
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator className="my-1 bg-border/50" />
-
-                <DropdownMenuItem
-                  onClick={() => {
-                    const handleClean = profile?.handle?.replace("@", "") || profile?._id;
-                    const url = `${window.location.origin}/c/${handleClean}`;
-                    navigator.clipboard.writeText(url);
-                    toast.success("Media Kit link copied to clipboard!");
-                  }}
-                  className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors"
-                >
-                  <Share2 className="h-4 w-4 text-purple-500" />
-                  <span>Share Media Kit</span>
-                </DropdownMenuItem>
-
-                {status === "pending" && (
-                  <>
-                    <DropdownMenuSeparator className="my-1 bg-border/50" />
-                    <div className="px-3 py-2 text-xs font-semibold text-amber-600 bg-amber-500/10 rounded-xl flex items-center gap-2">
-                      <Clock className="h-3.5 w-3.5" /> Verification Pending
+                  <button
+                    type="button"
+                    onClick={() => openFollowModal("followers")}
+                    className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs rounded-xl hover:bg-secondary transition-colors text-left w-full"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-foreground">Fans / Followers</span>
                     </div>
-                  </>
-                )}
+                    <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
+                      {followCounts.followers}
+                    </span>
+                  </button>
 
-                {status === "rejected" && (
-                  <>
-                    <DropdownMenuSeparator className="my-1 bg-border/50" />
-                    <DropdownMenuItem
-                      onClick={submitVerificationRequest}
-                      className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-semibold text-xs text-red-500 rounded-xl hover:bg-red-500/10 transition-colors"
-                    >
-                      <RotateCw className="h-4 w-4" />
-                      <span>Re-verify Profile</span>
-                    </DropdownMenuItem>
-                  </>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => openFollowModal("following")}
+                    className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs rounded-xl hover:bg-secondary transition-colors text-left w-full"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground">Following</span>
+                    </div>
+                    <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
+                      {followCounts.following}
+                    </span>
+                  </button>
 
-                {status !== "verified" && status !== "pending" && status !== "rejected" && (
-                  <>
-                    <DropdownMenuSeparator className="my-1 bg-border/50" />
-                    <DropdownMenuItem
-                      onClick={submitVerificationRequest}
-                      className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-semibold text-xs text-primary rounded-xl hover:bg-primary/10 transition-colors"
-                    >
-                      <ShieldCheck className="h-4 w-4" />
-                      <span>Request Verification</span>
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <div className="my-1 h-px bg-border/50" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const handleClean = profile?.handle?.replace("@", "") || profile?._id;
+                      const url = `${window.location.origin}/c/${handleClean}`;
+                      navigator.clipboard.writeText(url);
+                      toast.success("Media Kit link copied to clipboard!");
+                    }}
+                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors text-left w-full text-foreground"
+                  >
+                    <Share2 className="h-4 w-4 text-purple-500" />
+                    <span>Share Media Kit</span>
+                  </button>
+
+                  {status === "pending" && (
+                    <>
+                      <div className="my-1 h-px bg-border/50" />
+                      <div className="px-3 py-2 text-xs font-semibold text-amber-600 bg-amber-500/10 rounded-xl flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5" /> Verification Pending
+                      </div>
+                    </>
+                  )}
+
+                  {status === "rejected" && (
+                    <>
+                      <div className="my-1 h-px bg-border/50" />
+                      <button
+                        type="button"
+                        onClick={submitVerificationRequest}
+                        className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-semibold text-xs text-red-500 rounded-xl hover:bg-red-500/10 transition-colors text-left w-full"
+                      >
+                        <RotateCw className="h-4 w-4" />
+                        <span>Re-verify Profile</span>
+                      </button>
+                    </>
+                  )}
+
+                  {status !== "verified" && status !== "pending" && status !== "rejected" && (
+                    <>
+                      <div className="my-1 h-px bg-border/50" />
+                      <button
+                        type="button"
+                        onClick={submitVerificationRequest}
+                        className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-semibold text-xs text-primary rounded-xl hover:bg-primary/10 transition-colors text-left w-full"
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                        <span>Request Verification</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
   <Dialog open={showPostSaveDialog} onOpenChange={setShowPostSaveDialog}>
