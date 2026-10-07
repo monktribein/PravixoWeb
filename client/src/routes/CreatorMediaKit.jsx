@@ -90,10 +90,13 @@ export default function CreatorMediaKit() {
 
   const resolveImageUrl = (url) => {
     if (!url) return null;
-    if (url.startsWith("http")) return url;
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url;
+    if (url.startsWith("/avatars/") || url.startsWith("/icons/") || url.startsWith("/assets/")) return url;
     let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
     if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
-    return `${apiUrl}${url}`;
+    if (apiUrl.endsWith("/")) apiUrl = apiUrl.slice(0, -1);
+    const cleanPath = url.startsWith("/") ? url : `/${url}`;
+    return `${apiUrl}${cleanPath}`;
   };
 
   const fetchCreatorReviews = async (creatorId) => {
@@ -372,10 +375,14 @@ export default function CreatorMediaKit() {
 
   const creatorRole = creator.role || "creator";
   const creatorGender = creator.gender || "male";
+  const creatorDisplayName =
+    creator.fullName?.split(" ")[0] ||
+    creator.handle?.replace(/^@/, "") ||
+    "Creator";
   const avatarUrl =
     resolveImageUrl(creator.avatarUrl) ||
     resolveImageUrl(creator.avatar) ||
-    getGenderAvatar(creator.fullName || "Creator", creatorGender, creatorRole);
+    getGenderAvatar(creator.fullName || creatorDisplayName, creatorGender, creatorRole);
   const coverUrl = resolveImageUrl(creator.coverUrl) || DEFAULT_BANNER;
   const rawHandle = creator.handle?.replace(/^@/, "") || handle?.replace(/^@/, "");
 
@@ -588,7 +595,7 @@ export default function CreatorMediaKit() {
                   className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl sm:rounded-3xl border-4 border-card object-cover shadow-2xl bg-secondary"
                   onError={(e) => {
                     e.target.onerror = null;
-                    e.target.src = getGenderAvatar(creator.fullName || "User", creatorGender, creatorRole);
+                    e.target.src = getGenderAvatar(creator.fullName || creatorDisplayName, creatorGender, creatorRole);
                   }}
                 />
                 {creator.verificationStatus === "verified" && (
