@@ -36,6 +36,7 @@ import {
   Gift,
   Copy,
   Film,
+  MoreVertical,
   ChevronRight,
   ChevronLeft,
   ArrowRight,
@@ -1750,9 +1751,9 @@ const [submittingVerification, setSubmittingVerification] =
             </section>
           </div>
 
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6">
-              <div className="flex items-center gap-4 sm:gap-5 -mt-16 sm:-mt-20 z-10 min-w-0">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-0 pb-4 sm:py-6">
+            <div className="flex flex-row items-start justify-between gap-3 sm:gap-4 relative">
+              <div className="flex items-center gap-3 sm:gap-5 -mt-10 sm:-mt-20 z-10 min-w-0">
                 {/* AVATAR WITH INSTA-STYLE HOVER/CLICK ACTIONS */}
                 <div className="relative group shrink-0">
                   <img
@@ -1806,11 +1807,8 @@ const [submittingVerification, setSubmittingVerification] =
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1 pt-12 sm:pt-14 min-w-0">
-                  <p className="text-xs sm:text-sm text-muted-foreground font-medium">
-                    Brand dashboard
-                  </p>
-                  <h1 className="font-display text-2xl font-bold sm:text-3xl lg:text-4xl flex items-center gap-2 truncate">
+                <div className="flex flex-col gap-0.5 pt-8 sm:pt-14 min-w-0">
+                  <h1 className="font-display text-xl font-bold sm:text-3xl lg:text-4xl flex items-center gap-1.5 sm:gap-2 truncate">
                     {fullName || profile?.fullName || displayName}
                     {status === "verified" && (
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 shadow-xs" title="Verified Brand">
@@ -1818,16 +1816,16 @@ const [submittingVerification, setSubmittingVerification] =
                       </span>
                     )}
                   </h1>
-                  {profile && (
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {profile && (category || companySize || website) && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
                       {category && (
-                        <Badge variant="secondary" className="rounded-full text-[11px] font-medium">
+                        <Badge variant="secondary" className="rounded-full text-[10px] font-medium">
                           {category}
                         </Badge>
                       )}
                       {companySize && (
-                        <span className="flex items-center gap-1">
-                          <Building2 className="h-3.5 w-3.5" /> {companySize}
+                        <span className="flex items-center gap-1 text-[11px]">
+                          <Building2 className="h-3 w-3" /> {companySize}
                         </span>
                       )}
                       {website && (
@@ -1835,9 +1833,9 @@ const [submittingVerification, setSubmittingVerification] =
                           href={website}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center gap-1 text-primary hover:underline"
+                          className="flex items-center gap-1 text-primary hover:underline text-[11px]"
                         >
-                          <Globe className="h-3.5 w-3.5" /> {website.replace(/https?:\/\/(www\.)?/, "")}
+                          <Globe className="h-3 w-3" /> {website.replace(/https?:\/\/(www\.)?/, "")}
                         </a>
                       )}
                     </div>
@@ -1845,101 +1843,115 @@ const [submittingVerification, setSubmittingVerification] =
                 </div>
               </div>
 
-              {/* Action Buttons Row - Shifted Inward & Protected from Clipping */}
-              <div className="flex items-center flex-nowrap gap-2 py-1 shrink-0 overflow-x-auto no-scrollbar max-w-full lg:max-w-none pr-1">
-                <Link
-                  to={`/c/${(profile?.handle || profile?._id || "brand").replace("@", "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0"
-                >
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="rounded-full text-xs font-bold px-3.5 flex items-center gap-1.5 gradient-sunset text-white shadow-glow hover:opacity-90 cursor-pointer border-0 shrink-0 whitespace-nowrap h-9"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" /> Media Kit
-                  </Button>
-                </Link>
-
-                <Link
-                  to={`/c/${(profile?.handle || profile?._id || "brand").replace("@", "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0"
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full text-xs font-semibold px-3.5 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-9"
-                  >
-                    <Eye className="h-3.5 w-3.5 text-primary" /> View Profile
-                  </Button>
-                </Link>
-                {/* COMBINED FOLLOWERS & FOLLOWING IN ONE UNIFIED PILL */}
-                <div className="inline-flex items-center rounded-full border border-border/80 bg-card text-xs font-semibold overflow-hidden shadow-xs shrink-0 whitespace-nowrap h-9">
-                  <button
-                    type="button"
-                    onClick={() => openFollowModal("followers")}
-                    className="px-3 py-1.5 flex items-center gap-1.5 hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
-                  >
-                    <Users className="h-3.5 w-3.5 text-primary" />
-                    <span className="font-bold text-foreground">{followCounts.followers}</span>
-                    <span className="text-muted-foreground">Followers</span>
-                  </button>
-                  <span className="h-3.5 w-[1px] bg-border/80"></span>
-                  <button
-                    type="button"
-                    onClick={() => openFollowModal("following")}
-                    className="px-3 py-1.5 flex items-center gap-1.5 hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
-                  >
-                    <span className="font-bold text-foreground">{followCounts.following}</span>
-                    <span className="text-muted-foreground">Following</span>
-                  </button>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const url = `${window.location.origin}/influencer/${profile?._id}`;
-                    navigator.clipboard.writeText(url);
-                    toast.success("Brand profile link copied to clipboard!");
-                  }}
-                  className="rounded-full text-xs font-semibold px-3.5 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-9"
-                >
-                  <Share2 className="h-3.5 w-3.5 text-primary" /> Share Link
-                </Button>
-
-                {(() => {
-                  if (status === "pending") {
-                    return (
-                      <Button disabled className="rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 px-6 font-semibold opacity-70 cursor-not-allowed">
-                        Verification Pending
-                      </Button>
-                    );
-                  }
-                  if (status === "rejected") {
-                    return (
-                      <Button
-                        onClick={() => setShowVerificationDialog(true)}
-                        className="rounded-full bg-red-600 hover:bg-red-700 text-white px-6 font-semibold shadow-sm"
+              {/* Clean Three-Dots Action Menu - Positioned Right under the banner across all screens */}
+              <div className="flex items-center shrink-0 pt-2.5 sm:pt-4">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="rounded-full h-9 w-9 border-border/80 bg-card/80 backdrop-blur-sm hover:bg-secondary cursor-pointer shadow-xs transition-all hover:scale-105"
+                      title="More actions"
+                    >
+                      <MoreVertical className="h-4 w-4 text-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-56 rounded-2xl p-2 shadow-xl border-border/60 bg-popover/95 backdrop-blur-md">
+                    <div className="flex flex-col gap-1">
+                      <Link
+                        to={`/c/${(profile?.handle || profile?._id || "brand").replace("@", "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors text-foreground"
                       >
-                        Verification Failed (Try Again)
-                      </Button>
-                    );
-                  }
-                  if (status !== "verified") {
-                    return (
-                      <Button
-                        onClick={() => setShowVerificationDialog(true)}
-                        className="rounded-full gradient-sunset text-white px-6 font-semibold shadow-glow border-0"
+                        <Sparkles className="h-4 w-4 text-amber-500" />
+                        <span>Media Kit</span>
+                      </Link>
+
+                      <Link
+                        to={`/c/${(profile?.handle || profile?._id || "brand").replace("@", "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors text-foreground"
                       >
-                        Get Verified
-                      </Button>
-                    );
-                  }
-                  return null;
-                })()}
+                        <Eye className="h-4 w-4 text-blue-500" />
+                        <span>View Profile</span>
+                      </Link>
+
+                      <div className="my-1 h-px bg-border/50" />
+
+                      <button
+                        type="button"
+                        onClick={() => openFollowModal("followers")}
+                        className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs rounded-xl hover:bg-secondary transition-colors text-left w-full"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Users className="h-4 w-4 text-primary" />
+                          <span className="font-medium text-foreground">Followers</span>
+                        </div>
+                        <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
+                          {followCounts.followers}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openFollowModal("following")}
+                        className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs rounded-xl hover:bg-secondary transition-colors text-left w-full"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium text-foreground">Following</span>
+                        </div>
+                        <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
+                          {followCounts.following}
+                        </span>
+                      </button>
+
+                      <div className="my-1 h-px bg-border/50" />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${window.location.origin}/influencer/${profile?._id}`;
+                          navigator.clipboard.writeText(url);
+                          toast.success("Brand profile link copied to clipboard!");
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors text-left w-full text-foreground"
+                      >
+                        <Share2 className="h-4 w-4 text-purple-500" />
+                        <span>Share Profile Link</span>
+                      </button>
+
+                      {status === "pending" && (
+                        <div className="px-3 py-2 text-[11px] text-amber-600 bg-amber-500/10 rounded-xl font-medium">
+                          Verification Pending
+                        </div>
+                      )}
+
+                      {status === "rejected" && (
+                        <button
+                          type="button"
+                          onClick={() => setShowVerificationDialog(true)}
+                          className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl text-rose-500 hover:bg-rose-500/10 transition-colors text-left w-full"
+                        >
+                          <span>Retry Verification</span>
+                        </button>
+                      )}
+
+                      {status !== "verified" && status !== "pending" && status !== "rejected" && (
+                        <button
+                          type="button"
+                          onClick={() => setShowVerificationDialog(true)}
+                          className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl text-primary hover:bg-primary/10 transition-colors text-left w-full"
+                        >
+                          <Check className="h-4 w-4 text-primary" />
+                          <span>Get Verified</span>
+                        </button>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
