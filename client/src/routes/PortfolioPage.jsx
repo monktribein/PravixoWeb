@@ -131,11 +131,17 @@ export default function PortfolioPage() {
     if (!selectedPortfolioPost?._id || !portfolioCommentText.trim()) return;
     setSubmittingPortfolioComment(true);
     try {
-      const commenterAvatar = resolveImageUrl(myProfile?.avatarUrl) || (myProfile?.fullName ? getGenderAvatar(myProfile.fullName, myProfile.gender, myProfile.role) : "");
+      const commenterAvatar =
+        resolveImageUrl(myProfile?.avatarUrl) ||
+        (myProfile?.fullName
+          ? getGenderAvatar(myProfile.fullName, myProfile.gender, myProfile.role || "creator")
+          : "");
       const res = await api.post(`/portfolio/${selectedPortfolioPost._id}/comments`, {
         text: portfolioCommentText.trim(),
         userName: myProfile?.fullName || user?.email?.split("@")[0] || "Guest",
         userAvatar: commenterAvatar,
+        userGender: myProfile?.gender || "",
+        userRole: myProfile?.role || "creator",
       });
 
       const updatedComments = res?.data?.data || [];
@@ -556,12 +562,12 @@ export default function PortfolioPage() {
                         <div className="flex gap-2.5 items-start flex-1 min-w-0">
                           <div className="h-6 w-6 rounded-full overflow-hidden shrink-0 border border-border bg-muted">
                             <img
-                              src={resolveImageUrl(comm.userAvatar) || getGenderAvatar(comm.userName || "User", "", "creator")}
+                              src={resolveImageUrl(comm.userAvatar) || getGenderAvatar(comm.userName || "User", comm.userGender || "", comm.userRole || "creator")}
                               alt=""
                               className="h-full w-full object-cover"
                               onError={(e) => {
                                 e.target.onerror = null;
-                                e.target.src = getGenderAvatar(comm.userName || "User", "", "creator");
+                                e.target.src = getGenderAvatar(comm.userName || "User", comm.userGender || "", comm.userRole || "creator");
                               }}
                             />
                           </div>

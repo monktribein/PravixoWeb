@@ -728,11 +728,15 @@ export default function InfluencerDetails() {
     if (!selectedPortfolioPost?._id || !portfolioCommentText.trim()) return;
     setSubmittingPortfolioComment(true);
     try {
-      const commenterAvatar = resolveImageUrl(myProfile?.avatarUrl) || (myProfile?.fullName ? getGenderAvatar(myProfile.fullName, myProfile.gender, myProfile.role) : "");
+      const commenterAvatar =
+        resolveImageUrl(myProfile?.avatarUrl) ||
+        (myProfile?.fullName ? getGenderAvatar(myProfile.fullName, myProfile.gender, myProfile.role || "creator") : "");
       const res = await api.post(`/portfolio/${selectedPortfolioPost._id}/comments`, {
         text: portfolioCommentText.trim(),
-        userName: myProfile?.fullName || user?.email?.split("@")[0] || "Guest Brand",
+        userName: myProfile?.fullName || user?.email?.split("@")[0] || "Guest",
         userAvatar: commenterAvatar,
+        userGender: myProfile?.gender || "",
+        userRole: myProfile?.role || "creator",
       });
 
       const updatedComments = res?.data?.data || [];
@@ -1968,8 +1972,8 @@ export default function InfluencerDetails() {
 
             </div>
 
-            {/* ACTIONS (Single Clean Unified Responsive Row on Mobile & Desktop) */}
-            <div className="flex items-center justify-center sm:justify-end gap-1.5 sm:gap-2 pt-1 pb-1 shrink-0 w-full sm:w-auto">
+            {/* ACTIONS (Clean Responsive Row/Wrap on Mobile & Desktop) */}
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 pt-2 pb-1 shrink-0 w-full sm:w-auto max-w-full">
               {myProfile?.role === "brand" && (
                 <Button
                   variant="outline"
@@ -3229,12 +3233,12 @@ export default function InfluencerDetails() {
                         <div className="flex gap-2.5 items-start flex-1 min-w-0">
                           <div className="h-6 w-6 rounded-full overflow-hidden shrink-0 border border-border bg-muted">
                             <img
-                              src={resolveImageUrl(comm.userAvatar) || getGenderAvatar(comm.userName || "User", "", "creator")}
+                              src={resolveImageUrl(comm.userAvatar) || getGenderAvatar(comm.userName || "User", comm.userGender || "", comm.userRole || "creator")}
                               alt=""
                               className="h-full w-full object-cover"
                               onError={(e) => {
                                 e.target.onerror = null;
-                                e.target.src = getGenderAvatar(comm.userName || "User", "", "creator");
+                                e.target.src = getGenderAvatar(comm.userName || "User", comm.userGender || "", comm.userRole || "creator");
                               }}
                             />
                           </div>

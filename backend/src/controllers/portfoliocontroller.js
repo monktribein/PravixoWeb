@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Portfolio from "../models/Portfolio.js";
+import Profile from "../models/Profile.js";
 import cloudinary from "../config/cloudinary.js";
 
 // =====================================================
@@ -24,10 +25,64 @@ export const getByProfile = async (req, res) => {
       .sort({ sortOrder: 1 })
       .lean();
 
-    const results = images.map((image) => ({
-      ...image,
-      url: image.imageUrl,
-    }));
+    // Collect all unique userIds and userNames from comments to enrich current avatar
+    const commentUserIds = [];
+    const commentUserNames = [];
+    images.forEach((img) => {
+      (img.comments || []).forEach((c) => {
+        if (c.userId && mongoose.Types.ObjectId.isValid(c.userId)) {
+          commentUserIds.push(new mongoose.Types.ObjectId(c.userId));
+        }
+        if (c.userName) {
+          commentUserNames.push(c.userName.trim());
+        }
+      });
+    });
+
+    const userProfiles = await Profile.find({
+      $or: [
+        { _id: { $in: commentUserIds } },
+        { fullName: { $in: commentUserNames } },
+      ],
+    })
+      .select("_id fullName avatarUrl avatar gender role")
+      .lean();
+
+    const profileById = new Map();
+    const profileByName = new Map();
+    userProfiles.forEach((p) => {
+      profileById.set(p._id.toString(), p);
+      if (p.fullName) {
+        profileByName.set(p.fullName.trim().toLowerCase(), p);
+      }
+    });
+
+    const results = images.map((image) => {
+      const enrichedComments = (image.comments || []).map((comm) => {
+        const pMatch =
+          (comm.userId && profileById.get(comm.userId.toString())) ||
+          (comm.userName && profileByName.get(comm.userName.trim().toLowerCase()));
+
+        const avatar =
+          pMatch?.avatarUrl ||
+          pMatch?.avatar ||
+          comm.userAvatar ||
+          "";
+
+        return {
+          ...comm,
+          userAvatar: avatar,
+          userGender: pMatch?.gender || comm.userGender || "",
+          userRole: pMatch?.role || comm.userRole || "creator",
+        };
+      });
+
+      return {
+        ...image,
+        comments: enrichedComments,
+        url: image.imageUrl,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -198,7 +253,7 @@ export const toggleLike = async (req, res) => {
 export const addComment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { text, userName, userAvatar } = req.body;
+    const { text, userName, userAvatar, userGender, userRole } = req.body;
     const userId = req.user?.id || req.user?._id;
 
     if (!text || !text.trim()) {
@@ -223,10 +278,28 @@ export const addComment = async (req, res) => {
       });
     }
 
+    // Try finding latest profile data for accurate avatar
+    let freshAvatar = userAvatar || "";
+    let finalUserName = userName || req.user?.fullName || req.user?.name || "Pravixo User";
+    let finalGender = userGender || "";
+    let finalRole = userRole || req.user?.role || "creator";
+
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      const p = await Profile.findById(userId).select("avatarUrl avatar fullName gender role").lean();
+      if (p) {
+        freshAvatar = p.avatarUrl || p.avatar || freshAvatar;
+        finalUserName = p.fullName || finalUserName;
+        finalGender = p.gender || finalGender;
+        finalRole = p.role || finalRole;
+      }
+    }
+
     const newComment = {
       userId: userId && mongoose.Types.ObjectId.isValid(userId) ? userId : undefined,
-      userName: userName || (req.user?.name || req.user?.fullName || "Pravixo User"),
-      userAvatar: userAvatar || (req.user?.avatar || req.user?.avatarUrl || ""),
+      userName: finalUserName,
+      userAvatar: freshAvatar,
+      userGender: finalGender,
+      userRole: finalRole,
       text: text.trim(),
       createdAt: new Date(),
     };

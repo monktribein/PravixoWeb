@@ -280,7 +280,7 @@ export function Blog() {
   // ==========================================
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden py-12">
+    <div className="min-h-screen bg-background relative overflow-hidden py-6 sm:py-10">
 
       {/* Background decoration */}
 
@@ -290,13 +290,13 @@ export function Blog() {
         <div className="absolute bottom-10 right-1/4 h-72 w-72 rounded-full bg-accent/10 opacity-40 blur-3xl" />
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
 
         {/* =====================================
             HERO
         ====================================== */}
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-6 border-b border-border/40">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 pb-4 border-b border-border/40">
 
           <div>
 
@@ -335,44 +335,42 @@ export function Blog() {
         </div>
 
         {/* =====================================
-            SEARCH & FILTER
+            SEARCH & FILTER (Single Unified Row on Mobile & Desktop)
         ====================================== */}
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-12 gap-1.5 sm:gap-3">
 
-          <div className="relative md:col-span-2">
-
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <div className="relative col-span-12 sm:col-span-6">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
 
             <Input
               placeholder="Search blog articles..."
-              className="pl-10 rounded-full border-border bg-card/60 h-10 text-xs"
+              className="pl-8 sm:pl-9 rounded-full border-border bg-card/60 h-9 text-xs"
               value={searchQuery}
               onChange={(e) =>
                 setSearchQuery(e.target.value)
               }
             />
-
           </div>
 
-          <div>
+          <div className="col-span-6 sm:col-span-3">
             <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   role="combobox"
                   aria-expanded={categoryOpen}
-                  className="w-full justify-between rounded-full border-border bg-card/60 px-4 h-10 text-xs font-medium text-foreground hover:bg-card/80"
+                  className="w-full justify-between rounded-full border-border bg-card/60 px-2.5 sm:px-3.5 h-9 text-[11px] sm:text-xs font-medium text-foreground hover:bg-card/80"
                 >
                   <span className="truncate">
                     {selectedCategory === "all"
                       ? "All Categories"
                       : selectedCategory}
                   </span>
-                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  <ChevronDown className="ml-1 sm:ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[280px] p-2 rounded-2xl border-border bg-card shadow-elevated" align="start">
+              <PopoverContent className="w-[240px] sm:w-[280px] p-2 rounded-2xl border-border bg-card shadow-elevated" align="start">
                 <div className="max-h-60 overflow-y-auto space-y-1">
                   <button
                     type="button"
@@ -380,7 +378,7 @@ export function Blog() {
                       setSelectedCategory("all");
                       setCategoryOpen(false);
                     }}
-                    className={`flex items-center justify-between w-full px-3 py-2 text-xs rounded-xl font-medium transition-colors ${
+                    className={`flex items-center justify-between w-full px-3 py-1.5 text-xs rounded-xl font-medium transition-colors ${
                       selectedCategory === "all"
                         ? "bg-primary/10 text-primary font-bold"
                         : "hover:bg-secondary/60 text-foreground"
@@ -397,7 +395,7 @@ export function Blog() {
                         setSelectedCategory(category);
                         setCategoryOpen(false);
                       }}
-                      className={`flex items-center justify-between w-full px-3 py-2 text-xs rounded-xl font-medium transition-colors text-left ${
+                      className={`flex items-center justify-between w-full px-3 py-1.5 text-xs rounded-xl font-medium transition-colors text-left ${
                         selectedCategory === category
                           ? "bg-primary/10 text-primary font-bold"
                           : "hover:bg-secondary/60 text-foreground"
@@ -412,26 +410,26 @@ export function Blog() {
             </Popover>
           </div>
 
-          <div>
+          <div className="col-span-6 sm:col-span-3">
             <Popover open={roleOpen} onOpenChange={setRoleOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   role="combobox"
                   aria-expanded={roleOpen}
-                  className="w-full justify-between rounded-full border-border bg-card/60 px-4 h-10 text-xs font-medium text-foreground hover:bg-card/80"
+                  className="w-full justify-between rounded-full border-border bg-card/60 px-2.5 sm:px-3.5 h-9 text-[11px] sm:text-xs font-medium text-foreground hover:bg-card/80"
                 >
                   <span className="truncate">
                     {selectedRole === "all"
-                      ? "Target Roles (All)"
+                      ? "Target Roles"
                       : selectedRole === "brand"
-                      ? "For Brands Only"
-                      : "For Creators Only"}
+                      ? "Brands"
+                      : "Creators"}
                   </span>
-                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  <ChevronDown className="ml-1 sm:ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-2 rounded-2xl border-border bg-card shadow-elevated" align="start">
+              <PopoverContent className="w-[200px] p-2 rounded-2xl border-border bg-card shadow-elevated" align="end">
                 <div className="space-y-1">
                   {[
                     { value: "all", label: "Target Roles (All)" },
@@ -445,7 +443,7 @@ export function Blog() {
                         setSelectedRole(item.value);
                         setRoleOpen(false);
                       }}
-                      className={`flex items-center justify-between w-full px-3 py-2 text-xs rounded-xl font-medium transition-colors text-left ${
+                      className={`flex items-center justify-between w-full px-3 py-1.5 text-xs rounded-xl font-medium transition-colors text-left ${
                         selectedRole === item.value
                           ? "bg-primary/10 text-primary font-bold"
                           : "hover:bg-secondary/60 text-foreground"

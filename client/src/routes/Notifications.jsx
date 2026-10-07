@@ -223,8 +223,9 @@ export default function Notifications() {
       handleMarkRead(event._id);
     }
 
-    if (event.targetUrl) {
-      const url = event.targetUrl.trim();
+    const target = event.targetUrl || event.link;
+    if (target) {
+      const url = target.trim();
       if (/^https?:\/\//i.test(url)) {
         window.open(url, "_blank", "noopener,noreferrer");
       } else {
@@ -235,6 +236,14 @@ export default function Notifications() {
 
     // Role-aware and event-type fallback navigation
     switch (event.type) {
+      case "addon_service_approved":
+      case "addon_service_rejected":
+      case "addon_service_submitted":
+      case "addon_booking":
+      case "addon_booking_confirmed":
+      case "addon_booking_cancelled":
+        navigate("/addons");
+        break;
       case "withdrawal_requested":
       case "withdrawal_completed":
       case "withdrawal_failed":

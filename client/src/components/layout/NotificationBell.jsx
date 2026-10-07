@@ -415,8 +415,9 @@ export function NotificationBell({ profileId: propProfileId }) {
                   }
                   setOpen(false);
 
-                  if (event.targetUrl) {
-                    const url = event.targetUrl.trim();
+                  const target = event.targetUrl || event.link;
+                  if (target) {
+                    const url = target.trim();
                     if (/^https?:\/\//i.test(url)) {
                       window.open(url, "_blank", "noopener,noreferrer");
                     } else {
@@ -427,6 +428,14 @@ export function NotificationBell({ profileId: propProfileId }) {
 
                   // Fallback intelligent navigation based on event type
                   switch (event.type) {
+                    case "addon_service_approved":
+                    case "addon_service_rejected":
+                    case "addon_service_submitted":
+                    case "addon_booking":
+                    case "addon_booking_confirmed":
+                    case "addon_booking_cancelled":
+                      navigate("/addons");
+                      break;
                     case "withdrawal_requested":
                     case "withdrawal_completed":
                     case "withdrawal_failed":
@@ -464,7 +473,10 @@ export function NotificationBell({ profileId: propProfileId }) {
                       navigate("/collaborations");
                       break;
                     default:
-                      if (event.text?.toLowerCase().includes("deliverable") || event.text?.toLowerCase().includes("post") || event.text?.toLowerCase().includes("reel")) {
+                      const txt = (event.text || "").toLowerCase();
+                      if (txt.includes("add-on") || txt.includes("addon") || txt.includes("rental")) {
+                        navigate("/addons");
+                      } else if (txt.includes("deliverable") || txt.includes("post") || txt.includes("reel")) {
                         navigate("/collaborations");
                       }
                       break;

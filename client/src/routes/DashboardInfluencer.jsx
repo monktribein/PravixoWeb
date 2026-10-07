@@ -65,10 +65,18 @@ import {
   Share,
   Loader2,
   MessageSquare,
+  MoreVertical,
 } from "lucide-react";
 
 
 import { Button } from "@/components/ui/Button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/DropdownMenu";
 import { CATEGORY_OPTIONS } from "@/data/influencer";
 import { Switch } from "@/components/ui/Switch";
 import { SubscriptionTab } from "../components/subscription/SubscriptionTab";
@@ -1880,7 +1888,7 @@ const CAMPAIGNS_PER_PAGE = 6;
     <div className="w-full max-w-full overflow-x-hidden">
       {/* Sticky Top Promo Banner */}
       {activeOffer && !dismissedBanner && (
-        <div className="bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-white py-2 px-4 shadow-md sticky top-[64px] z-40">
+        <div className="bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-white py-2 px-4 shadow-md sticky top-16 z-40">
           <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-semibold">
             <div className="flex items-center gap-2">
               <span className="bg-white/20 px-2 py-0.5 rounded-full text-[9px] uppercase font-bold animate-pulse">Limited Deal</span>
@@ -1899,7 +1907,7 @@ const CAMPAIGNS_PER_PAGE = 6;
                 Upgrade Now
               </Button>
               <button
-                className="hover:opacity-80 p-1"
+                className="hover:opacity-80 p-1 cursor-pointer"
                 onClick={() => setDismissedBanner(true)}
                 aria-label="Dismiss banner"
               >
@@ -1912,23 +1920,23 @@ const CAMPAIGNS_PER_PAGE = 6;
 
       {/* Push Notification Permission Banner */}
       {showPushBanner && (
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-2.5 px-4 shadow-md sticky top-[64px] z-40">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-2.5 px-4 shadow-md sticky top-16 z-40">
           <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-bold">🔔 NEW</span>
               <span>Turn on notifications to get instant alerts whenever brands launch new campaigns!</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Button
                 size="sm"
                 disabled={enablingPush}
-                className="bg-white text-blue-700 hover:bg-slate-100 font-bold text-xs h-7 px-3 rounded-full"
+                className="bg-white text-blue-700 hover:bg-slate-100 font-bold text-xs h-7 px-3 rounded-full cursor-pointer"
                 onClick={handleEnablePush}
               >
                 {enablingPush ? "Enabling..." : "Enable Notifications"}
               </Button>
               <button
-                className="hover:opacity-80 p-1"
+                className="hover:opacity-80 p-1 cursor-pointer"
                 onClick={() => setShowPushBanner(false)}
                 aria-label="Dismiss banner"
               >
@@ -2056,110 +2064,123 @@ const CAMPAIGNS_PER_PAGE = 6;
             </div>
           </div>
 
-          {/* Action Buttons Row - Multi-row/flex-wrap on Mobile so no scroller appears */}
-          <div className="flex flex-wrap items-center gap-2 py-1 shrink-0 max-w-full">
-            <Link
-              to={`/c/${(profile?.handle || profile?._id || "creator").replace("@", "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0"
-            >
-              <Button
-                variant="default"
-                size="sm"
-                className="rounded-full text-xs font-bold px-3 flex items-center gap-1.5 gradient-sunset text-white shadow-glow hover:opacity-90 cursor-pointer border-0 shrink-0 whitespace-nowrap h-8 sm:h-9"
-              >
-                <Sparkles className="h-3.5 w-3.5" /> Media Kit
-              </Button>
-            </Link>
-
-            <Link
-              to={`/influencer/${profile?._id || profile?.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0"
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-full text-xs font-semibold px-3 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-8 sm:h-9"
-              >
-                <Eye className="h-3.5 w-3.5 text-primary" /> View Profile
-              </Button>
-            </Link>
-
-            {/* COMBINED FOLLOWERS & FOLLOWING IN ONE UNIFIED PILL */}
-            <div className="inline-flex items-center rounded-full border border-border/80 bg-card text-xs font-semibold overflow-hidden shadow-xs shrink-0 whitespace-nowrap h-8 sm:h-9">
-              <button
-                type="button"
-                onClick={() => openFollowModal("followers")}
-                className="px-2.5 py-1 flex items-center gap-1 hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <Users className="h-3.5 w-3.5 text-primary" />
-                <span className="font-bold text-foreground">{followCounts.followers}</span>
-                <span className="text-muted-foreground text-[11px]">Fans</span>
-              </button>
-              <span className="h-3.5 w-[1px] bg-border/80"></span>
-              <button
-                type="button"
-                onClick={() => openFollowModal("following")}
-                className="px-2.5 py-1 flex items-center gap-1 hover:bg-secondary transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <span className="font-bold text-foreground">{followCounts.following}</span>
-                <span className="text-muted-foreground text-[11px]">Following</span>
-              </button>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const handleClean = profile?.handle?.replace("@", "") || profile?._id;
-                const url = `${window.location.origin}/c/${handleClean}`;
-                navigator.clipboard.writeText(url);
-                toast.success("Media Kit shareable link copied to clipboard!");
-              }}
-              className="rounded-full text-xs font-semibold px-3 flex items-center gap-1.5 border-border/80 hover:bg-secondary cursor-pointer shrink-0 whitespace-nowrap h-8 sm:h-9"
-            >
-              <Share2 className="h-3.5 w-3.5 text-primary" /> Share
-            </Button>
-
-            {(() => {
-              if (status === "pending") {
-                return (
-                  <Badge className="rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 px-3 py-1.5 font-semibold shrink-0">
-                    Verification Pending ⏳
-                  </Badge>
-                );
-              }
-              if (status === "rejected") {
-                return (
-                  <Button
-                    size="sm"
-                    onClick={submitVerificationRequest}
-                    className="rounded-full bg-red-600 hover:bg-red-700 text-white px-3 font-semibold shadow-sm h-8 sm:h-9 shrink-0 text-xs"
+          {/* Clean Three-Dots Action Menu */}
+          <div className="flex items-center gap-2 py-1 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full h-9 w-9 border-border/80 bg-card/80 backdrop-blur-sm hover:bg-secondary cursor-pointer shadow-xs transition-all hover:scale-105"
+                  title="More actions"
+                >
+                  <MoreVertical className="h-4 w-4 text-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 shadow-xl border-border/60 bg-popover/95 backdrop-blur-md">
+                <DropdownMenuItem asChild>
+                  <Link
+                    to={`/c/${(profile?.handle || profile?._id || "creator").replace("@", "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors"
                   >
-                    Re-verify
-                  </Button>
-                );
-              }
-              if (status !== "verified") {
-                return (
-                  <Button
-                    size="sm"
-                    onClick={submitVerificationRequest}
-                    className="rounded-full gradient-sunset text-white px-3.5 font-bold shadow-glow border-0 h-8 sm:h-9 shrink-0 text-xs flex items-center gap-1"
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    <span>Media Kit</span>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <Link
+                    to={`/influencer/${profile?._id || profile?.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors"
                   >
-                    <ShieldCheck className="h-3.5 w-3.5" /> Request Verification
-                  </Button>
-                );
-              }
-              return (
-                <Badge className="rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 px-3 py-1 font-bold shrink-0 flex items-center gap-1 text-xs">
-                  <ShieldCheck className="h-3.5 w-3.5 text-blue-500" /> Verified Creator
-                </Badge>
-              );
-            })()}
+                    <Eye className="h-4 w-4 text-blue-500" />
+                    <span>View Profile</span>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1 bg-border/50" />
+
+                <DropdownMenuItem
+                  onClick={() => openFollowModal("followers")}
+                  className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs rounded-xl hover:bg-secondary transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Users className="h-4 w-4 text-primary" />
+                    <span>Fans / Followers</span>
+                  </div>
+                  <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
+                    {followCounts.followers}
+                  </span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => openFollowModal("following")}
+                  className="flex items-center justify-between px-3 py-2 cursor-pointer text-xs rounded-xl hover:bg-secondary transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span>Following</span>
+                  </div>
+                  <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
+                    {followCounts.following}
+                  </span>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1 bg-border/50" />
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    const handleClean = profile?.handle?.replace("@", "") || profile?._id;
+                    const url = `${window.location.origin}/c/${handleClean}`;
+                    navigator.clipboard.writeText(url);
+                    toast.success("Media Kit link copied to clipboard!");
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-medium text-xs rounded-xl hover:bg-secondary transition-colors"
+                >
+                  <Share2 className="h-4 w-4 text-purple-500" />
+                  <span>Share Media Kit</span>
+                </DropdownMenuItem>
+
+                {status === "pending" && (
+                  <>
+                    <DropdownMenuSeparator className="my-1 bg-border/50" />
+                    <div className="px-3 py-2 text-xs font-semibold text-amber-600 bg-amber-500/10 rounded-xl flex items-center gap-2">
+                      <Clock className="h-3.5 w-3.5" /> Verification Pending
+                    </div>
+                  </>
+                )}
+
+                {status === "rejected" && (
+                  <>
+                    <DropdownMenuSeparator className="my-1 bg-border/50" />
+                    <DropdownMenuItem
+                      onClick={submitVerificationRequest}
+                      className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-semibold text-xs text-red-500 rounded-xl hover:bg-red-500/10 transition-colors"
+                    >
+                      <RotateCw className="h-4 w-4" />
+                      <span>Re-verify Profile</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {status !== "verified" && status !== "pending" && status !== "rejected" && (
+                  <>
+                    <DropdownMenuSeparator className="my-1 bg-border/50" />
+                    <DropdownMenuItem
+                      onClick={submitVerificationRequest}
+                      className="flex items-center gap-2.5 px-3 py-2 cursor-pointer font-semibold text-xs text-primary rounded-xl hover:bg-primary/10 transition-colors"
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Request Verification</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
   <Dialog open={showPostSaveDialog} onOpenChange={setShowPostSaveDialog}>
@@ -2274,10 +2295,10 @@ const CAMPAIGNS_PER_PAGE = 6;
       </div>
       </>
     ) : (
-        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 pt-3 sm:px-6 lg:px-8">
           <button
             onClick={() => setActiveTab("dashboard")}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-2 cursor-pointer group"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-1 cursor-pointer group"
           >
             <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" /> Back to Dashboard
           </button>
@@ -2285,7 +2306,7 @@ const CAMPAIGNS_PER_PAGE = 6;
       )}
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="mt-4 font-jakarta">
+        <div className="mt-2 font-jakarta">
           <div className="w-full">
             {activeTab === "dashboard" ? (
               <div className="w-full space-y-8">

@@ -522,9 +522,9 @@ export default function Addons() {
             </p>
           </div>
 
-          <div className="flex flex-row items-center gap-1.5 sm:gap-3 w-full md:w-auto justify-start sm:justify-end overflow-x-auto no-scrollbar py-1">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto justify-start sm:justify-end py-1">
             {/* Tab switch */}
-            <div className="inline-flex items-center shrink-0 rounded-full bg-secondary/30 p-1 border border-border/40 text-[11px] sm:text-xs font-semibold shadow-inner">
+            <div className="inline-flex items-center shrink-0 rounded-full bg-secondary/30 p-1 border border-border/40 text-xs font-semibold shadow-inner">
               <button
                 type="button"
                 onClick={() => setActiveTab("services")}
@@ -534,8 +534,8 @@ export default function Addons() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <ShoppingBag className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                Services & Rentals
+                <ShoppingBag className="h-3.5 w-3.5" />
+                <span>Services & Rentals</span>
               </button>
 
               <button
@@ -550,8 +550,8 @@ export default function Addons() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <ClipboardList className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                {isAdmin ? "Bookings" : "My Bookings"}
+                <ClipboardList className="h-3.5 w-3.5" />
+                <span>{isAdmin ? "Bookings" : "My Bookings"}</span>
                 {bookings.length > 0 && (
                   <span
                     className={`ml-1 px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold ${
@@ -569,10 +569,10 @@ export default function Addons() {
             {(isAdmin || isCreator) && activeTab === "services" && (
               <Button
                 onClick={handleOpenCreate}
-                className="btn-bouncy shrink-0 rounded-full gradient-sunset border-0 text-white font-semibold shadow-glow hover:opacity-95 text-[11px] sm:text-xs h-9 sm:h-10 px-3.5 sm:px-4 flex items-center whitespace-nowrap"
+                className="btn-bouncy shrink-0 rounded-full gradient-sunset border-0 text-white font-semibold shadow-glow hover:opacity-95 text-xs h-9 sm:h-10 px-3.5 sm:px-4 flex items-center whitespace-nowrap"
               >
-                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
-                {isCreator ? "Offer My Add-on" : "Add Service"}
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                <span>{isCreator ? "Offer My Add-on" : "Add Service"}</span>
               </Button>
             )}
           </div>
