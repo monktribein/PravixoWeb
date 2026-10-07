@@ -1252,11 +1252,52 @@ export const extractSocialMetadata = async (req, res) => {
         const calcViews = Math.round(numLike * 4.9);
         views = `${calcViews}K`;
       }
+    } else if (isFacebook) {
+      detectedPlatform = "facebook";
+      detectedType = /\/reel\/|\/videos\//i.test(cleanUrl) ? "reel" : "post";
+      badge = detectedType === "reel" ? "Viral FB Reel" : "Facebook Post";
+
+      try {
+        const fbRes = await fetch(cleanUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          },
+        });
+        if (fbRes.ok) {
+          const html = await fbRes.text();
+          const ogImg = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+          if (ogImg && ogImg[1]) thumbnail = ogImg[1].replace(/&amp;/g, "&");
+
+          const ogTitle = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+          if (ogTitle && ogTitle[1]) caption = ogTitle[1].replace(/&amp;/g, "&");
+
+          const ogDesc = html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i);
+          if (!caption && ogDesc && ogDesc[1]) caption = ogDesc[1].replace(/&amp;/g, "&");
+        }
+      } catch (fbErr) {
+        console.warn("Facebook scrape warning:", fbErr.message);
+      }
+
+      if (!thumbnail) {
+        thumbnail = "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?w=800&auto=format&fit=crop&q=80";
+      }
+      if (!caption) {
+        caption = "Facebook Video & Community Post 🌟";
+      }
+
+      let hash = 0;
+      for (let i = 0; i < cleanUrl.length; i++) hash = (hash << 5) - hash + cleanUrl.charCodeAt(i);
+      const baseLike = (Math.abs(hash) % 28) + 8;
+      likes = `${baseLike.toFixed(1)}K`;
+      comments = `${(Math.abs(hash) % 320) + 45}`;
+      views = `${Math.round(baseLike * 4.2)}K`;
+
     } else {
-      // General fallback (Facebook / other)
-      detectedPlatform = isFacebook ? "facebook" : "instagram";
+      // General fallback (TikTok / LinkedIn / other)
+      detectedPlatform = "instagram";
       detectedType = "reel";
-      badge = "Trending Post";
+      badge = "Featured Post";
       thumbnail = "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&auto=format&fit=crop&q=80";
       caption = "Featured Live Content 🚀";
       likes = "18.4K";
