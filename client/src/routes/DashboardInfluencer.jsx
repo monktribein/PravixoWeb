@@ -1986,9 +1986,9 @@ const CAMPAIGNS_PER_PAGE = 6;
         </section>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6">
-          <div className="flex items-center gap-4 sm:gap-5 -mt-16 sm:-mt-20 z-10 min-w-0">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="flex flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-5 -mt-12 sm:-mt-20 z-10 min-w-0">
             {/* AVATAR WITH INSTA-STYLE HOVER/CLICK ACTIONS */}
             <div className="relative group shrink-0">
               <img
@@ -2042,11 +2042,11 @@ const CAMPAIGNS_PER_PAGE = 6;
               </div>
             </div>
 
-            <div className="flex flex-col gap-1 pt-12 sm:pt-14 min-w-0">
+            <div className="flex flex-col gap-0.5 pt-8 sm:pt-14 min-w-0">
               <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                 Creator dashboard
               </p>
-              <h1 className="font-display text-2xl font-bold sm:text-3xl lg:text-4xl flex items-center gap-2 truncate">
+              <h1 className="font-display text-xl font-bold sm:text-3xl lg:text-4xl flex items-center gap-1.5 sm:gap-2 truncate">
                 {displayName}
                 {status === "verified" && (
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 shadow-xs" title="Verified Creator">
@@ -2057,8 +2057,8 @@ const CAMPAIGNS_PER_PAGE = 6;
             </div>
           </div>
 
-          {/* Clean Three-Dots Action Menu */}
-          <div className="flex items-center gap-2 py-1 shrink-0">
+          {/* Clean Three-Dots Action Menu - Positioned Right under the banner across all screens */}
+          <div className="flex items-center shrink-0 self-start sm:self-center mt-1 sm:mt-0">
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -2101,7 +2101,7 @@ const CAMPAIGNS_PER_PAGE = 6;
                   >
                     <div className="flex items-center gap-2.5">
                       <Users className="h-4 w-4 text-primary" />
-                      <span className="font-medium text-foreground">Fans / Followers</span>
+                      <span className="font-medium text-foreground">Followers</span>
                     </div>
                     <span className="font-bold text-xs bg-secondary/80 px-2 py-0.5 rounded-full text-foreground">
                       {followCounts.followers}
