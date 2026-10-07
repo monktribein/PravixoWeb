@@ -2064,9 +2064,7 @@ const CAMPAIGNS_PER_PAGE = 6;
             </div>
 
             <div className="flex flex-col gap-0.5 pt-8 sm:pt-14 min-w-0">
-              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
-                Creator dashboard
-              </p>
+             
               <h1 className="font-display text-xl font-bold sm:text-3xl lg:text-4xl flex items-center gap-1.5 sm:gap-2 truncate">
                 {displayName}
                 {status === "verified" && (
