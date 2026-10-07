@@ -2171,15 +2171,16 @@ const [submittingVerification, setSubmittingVerification] =
                 <div className="flex flex-col sm:flex-row items-center gap-4">
                   <img src={
                       resolveImageUrl(profile?.avatarUrl) ||
-                      `https://api.dicebear.com/9.x/avataaars/svg?seed=${profile?.fullName || user?.email || "brand"}`
+                      profile?.avatar ||
+                      getGenderAvatar(profile?.fullName || fullName || displayName, "male", "brand")
                     }
                     alt=""
-                    className="h-20 w-20 rounded-full border border-border object-cover bg-muted"
-                   onError={(e) => { e.target.onerror = null; e.target.src = "https://api.dicebear.com/9.x/avataaars/svg?seed=Fallback"; }} />
-                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors">
-                      <Camera className="h-4 w-4 text-muted-foreground" />
-                      {uploadingAvatar ? "Uploading..." : "Upload logo"}
+                    className="h-20 w-20 rounded-full border border-border object-cover bg-muted shrink-0"
+                   onError={(e) => { e.target.onerror = null; e.target.src = getGenderAvatar(profile?.fullName || fullName || displayName, "male", "brand"); }} />
+                  <div className="flex flex-row items-center justify-center sm:justify-start gap-1.5 sm:gap-2 w-full sm:w-auto">
+                    <label className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:bg-secondary transition-colors whitespace-nowrap h-9">
+                      <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{uploadingAvatar ? "Uploading..." : "Photo"}</span>
                       <input
                         ref={avatarFileRef}
                         type="file"
@@ -2192,14 +2193,14 @@ const [submittingVerification, setSubmittingVerification] =
                     <button
                       type="button"
                       onClick={() => setIsAvatarPickerOpen(true)}
-                      className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors"
+                      className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:border-pink-500/40 hover:text-pink-500 hover:bg-secondary transition-colors whitespace-nowrap h-9"
                     >
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      Choose Brand Avatar
+                      <Sparkles className="h-3.5 w-3.5 text-pink-500" />
+                      <span>Avatar</span>
                     </button>
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors">
-                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                      {uploadingCover ? "Uploading..." : "Upload banner"}
+                    <label className="flex-1 sm:flex-initial inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 sm:px-4 py-2 text-xs font-semibold hover:bg-secondary transition-colors whitespace-nowrap h-9">
+                      <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{uploadingCover ? "Uploading..." : "Banner"}</span>
                       <input
                         ref={coverFileRef}
                         type="file"
