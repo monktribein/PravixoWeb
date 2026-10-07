@@ -52,6 +52,7 @@ import {
   Copy,
   CheckCircle2,
   Users,
+  User,
   ChevronRight,
   ChevronLeft,
   Search,
