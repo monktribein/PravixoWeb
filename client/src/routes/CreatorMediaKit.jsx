@@ -156,22 +156,29 @@ export default function CreatorMediaKit() {
   }, [handle]);
 
   // Continuous auto-sliding ticker for Recent Reels / Posts Carousel
+  const socialFeedRef = useRef(null);
   const [isFeedPaused, setIsFeedPaused] = useState(false);
+
   useEffect(() => {
-    const el = document.getElementById("social-feed-scroll-container");
+    const el = socialFeedRef.current || document.getElementById("social-feed-scroll-container");
     if (!el) return;
 
-    const interval = setInterval(() => {
-      if (isFeedPaused) return;
-      const maxScroll = el.scrollWidth - el.clientWidth;
-      if (el.scrollLeft >= maxScroll - 5) {
-        el.scrollTo({ left: 0, behavior: "smooth" });
-      } else {
-        el.scrollBy({ left: 280, behavior: "smooth" });
-      }
-    }, 2600);
+    let animId;
+    const speed = 1.2; // Pixels per frame for smooth continuous fluid movement
 
-    return () => clearInterval(interval);
+    const step = () => {
+      if (!isFeedPaused && el) {
+        if (el.scrollLeft >= el.scrollWidth - el.clientWidth - 1) {
+          el.scrollLeft = 0;
+        } else {
+          el.scrollLeft += speed;
+        }
+      }
+      animId = requestAnimationFrame(step);
+    };
+
+    animId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animId);
   }, [isFeedPaused, activeSocialFeedTab, creator]);
 
   // Check review eligibility whenever active profile or creator changes
@@ -1166,8 +1173,8 @@ export default function CreatorMediaKit() {
           >
             <div
               id="social-feed-scroll-container"
-              className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30"
-              style={{ scrollBehavior: "smooth" }}
+              ref={socialFeedRef}
+              className="flex gap-4 overflow-x-auto pb-4 pt-1 scrollbar-none no-scrollbar"
             >
               {(activeSocialFeedTab === "instagram"
                 ? liveInstagramFeeds
