@@ -431,26 +431,41 @@ html.lenis, html.lenis body {
 }
 
 /* =====================================================
-   INFINITE AUTO-SCROLLING MARQUEE (PURE CSS)
+   INFINITE AUTO-SCROLLING MARQUEE (DESKTOP & MOBILE)
    ===================================================== */
 @keyframes marquee-scroll {
-  from {
-    transform: translateX(0);
+  0% {
+    transform: translate3d(0, 0, 0);
   }
-  to {
-    transform: translateX(-50%);
+  100% {
+    transform: translate3d(-50%, 0, 0);
   }
+}
+
+.marquee-container {
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 4%, black 96%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 4%, black 96%, transparent);
 }
 
 .marquee-track {
   display: flex;
   width: max-content;
-  animation: marquee-scroll 55s linear infinite;
+  animation: marquee-scroll 42s linear infinite;
   will-change: transform;
+  transform: translate3d(0, 0, 0);
 }
 
-.marquee-track:hover {
-  animation-play-state: paused !important;
+@media (max-width: 640px) {
+  .marquee-track {
+    animation-duration: 32s;
+  }
+}
+
+.marquee-container:hover .marquee-track {
+  animation-play-state: paused;
 }
 
 /* Also support reversing or different speeds */
@@ -461,7 +476,6 @@ html.lenis, html.lenis body {
 @media (prefers-reduced-motion: reduce) {
   .marquee-track {
     animation: none !important;
-    overflow-x: auto;
   }
 }
 
