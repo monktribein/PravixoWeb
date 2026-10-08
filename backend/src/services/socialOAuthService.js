@@ -111,12 +111,12 @@ export const exchangeInstagramCode = async ({
         break;
       }
       
-      // If nested object wasn't expanded, query the page's instagram_business_account field directly
+      // Query page for instagram_business_account and connected_instagram_account
       if (page.id) {
         const tokenToUse = page.access_token || accessToken;
         try {
           const pRes = await fetch(
-            `https://graph.facebook.com/${GRAPH_API_VERSION}/${page.id}?fields=instagram_business_account{id,username,name,followers_count,media_count}&access_token=${encodeURIComponent(
+            `https://graph.facebook.com/${GRAPH_API_VERSION}/${page.id}?fields=instagram_business_account{id,username,name,followers_count,media_count},connected_instagram_account{id,username,name,followers_count,media_count}&access_token=${encodeURIComponent(
               tokenToUse
             )}`
           );
@@ -126,6 +126,10 @@ export const exchangeInstagramCode = async ({
             targetIg = pData.instagram_business_account;
             pageToken = tokenToUse;
             break;
+          } else if (pData?.connected_instagram_account) {
+            targetIg = pData.connected_instagram_account;
+            pageToken = tokenToUse;
+            break;
           }
         } catch (e) {
           console.error(`[Meta OAuth] Page ${page.id} lookup error:`, e);
@@ -133,11 +137,11 @@ export const exchangeInstagramCode = async ({
       }
     }
 
-    // 2. If not found in pages, check /me?fields=accounts,instagram_business_account
+    // 2. If not found in pages, check /me?fields=accounts,instagram_business_account,connected_instagram_account
     if (!targetIg) {
       try {
         const meFullRes = await fetch(
-          `https://graph.facebook.com/${GRAPH_API_VERSION}/me?fields=id,name,instagram_business_account{id,username,name,followers_count,media_count}&access_token=${encodeURIComponent(
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/me?fields=id,name,instagram_business_account{id,username,name,followers_count,media_count},connected_instagram_account{id,username,name,followers_count,media_count}&access_token=${encodeURIComponent(
             accessToken
           )}`
         );
@@ -145,6 +149,8 @@ export const exchangeInstagramCode = async ({
         console.log("[Meta OAuth] /me direct IG lookup:", meFullData);
         if (meFullData?.instagram_business_account) {
           targetIg = meFullData.instagram_business_account;
+        } else if (meFullData?.connected_instagram_account) {
+          targetIg = meFullData.connected_instagram_account;
         }
       } catch (e) {
         console.error("[Meta OAuth] /me lookup error:", e);
