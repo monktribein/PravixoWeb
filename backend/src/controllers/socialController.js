@@ -869,10 +869,10 @@ export const verifyAndConnectPlatform = async (req, res) => {
     const cleanHandle = String(handle).trim().replace(/^@/, "");
     const normalizedPlatform = platform.toLowerCase();
 
-    // Compute realistic verified metrics if simulated or not provided
-    const parsedFollowers = Number(followers) || Math.floor(Math.random() * 85000) + 12500;
-    const computedViews = Number(views) || Math.floor(parsedFollowers * (1.8 + Math.random() * 1.5));
-    const computedEngagement = Number(engagementRate) || Number(((Math.random() * 3.5) + 2.1).toFixed(2));
+    // Use exact metrics provided
+    const parsedFollowers = Number(followers) >= 0 ? Number(followers) : 0;
+    const computedViews = Number(views) || Math.floor(parsedFollowers * 2.2);
+    const computedEngagement = Number(engagementRate) || 3.25;
 
     const existing = await SocialConnection.findOne({
       profileId,

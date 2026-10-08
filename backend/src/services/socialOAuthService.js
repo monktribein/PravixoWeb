@@ -110,21 +110,37 @@ export const exchangeInstagramCode = async ({
       }
       
       // If nested object wasn't expanded, query the page's instagram_business_account field directly
-      if (page.id && page.access_token) {
+      if (page.id) {
+        const tokenToUse = page.access_token || accessToken;
         try {
           const pRes = await fetch(
             `https://graph.facebook.com/${GRAPH_API_VERSION}/${page.id}?fields=instagram_business_account{id,username,name,followers_count,media_count}&access_token=${encodeURIComponent(
-              page.access_token
+              tokenToUse
             )}`
           );
           const pData = await parseJsonResponse(pRes);
           if (pData?.instagram_business_account) {
             targetIg = pData.instagram_business_account;
-            pageToken = page.access_token;
+            pageToken = tokenToUse;
             break;
           }
         } catch (_) {}
       }
+    }
+
+    // 2. If not found in pages, check /me?fields=accounts,instagram_business_account
+    if (!targetIg) {
+      try {
+        const meFullRes = await fetch(
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/me?fields=id,name,instagram_business_account{id,username,name,followers_count,media_count}&access_token=${encodeURIComponent(
+            accessToken
+          )}`
+        );
+        const meFullData = await parseJsonResponse(meFullRes);
+        if (meFullData?.instagram_business_account) {
+          targetIg = meFullData.instagram_business_account;
+        }
+      } catch (_) {}
     }
 
     if (targetIg) {
