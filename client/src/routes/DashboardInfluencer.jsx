@@ -1543,6 +1543,10 @@ const CAMPAIGNS_PER_PAGE = 6;
       views: "120K",
     });
 
+    await saveSocialPresence(nextFeeds);
+    toast.success("Live reel/post added and synced with your Media Kit!");
+  };
+
   const handleAutoFetchAllReels = async () => {
     const targetHandle = instaHandle || profile?.instagramHandle || handle;
     if (!targetHandle) {
