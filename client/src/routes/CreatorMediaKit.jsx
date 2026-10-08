@@ -155,6 +155,25 @@ export default function CreatorMediaKit() {
     loadMediaKit();
   }, [handle]);
 
+  // Continuous auto-sliding ticker for Recent Reels / Posts Carousel
+  const [isFeedPaused, setIsFeedPaused] = useState(false);
+  useEffect(() => {
+    const el = document.getElementById("social-feed-scroll-container");
+    if (!el) return;
+
+    const interval = setInterval(() => {
+      if (isFeedPaused) return;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (el.scrollLeft >= maxScroll - 5) {
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        el.scrollBy({ left: 280, behavior: "smooth" });
+      }
+    }, 2600);
+
+    return () => clearInterval(interval);
+  }, [isFeedPaused, activeSocialFeedTab, creator]);
+
   // Check review eligibility whenever active profile or creator changes
   useEffect(() => {
     async function checkEligibility() {
@@ -1138,7 +1157,13 @@ export default function CreatorMediaKit() {
           </div>
 
           {/* SIDE SCROLLABLE FEED CARDS CONTAINER */}
-          <div className="relative group/scroll">
+          <div
+            className="relative group/scroll"
+            onMouseEnter={() => setIsFeedPaused(true)}
+            onMouseLeave={() => setIsFeedPaused(false)}
+            onTouchStart={() => setIsFeedPaused(true)}
+            onTouchEnd={() => setIsFeedPaused(false)}
+          >
             <div
               id="social-feed-scroll-container"
               className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30"
