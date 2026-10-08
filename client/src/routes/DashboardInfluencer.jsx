@@ -1126,6 +1126,10 @@ const CAMPAIGNS_PER_PAGE = 6;
     }
   };
 
+  const handleOAuthConnect = (platform) => {
+    handleConnectPlatform(platform);
+  };
+
   const handleQuickVerify = async (platform, handle, followers) => {
     if (!mongoProfileId) return;
     if (!handle?.trim()) {
