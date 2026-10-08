@@ -988,6 +988,60 @@ export function DashboardInfluencer() {
     }
   }, [mongoProfileId]);
 
+  // Synchronize handles and followers from profile and verified connections
+  useEffect(() => {
+    if (profile) {
+      if (profile.fullName !== undefined) setFullName(profile.fullName || "");
+      if (profile.handle !== undefined) setHandle(profile.handle || "");
+      if (profile.gender !== undefined) setGender(profile.gender || "male");
+      if (profile.phone !== undefined) setPhone(profile.phone || "");
+      if (profile.category !== undefined) setCategory(profile.category || "");
+      if (profile.location !== undefined) setLocation(profile.location || "");
+      if (profile.bio !== undefined) setBio(profile.bio || "");
+      if (profile.startingPrice !== undefined) setStartingPrice(profile.startingPrice || 0);
+      if (profile.isBarterAllowed !== undefined) setIsBarterAllowed(!!profile.isBarterAllowed);
+
+      // Social handles & followers from profile
+      setInstaHandle(profile.instagramHandle || "");
+      setInstaFollowers(profile.instagramFollowers || 0);
+      setFbHandle(profile.facebookHandle || "");
+      setFbFollowers(profile.facebookFollowers || 0);
+      setLiHandle(profile.linkedinHandle || "");
+      setLiFollowers(profile.linkedinFollowers || 0);
+      setYtHandle(profile.youtubeHandle || "");
+      setYtFollowers(profile.youtubeFollowers || 0);
+      setQuoraHandle(profile.quoraHandle || "");
+      setQuoraFollowers(profile.quoraFollowers || 0);
+      setTwHandle(profile.twitterHandle || "");
+      setTwFollowers(profile.twitterFollowers || 0);
+      setXHandle(profile.twitterHandle || "");
+      setXFollowers(profile.twitterFollowers || 0);
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (Array.isArray(connections)) {
+      connections.forEach((conn) => {
+        if (conn.platform === "instagram" && conn.handle) {
+          setInstaHandle(conn.handle);
+          if (conn.followers) setInstaFollowers(conn.followers);
+        } else if (conn.platform === "facebook" && conn.handle) {
+          setFbHandle(conn.handle);
+          if (conn.followers) setFbFollowers(conn.followers);
+        } else if (conn.platform === "youtube" && conn.handle) {
+          setYtHandle(conn.handle);
+          if (conn.followers) setYtFollowers(conn.followers);
+        } else if (conn.platform === "linkedin" && conn.handle) {
+          setLiHandle(conn.handle);
+          if (conn.followers) setLiFollowers(conn.followers);
+        } else if ((conn.platform === "twitter" || conn.platform === "x") && conn.handle) {
+          setXHandle(conn.handle);
+          if (conn.followers) setXFollowers(conn.followers);
+        }
+      });
+    }
+  }, [connections]);
+
   const [showVerificationDialog, setShowVerificationDialog] =
   useState(false);
 
