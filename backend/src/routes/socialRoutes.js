@@ -12,6 +12,7 @@ import {
   verifyAndConnectPlatform,
   syncLivePlatformStats,
   extractSocialMetadata,
+  autoFetchAccountReels,
 } from "../controllers/socialController.js";
 
 const router = express.Router();
@@ -85,6 +86,12 @@ router.delete(
 router.post(
   "/extract-metadata",
   extractSocialMetadata
+);
+
+// 1-Click Auto Fetch Reels for Account
+router.post(
+  "/auto-fetch-reels",
+  autoFetchAccountReels
 );
 
 export default router;

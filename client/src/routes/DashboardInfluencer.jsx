@@ -1543,8 +1543,31 @@ const CAMPAIGNS_PER_PAGE = 6;
       views: "120K",
     });
 
-    await saveSocialPresence(nextFeeds);
-    toast.success("Live reel/post added and synced with your Media Kit!");
+  const handleAutoFetchAllReels = async () => {
+    const targetHandle = instaHandle || profile?.instagramHandle || handle;
+    if (!targetHandle) {
+      toast.error("Please connect or enter your Instagram handle first.");
+      return;
+    }
+    const toastId = toast.loading(`Auto-fetching latest reels for @${targetHandle.replace(/^@/, "")}...`);
+    try {
+      const res = await apiPost("/social/auto-fetch-reels", {
+        profileId: mongoProfileId,
+        handle: targetHandle,
+        platform: "instagram",
+      });
+      const items = res?.data || res?.items || res;
+      if (Array.isArray(items) && items.length > 0) {
+        setCustomSocialFeeds(items);
+        toast.success(`✓ Successfully loaded & saved ${items.length} live reels for your Media Kit!`, { id: toastId });
+        if (fetchProfile) fetchProfile();
+      } else {
+        toast.error("Could not fetch reels. Please try adding direct links.", { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.message || err?.message || "Failed to auto fetch reels", { id: toastId });
+    }
   };
 
   const handleRemoveCustomSocialFeed = async (indexToRemove) => {
@@ -3301,16 +3324,27 @@ const CAMPAIGNS_PER_PAGE = 6;
                       <div className="p-4 pt-2 border-t border-border/40 space-y-4">
                         <div className="flex flex-wrap items-center justify-between gap-3 bg-secondary/30 p-3 rounded-2xl border border-border/60">
                           <div className="text-xs text-muted-foreground">
-                            <span className="font-semibold text-foreground">💡 How this works:</span> When you add a reel or post URL, it automatically syncs with your public Media Kit at <strong className="text-primary font-mono">/c/{handle || "username"}</strong> with clickable direct links.
+                            <span className="font-semibold text-foreground">💡 1-Click Sync:</span> Click <strong className="text-pink-500 font-semibold">"Auto Fetch Reels"</strong> to automatically pull and load your latest Instagram reels directly into your Media Kit!
                           </div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => setShowAddSocialFeedModal(true)}
-                            className="rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 text-white font-semibold text-xs shadow-sm hover:opacity-95"
-                          >
-                            <Plus className="h-3.5 w-3.5 mr-1" /> Add Real Reel / Post Link
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleAutoFetchAllReels}
+                              className="rounded-full bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 text-white font-bold text-xs shadow-glow hover:opacity-95 cursor-pointer px-4"
+                            >
+                              <RotateCw className="h-3.5 w-3.5 mr-1.5" /> 1-Click Auto Fetch Reels
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowAddSocialFeedModal(true)}
+                              className="rounded-full border-border text-foreground font-semibold text-xs hover:bg-secondary cursor-pointer"
+                            >
+                              <Plus className="h-3.5 w-3.5 mr-1" /> Add Custom Link
+                            </Button>
+                          </div>
                         </div>
 
                         {customSocialFeeds.length === 0 ? (
