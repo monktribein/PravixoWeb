@@ -98,22 +98,49 @@ export const exchangeInstagramCode = async ({
     const pagesData = await parseJsonResponse(pagesResponse);
     const pages = Array.isArray(pagesData?.data) ? pagesData.data : [];
     
-    // Find page that has connected instagram business account
-    const pageWithIg = pages.find((p) => p.instagram_business_account);
+    // Find page that has connected instagram business account, or check each page directly
+    let targetIg = null;
+    let pageToken = accessToken;
 
-    if (pageWithIg?.instagram_business_account) {
-      const ig = pageWithIg.instagram_business_account;
+    for (const page of pages) {
+      if (page.instagram_business_account) {
+        targetIg = page.instagram_business_account;
+        pageToken = page.access_token || accessToken;
+        break;
+      }
+      
+      // If nested object wasn't expanded, query the page's instagram_business_account field directly
+      if (page.id && page.access_token) {
+        try {
+          const pRes = await fetch(
+            `https://graph.facebook.com/${GRAPH_API_VERSION}/${page.id}?fields=instagram_business_account{id,username,name,followers_count,media_count}&access_token=${encodeURIComponent(
+              page.access_token
+            )}`
+          );
+          const pData = await parseJsonResponse(pRes);
+          if (pData?.instagram_business_account) {
+            targetIg = pData.instagram_business_account;
+            pageToken = page.access_token;
+            break;
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (targetIg) {
+      const ig = targetIg;
       
       // If followers_count is directly returned:
       let igFollowers = Number(ig.followers_count) || 0;
       let igHandle = ig.username ? `@${ig.username.replace(/^@/, "")}` : `@${ig.name || "creator"}`;
       
-      // If followers_count wasn't in the nested response, fetch it directly with the page or user access token
+      // If followers_count or username wasn't returned, fetch directly from the IG node
       if (ig.id && (!igFollowers || !ig.username)) {
         try {
-          const igToken = pageWithIg.access_token || accessToken;
           const directIgRes = await fetch(
-            `https://graph.facebook.com/${GRAPH_API_VERSION}/${ig.id}?fields=id,username,name,followers_count,media_count&access_token=${encodeURIComponent(igToken)}`
+            `https://graph.facebook.com/${GRAPH_API_VERSION}/${ig.id}?fields=id,username,name,followers_count,media_count&access_token=${encodeURIComponent(
+              pageToken
+            )}`
           );
           const directIgData = await parseJsonResponse(directIgRes);
           if (directIgData?.followers_count !== undefined) {
@@ -130,10 +157,9 @@ export const exchangeInstagramCode = async ({
       // Fetch latest Instagram posts / reels for media kit
       let mediaItems = [];
       try {
-        const igToken = pageWithIg.access_token || accessToken;
         const mediaRes = await fetch(
           `https://graph.facebook.com/${GRAPH_API_VERSION}/${ig.id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp&limit=6&access_token=${encodeURIComponent(
-            igToken
+            pageToken
           )}`
         );
         const mediaData = await parseJsonResponse(mediaRes);
@@ -154,7 +180,7 @@ export const exchangeInstagramCode = async ({
         console.error("Failed to query Instagram media nodes:", mediaErr);
       }
 
-      accountId = ig.id || pageWithIg.id;
+      accountId = ig.id || "meta_ig";
       handle = igHandle;
       followers = igFollowers;
       views = Math.floor(followers * 2.2);
