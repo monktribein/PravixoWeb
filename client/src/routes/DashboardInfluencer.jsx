@@ -1085,7 +1085,7 @@ const CAMPAIGNS_PER_PAGE = 6;
 
   const handleConnectPlatform = (platform) => {
     if (!profile || !clientIds) return;
-    const redirectUri = encodeURIComponent(`${window.location.origin}/oauth/callback`);
+    const redirectUri = encodeURIComponent(`${window.location.origin}/social-callback`);
     const state = `${platform}:${mongoProfileId}:${profile.role}`;
 
     let url = "";
