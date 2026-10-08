@@ -209,6 +209,11 @@ function Layout() {
                 element={<OAuthCallback />}
               />
 
+              <Route
+                path="/social-callback"
+                element={<OAuthCallback />}
+              />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </motion.div>

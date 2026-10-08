@@ -60,7 +60,7 @@ export function OAuthCallback() {
 
       try {
         const redirectUri =
-          `${window.location.origin}/oauth/callback`;
+          `${window.location.origin}${window.location.pathname}`;
 
         /*
           Twitter PKCE support
