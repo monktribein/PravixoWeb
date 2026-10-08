@@ -3125,13 +3125,22 @@ const CAMPAIGNS_PER_PAGE = 6;
                                         <>
                                           <Button
                                             size="sm"
+                                            className="text-xs h-9 px-4 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-xs transition-all cursor-pointer"
+                                            disabled={syncingPlatform === currentPlat.id}
+                                            onClick={() => handleQuickVerify(currentPlat.id, currentPlat.handle, currentPlat.followers)}
+                                          >
+                                            <ShieldCheck className="h-4 w-4" />
+                                            {syncingPlatform === currentPlat.id ? "Updating..." : "Update Verified Stats"}
+                                          </Button>
+                                          <Button
+                                            size="sm"
                                             variant="outline"
                                             className="text-xs h-9 px-4 rounded-full border-sky-500/30 bg-sky-500/5 hover:bg-sky-500/15 text-sky-500 gap-1.5 font-semibold transition-all cursor-pointer"
                                             disabled={syncingPlatform === currentPlat.id}
                                             onClick={() => handleLiveReSync(conn?._id, currentPlat.id)}
                                           >
                                             <RotateCw className={cn("h-3.5 w-3.5", syncingPlatform === currentPlat.id && "animate-spin")} />
-                                            {syncingPlatform === currentPlat.id ? "Syncing..." : "Live Sync Metrics"}
+                                            {syncingPlatform === currentPlat.id ? "Syncing..." : "Live Sync"}
                                           </Button>
                                           <Button
                                             size="sm"

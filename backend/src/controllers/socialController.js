@@ -797,7 +797,7 @@ export const exchangeOAuthCode = async (req, res) => {
     }
 
     /*
-      Update profile social stats
+      Update profile social stats and live feeds
     */
 
     await updateProfilePlatformStats(
@@ -806,6 +806,12 @@ export const exchangeOAuthCode = async (req, res) => {
       oauthResult.handle,
       oauthResult.followers
     );
+
+    if (Array.isArray(oauthResult.customSocialFeeds) && oauthResult.customSocialFeeds.length > 0) {
+      await Profile.findByIdAndUpdate(profileId, {
+        $set: { customSocialFeeds: oauthResult.customSocialFeeds },
+      });
+    }
 
     return res.status(200).json({
       success: true,
