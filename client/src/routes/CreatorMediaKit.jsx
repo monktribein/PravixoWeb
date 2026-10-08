@@ -809,8 +809,8 @@ export default function CreatorMediaKit() {
                     {creator.audienceHighlights?.topGender || (creatorGender === "female" ? "68% Female / 32% Male" : "58% Male / 42% Female")}
                   </div>
                   <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden mt-2 flex">
-                    <div className={cn("h-full", creatorGender === "female" ? "bg-rose-400 w-[68%]" : "bg-blue-400 w-[58%]")} />
-                    <div className={cn("h-full", creatorGender === "female" ? "bg-blue-400 w-[32%]" : "bg-rose-400 w-[42%]")} />
+                    <div className={`h-full ${creatorGender === "female" ? "bg-rose-400 w-[68%]" : "bg-blue-400 w-[58%]"}`} />
+                    <div className={`h-full ${creatorGender === "female" ? "bg-blue-400 w-[32%]" : "bg-rose-400 w-[42%]"}`} />
                   </div>
                   <span className="text-[10px] text-muted-foreground">High Engagement Audience</span>
                 </div>
