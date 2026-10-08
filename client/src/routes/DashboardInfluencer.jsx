@@ -1156,7 +1156,7 @@ const CAMPAIGNS_PER_PAGE = 6;
         toast.error("Meta OAuth is not configured on the backend yet.");
         return;
       }
-      const scope = "email,public_profile,pages_show_list,pages_read_engagement,pages_read_user_content,instagram_basic,instagram_manage_insights";
+      const scope = "public_profile,pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights";
       url = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}&scope=${encodeURIComponent(scope)}`;
     } else if (platform === "linkedin") {
       const clientId = clientIds.linkedinClientId;
