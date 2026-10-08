@@ -3430,6 +3430,26 @@ const CAMPAIGNS_PER_PAGE = 6;
                             ))}
                           </div>
                         )}
+
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/40 mt-4">
+                          <p className="text-xs text-muted-foreground text-center sm:text-left">
+                            ✨ Active reels & posts are synced directly to your live public Media Kit at <strong className="text-primary">/c/{handle ? handle.replace(/^@/, '') : 'username'}</strong>
+                          </p>
+                          <Button
+                            type="button"
+                            onClick={() => saveSocialPresence()}
+                            disabled={saving}
+                            className="btn-bouncy rounded-full gradient-sunset border-0 text-white shadow-glow px-6 font-bold text-xs h-10 w-full sm:w-auto cursor-pointer"
+                          >
+                            {saving ? (
+                              <span className="flex items-center gap-2">
+                                <RotateCw className="h-4 w-4 animate-spin" /> Saving Feeds...
+                              </span>
+                            ) : (
+                              "Save Live Feeds & Showcase"
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
