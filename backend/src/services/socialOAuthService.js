@@ -97,6 +97,7 @@ export const exchangeInstagramCode = async ({
 
     const pagesData = await parseJsonResponse(pagesResponse);
     const pages = Array.isArray(pagesData?.data) ? pagesData.data : [];
+    console.log("[Meta OAuth] Found Facebook pages count:", pages.length, "Pages:", JSON.stringify(pages));
     
     // Find page that has connected instagram business account, or check each page directly
     let targetIg = null;
@@ -106,6 +107,7 @@ export const exchangeInstagramCode = async ({
       if (page.instagram_business_account) {
         targetIg = page.instagram_business_account;
         pageToken = page.access_token || accessToken;
+        console.log("[Meta OAuth] Found Instagram account directly on page:", targetIg);
         break;
       }
       
@@ -119,12 +121,15 @@ export const exchangeInstagramCode = async ({
             )}`
           );
           const pData = await parseJsonResponse(pRes);
+          console.log(`[Meta OAuth] Page ${page.id} direct lookup:`, pData);
           if (pData?.instagram_business_account) {
             targetIg = pData.instagram_business_account;
             pageToken = tokenToUse;
             break;
           }
-        } catch (_) {}
+        } catch (e) {
+          console.error(`[Meta OAuth] Page ${page.id} lookup error:`, e);
+        }
       }
     }
 
@@ -137,10 +142,13 @@ export const exchangeInstagramCode = async ({
           )}`
         );
         const meFullData = await parseJsonResponse(meFullRes);
+        console.log("[Meta OAuth] /me direct IG lookup:", meFullData);
         if (meFullData?.instagram_business_account) {
           targetIg = meFullData.instagram_business_account;
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error("[Meta OAuth] /me lookup error:", e);
+      }
     }
 
     if (targetIg) {
