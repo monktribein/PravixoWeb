@@ -1365,7 +1365,7 @@ export const autoFetchAccountReels = async (req, res) => {
     if (connection?.encryptedAccessToken && connection?.accountId) {
       try {
         const mediaRes = await fetch(
-          `https://graph.facebook.com/v19.0/${connection.accountId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp&limit=6&access_token=${encodeURIComponent(
+          `https://graph.facebook.com/v19.0/${connection.accountId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp&limit=18&access_token=${encodeURIComponent(
             connection.encryptedAccessToken
           )}`
         );

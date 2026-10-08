@@ -188,7 +188,7 @@ export const exchangeInstagramCode = async ({
       let mediaItems = [];
       try {
         const mediaRes = await fetch(
-          `https://graph.facebook.com/${GRAPH_API_VERSION}/${ig.id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp&limit=6&access_token=${encodeURIComponent(
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/${ig.id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp&limit=18&access_token=${encodeURIComponent(
             pageToken
           )}`
         );
