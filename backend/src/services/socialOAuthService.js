@@ -88,6 +88,7 @@ export const exchangeInstagramCode = async ({
   let engagementRate = 3.25;
 
   try {
+    // 1. Try to fetch user's Facebook Pages with linked Instagram business / creator accounts
     const pagesResponse = await fetch(
       `https://graph.facebook.com/${GRAPH_API_VERSION}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name,followers_count,media_count}&access_token=${encodeURIComponent(
         accessToken
@@ -97,17 +98,41 @@ export const exchangeInstagramCode = async ({
     const pagesData = await parseJsonResponse(pagesResponse);
     const pages = Array.isArray(pagesData?.data) ? pagesData.data : [];
     
-    // Find first page with connected instagram business account
+    // Find page that has connected instagram business account
     const pageWithIg = pages.find((p) => p.instagram_business_account);
 
     if (pageWithIg?.instagram_business_account) {
       const ig = pageWithIg.instagram_business_account;
+      
+      // If followers_count is directly returned:
+      let igFollowers = Number(ig.followers_count) || 0;
+      let igHandle = ig.username ? `@${ig.username.replace(/^@/, "")}` : `@${ig.name || "creator"}`;
+      
+      // If followers_count wasn't in the nested response, fetch it directly with the page or user access token
+      if (ig.id && (!igFollowers || !ig.username)) {
+        try {
+          const igToken = pageWithIg.access_token || accessToken;
+          const directIgRes = await fetch(
+            `https://graph.facebook.com/${GRAPH_API_VERSION}/${ig.id}?fields=id,username,name,followers_count,media_count&access_token=${encodeURIComponent(igToken)}`
+          );
+          const directIgData = await parseJsonResponse(directIgRes);
+          if (directIgData?.followers_count !== undefined) {
+            igFollowers = Number(directIgData.followers_count) || igFollowers;
+          }
+          if (directIgData?.username) {
+            igHandle = `@${directIgData.username.replace(/^@/, "")}`;
+          }
+        } catch (subErr) {
+          console.error("Failed to query direct Instagram node:", subErr);
+        }
+      }
+
       accountId = ig.id || pageWithIg.id;
-      handle = ig.username ? `@${ig.username.replace(/^@/, "")}` : `@${ig.name || "creator"}`;
-      followers = Number(ig.followers_count) || 0;
+      handle = igHandle;
+      followers = igFollowers;
       views = Math.floor(followers * 2.2);
     } else {
-      // Fallback to /me if no business account is linked yet
+      // 2. Fallback: Query Instagram Basic Display or Meta profile
       const meResponse = await fetch(
         `https://graph.facebook.com/${GRAPH_API_VERSION}/me?fields=id,name&access_token=${encodeURIComponent(
           accessToken
@@ -115,7 +140,9 @@ export const exchangeInstagramCode = async ({
       );
       const meData = await parseJsonResponse(meResponse);
       accountId = meData.id || "meta_user";
-      handle = meData.name ? `@${meData.name.replace(/\s+/g, "").toLowerCase()}` : "Instagram User";
+      
+      // Keep handle as Instagram user if available
+      handle = meData.name ? `@${meData.name.replace(/\s+/g, "").toLowerCase()}` : "@instagram_creator";
     }
   } catch (err) {
     console.error("Error fetching Instagram business details:", err);
