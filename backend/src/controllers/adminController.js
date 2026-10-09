@@ -213,7 +213,17 @@ export const deleteProfile = async (req, res) => {
     if (isPermanent) {
       // PERMANENT PURGE: Completely remove profile and notifications from database
       await Notification.deleteMany({ $or: [{ recipientId: id }, { senderId: id }] });
-      await Profile.findByIdAndDelete(id);
+      const deletedProfile = await Profile.findByIdAndDelete(id);
+
+      // Also purge from Supabase PostgreSQL
+      try {
+        const { query } = await import("../config/postgres.js");
+        if (deletedProfile?.email) {
+          await query(`DELETE FROM profiles WHERE email = $1`, [deletedProfile.email]);
+        }
+      } catch (pgErr) {
+        console.warn("[Postgres Admin Delete Notice]:", pgErr.message);
+      }
 
       return res.status(200).json({
         success: true,
