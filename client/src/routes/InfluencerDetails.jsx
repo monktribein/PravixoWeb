@@ -882,12 +882,25 @@ export default function InfluencerDetails() {
         const profile = await fetchProfileById(profileId);
         if (profile && isMounted) {
           let portfolio = [];
+          let livePricingTiers = profile.pricingTiers || [];
+
           try {
-            const portRes = await fetchPortfolio(profile._id || profileId);
-            const portData = Array.isArray(portRes) ? portRes : portRes?.data || [];
-            portfolio = Array.isArray(portData) ? portData : [];
+            const [portRes, pricingRes] = await Promise.allSettled([
+              fetchPortfolio(profile._id || profileId),
+              api.get(`/pricing/profile/${profile._id || profileId}`),
+            ]);
+            if (portRes.status === "fulfilled") {
+              const portData = Array.isArray(portRes.value) ? portRes.value : portRes.value?.data || [];
+              portfolio = Array.isArray(portData) ? portData : [];
+            }
+            if (pricingRes.status === "fulfilled") {
+              const pData = pricingRes.value.data?.data || pricingRes.value.data || [];
+              if (Array.isArray(pData) && pData.length > 0) {
+                livePricingTiers = pData;
+              }
+            }
           } catch (e) {
-            console.error("Portfolio fetch failed:", e);
+            console.error("Portfolio/pricing fetch failed:", e);
           }
 
           const fullName = profile.fullName || "User";
@@ -926,7 +939,7 @@ export default function InfluencerDetails() {
             quoraFollowers: Number(profile.quoraFollowers || 0),
             twitterHandle: profile.twitterHandle,
             twitterFollowers: Number(profile.twitterFollowers || 0),
-            pricingTiers: profile.pricingTiers || [],
+            pricingTiers: livePricingTiers,
             verificationStatus: profile.verificationStatus,
             website: profile.website,
             companySize: profile.companySize,

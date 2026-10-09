@@ -211,6 +211,12 @@ export const getById = async (req, res) => {
       visible: true,
     }).lean();
 
+    const pricingTiers = await PricingTier.find({
+      profileId: profile._id,
+    })
+      .sort({ sortOrder: 1 })
+      .lean();
+
     const rating =
       reviews.length === 0
         ? 5.0
@@ -233,6 +239,7 @@ export const getById = async (req, res) => {
         hiredCount,
         rating,
         reviewsCount: reviews.length,
+        pricingTiers: pricingTiers || [],
       },
     });
   } catch (error) {
@@ -284,6 +291,12 @@ export const getByHandle = async (req, res) => {
       visible: true,
     }).lean();
 
+    const pricingTiers = await PricingTier.find({
+      profileId: profile._id,
+    })
+      .sort({ sortOrder: 1 })
+      .lean();
+
     const rating =
       reviews.length === 0
         ? 5.0
@@ -303,6 +316,7 @@ export const getByHandle = async (req, res) => {
         rating,
         reviewsCount: reviews.length,
         reviews,
+        pricingTiers: pricingTiers || [],
       },
     });
   } catch (error) {

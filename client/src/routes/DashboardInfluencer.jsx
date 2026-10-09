@@ -322,6 +322,7 @@ export function DashboardInfluencer() {
     /^[a-fA-F0-9]{24}$/.test(mongoProfileId);
 
   const profileKey = mongoProfileId || "none";
+  const [pricingRefreshKey, setPricingRefreshKey] = useState(0);
   const [portfolioRefreshKey, setPortfolioRefreshKey] = useState(0);
   const [socialRefreshKey, setSocialRefreshKey] = useState(0);
   const [showPushBanner, setShowPushBanner] = useState(false);
@@ -406,7 +407,7 @@ export function DashboardInfluencer() {
   // PROFILE-DEPENDENT QUERIES
   // =====================================================
   const pricingTiers = useRestQuery(
-    `pricing-${profileKey}`,
+    `pricing-${profileKey}-${pricingRefreshKey}`,
     () => apiGet(`/pricing/profile/${mongoProfileId}`),
     hasValidMongoProfileId
   );
@@ -1585,19 +1586,32 @@ const CAMPAIGNS_PER_PAGE = 6;
   const savePricing = async () => {
     if (!profile) return;
     try {
-      await upsertPricing({
+      const res = await upsertPricing({
         profileId: mongoProfileId,
         tiers: tiers.map((t, idx) => ({
           id: t.id,
           name: t.name,
-          price: t.price,
+          price: Number(t.price) || 0,
           sortOrder: idx,
         })),
       });
-      toast.success("Pricing updated");
+      const updatedTiers = res?.data || res || [];
+      if (Array.isArray(updatedTiers)) {
+        setTiers(
+          updatedTiers.map((t) => ({
+            id: t._id || t.id,
+            name: t.name,
+            price: Number(t.price) || 0,
+            sortOrder: t.sortOrder,
+          }))
+        );
+      }
+      setPricingRefreshKey((c) => c + 1);
+      if (fetchProfile) fetchProfile();
+      toast.success("Pricing updated successfully!");
     } catch (err) {
-      const e = err ;
-      toast.error(e.message);
+      const e = err;
+      toast.error(e?.response?.data?.message || e?.message || "Failed to update pricing");
     }
   };
 
