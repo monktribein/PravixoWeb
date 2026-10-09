@@ -125,6 +125,34 @@ export const registerController = async (req, res) => {
       verificationStatus: "pending",
     });
 
+    // SYNC NEW PROFILE DIRECTLY TO SUPABASE POSTGRESQL
+    try {
+      const { query } = await import("../config/postgres.js");
+      await query(
+        `
+        INSERT INTO profiles (
+          user_id, full_name, email, password, role, gender, avatar_url, verification_status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (email) DO UPDATE SET
+          full_name = EXCLUDED.full_name,
+          avatar_url = EXCLUDED.avatar_url,
+          updated_at = NOW();
+        `,
+        [
+          profile.userId || `usr_${profile._id}`,
+          profile.fullName,
+          profile.email,
+          profile.password,
+          profile.role,
+          profile.gender || "",
+          profile.avatarUrl || "",
+          profile.verificationStatus || "pending",
+        ]
+      );
+    } catch (pgErr) {
+      console.warn("[PostgreSQL Sync Notice]:", pgErr.message);
+    }
+
     // 3-MONTH PRO PACKAGE PROMOTIONAL OFFER FOR NEW USERS
     try {
       let proPackage = await SubscriptionPackage.findOne({ name: /^Pro$/i });
