@@ -2375,8 +2375,14 @@ const CAMPAIGNS_PER_PAGE = 6;
             </div>
 
             {/* Metric 4: Direct Brand Bookings & Collabs */}
-            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+            <div
+              onClick={() => setShowCampaignBreakdownDialog(true)}
+              className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center gap-3 cursor-pointer hover:bg-secondary/70 hover:border-emerald-500/40 hover:scale-[1.02] transition-all group"
+              role="button"
+              tabIndex={0}
+              title="Click to view all active & completed campaigns and collaborations"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                 <TrendingUp className="w-5 h-5" />
               </div>
               <div className="min-w-0">
@@ -2385,8 +2391,11 @@ const CAMPAIGNS_PER_PAGE = 6;
                     ? `${Number(profile?.bookings)} Deals`
                     : `${myRequests?.filter(r => r.status === "accepted")?.length || "2"} Deals`}
                 </div>
-                <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
-                  Collabs
+                <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5 flex items-center gap-1">
+                  <span>Collabs</span>
+                  <span className="text-[9px] text-emerald-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                    • View &rarr;
+                  </span>
                 </div>
               </div>
             </div>
