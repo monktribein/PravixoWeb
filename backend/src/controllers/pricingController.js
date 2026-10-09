@@ -104,32 +104,30 @@ export const upsertMany = async (req, res) => {
       });
     }
 
-    for (
-      let index = 0;
-      index < tiers.length;
-      index++
-    ) {
+    // Extract valid incoming IDs
+    const incomingIds = tiers
+      .map((t) => t?.id || t?._id)
+      .filter((id) => id && mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    // Delete any existing tiers for this profile that are NOT in the incoming array
+    await PricingTier.deleteMany({
+      profileId: mongoProfileId,
+      _id: { $nin: incomingIds },
+    });
+
+    // Update existing or create new tiers
+    for (let index = 0; index < tiers.length; index++) {
       const tier = tiers[index];
-
-      const name = String(
-        tier?.name || `Tier ${index + 1}`
-      ).trim();
-
+      const tierId = tier?.id || tier?._id;
+      const name = String(tier?.name || `Tier ${index + 1}`).trim();
       const price = Number(tier?.price) || 0;
+      const sortOrder = tier?.sortOrder !== undefined ? Number(tier.sortOrder) : index;
 
-      const sortOrder =
-        tier?.sortOrder !== undefined
-          ? Number(tier.sortOrder)
-          : index;
-
-      // UPDATE EXISTING
-      if (
-        tier?.id &&
-        mongoose.Types.ObjectId.isValid(tier.id)
-      ) {
+      if (tierId && mongoose.Types.ObjectId.isValid(tierId)) {
         await PricingTier.findOneAndUpdate(
           {
-            _id: tier.id,
+            _id: tierId,
             profileId: mongoProfileId,
           },
           {
@@ -142,10 +140,7 @@ export const upsertMany = async (req, res) => {
             runValidators: true,
           }
         );
-      }
-
-      // CREATE NEW
-      else {
+      } else {
         await PricingTier.create({
           profileId: mongoProfileId,
           name,

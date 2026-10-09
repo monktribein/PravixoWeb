@@ -1617,16 +1617,20 @@ const CAMPAIGNS_PER_PAGE = 6;
 
   const removeTier = async (idx) => {
     const t = tiers[idx];
-    if (t.id) {
+    const newTiers = tiers.filter((_, i) => i !== idx);
+    setTiers(newTiers);
+
+    if (t?.id && typeof t.id === "string" && /^[a-fA-F0-9]{24}$/.test(t.id)) {
       try {
         await removeTierMutation({ id: t.id });
+        setPricingRefreshKey((c) => c + 1);
+        if (fetchProfile) fetchProfile();
+        toast.success("Tier removed");
       } catch (err) {
-        const e = err ;
-        toast.error(e.message);
-        return;
+        // If already deleted or not found, simply continue
+        console.warn("Remove tier backend warning:", err?.message);
       }
     }
-    setTiers(tiers.filter((_, i) => i !== idx));
   };
 
   const onPortfolioUpload = async (e) => {
