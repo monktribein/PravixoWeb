@@ -7325,8 +7325,8 @@ const CAMPAIGNS_PER_PAGE = 6;
         open={showCampaignBreakdownDialog}
         onOpenChange={(open) => !open && setShowCampaignBreakdownDialog(false)}
       >
-        <DialogContent className="max-w-2xl rounded-3xl p-6 max-h-[85vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl rounded-3xl p-6 max-h-[85vh] h-full flex flex-col overscroll-contain">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="font-display text-lg font-bold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" /> Campaign Escrow & Earnings Breakdown
             </DialogTitle>
@@ -7335,7 +7335,7 @@ const CAMPAIGNS_PER_PAGE = 6;
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-1 space-y-4 py-2 custom-scrollbar text-xs">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4 py-2 custom-scrollbar text-xs overscroll-contain">
             {/* Summary Highlights */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-secondary/20 p-3.5 rounded-2xl border border-border/60">
               <div>
