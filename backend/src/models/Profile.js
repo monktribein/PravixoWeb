@@ -400,6 +400,92 @@ profileSchema.index({
   category: "text",
 });
 
+// =========================================================================
+// AUTOMATIC FULL SUPABASE POSTGRESQL SYNC HOOK
+// Whenever any profile is created/saved in MongoDB, immediately sync to PostgreSQL
+// =========================================================================
+profileSchema.post("save", async function (doc) {
+  try {
+    const { query } = await import("../config/postgres.js");
+    await query(
+      `
+      INSERT INTO profiles (
+        user_id, full_name, email, password, role, gender, handle,
+        category, phone, location, bio, starting_price, is_barter_allowed,
+        avatar_url, cover_url, profile_views, clicks, bookings,
+        instagram_handle, instagram_followers, facebook_handle, facebook_followers,
+        linkedin_handle, linkedin_followers, youtube_handle, youtube_followers,
+        quora_handle, quora_followers, twitter_handle, twitter_followers,
+        custom_social_feeds, custom_pricing_packages, social_links,
+        verification_status, kyc_documents, is_active
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18,
+        $19, $20, $21, $22,
+        $23, $24, $25, $26,
+        $27, $28, $29, $30,
+        $31, $32, $33,
+        $34, $35, $36
+      )
+      ON CONFLICT (email) DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        handle = EXCLUDED.handle,
+        role = EXCLUDED.role,
+        avatar_url = EXCLUDED.avatar_url,
+        starting_price = EXCLUDED.starting_price,
+        instagram_handle = EXCLUDED.instagram_handle,
+        instagram_followers = EXCLUDED.instagram_followers,
+        custom_social_feeds = EXCLUDED.custom_social_feeds,
+        custom_pricing_packages = EXCLUDED.custom_pricing_packages,
+        social_links = EXCLUDED.social_links,
+        updated_at = NOW();
+      `,
+      [
+        doc.userId || `usr_${doc._id}`,
+        doc.fullName || "User",
+        doc.email || `user_${doc._id}@pravixo.com`,
+        doc.password || "hashed_pass_placeholder",
+        doc.role || "creator",
+        doc.gender || "",
+        doc.handle || "",
+        doc.category || "",
+        doc.phone || "",
+        doc.location || "",
+        doc.bio || "",
+        doc.startingPrice || 0,
+        !!doc.isBarterAllowed,
+        doc.avatarUrl || doc.avatar || "",
+        doc.coverUrl || "",
+        doc.profileViews || 0,
+        doc.clicks || 0,
+        doc.bookings || 0,
+        doc.instagramHandle || "",
+        doc.instagramFollowers || 0,
+        doc.facebookHandle || "",
+        doc.facebookFollowers || 0,
+        doc.linkedinHandle || "",
+        doc.linkedinFollowers || 0,
+        doc.youtubeHandle || "",
+        doc.youtubeFollowers || 0,
+        doc.quoraHandle || "",
+        doc.quoraFollowers || 0,
+        doc.twitterHandle || "",
+        doc.twitterFollowers || 0,
+        JSON.stringify(doc.customSocialFeeds || []),
+        JSON.stringify(doc.customPricingPackages || []),
+        JSON.stringify(doc.socialLinks || {}),
+        doc.verificationStatus || "unverified",
+        JSON.stringify(doc.kycDocuments || []),
+        doc.isActive !== false,
+      ]
+    );
+    console.log(`[Supabase Auto-Sync] Profile ${doc.email} synchronized to PostgreSQL.`);
+  } catch (syncErr) {
+    console.warn(`[Supabase Auto-Sync Error for ${doc.email}]:`, syncErr.message);
+  }
+});
+
 const Profile = mongoose.model("Profile", profileSchema);
 
 export default Profile;
