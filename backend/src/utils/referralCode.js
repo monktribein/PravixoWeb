@@ -1,11 +1,11 @@
 import crypto from "crypto";
-import Profile from "../models/Profile.js";
+import { query } from "../config/postgres.js";
 
 /**
  * Generate a random alphanumeric code prefixed with PVX (e.g. PVX9A2F1)
  */
 export const generateCode = (length = 6) => {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // excludes ambiguous chars like 0, O, 1, I
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "PVX";
   const bytes = crypto.randomBytes(length);
   for (let i = 0; i < length; i++) {
@@ -24,15 +24,17 @@ export const getUniqueReferralCode = async () => {
 
   while (!unique && attempts < 10) {
     code = generateCode(6);
-    const existing = await Profile.findOne({ referralCode: code });
-    if (!existing) {
+    const result = await query(
+      "SELECT id FROM profiles WHERE referral_code = $1 LIMIT 1",
+      [code]
+    );
+    if (result.rows.length === 0) {
       unique = true;
     }
     attempts++;
   }
 
   if (!unique) {
-    // Fallback with timestamp slice
     code = `PVX${Date.now().toString(36).toUpperCase().slice(-5)}`;
   }
 
@@ -40,12 +42,11 @@ export const getUniqueReferralCode = async () => {
 };
 
 /**
- * Generate a guaranteed unique referral code matching format:
- * 2-letter prefix (BR for brand, CR for creator) + "-" + 5 random alphanumeric chars (e.g. BR-K9X2Q, CR-7M4P9)
+ * Generate a unique typed referral code: CR-XXXXX or BR-XXXXX
  */
 export const generateTypedReferralCode = async (role = "creator") => {
   const prefix = role === "brand" ? "BR" : "CR";
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // alphanumeric without ambiguous chars
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let unique = false;
   let code = "";
   let attempts = 0;
@@ -58,10 +59,11 @@ export const generateTypedReferralCode = async (role = "creator") => {
     }
     code = `${prefix}-${randomPart}`;
 
-    const existing = await Profile.findOne({
-      $or: [{ referral_code: code }, { referralCode: code }],
-    });
-    if (!existing) {
+    const result = await query(
+      "SELECT id FROM profiles WHERE referral_code = $1 LIMIT 1",
+      [code]
+    );
+    if (result.rows.length === 0) {
       unique = true;
     }
     attempts++;

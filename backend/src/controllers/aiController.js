@@ -1,6 +1,5 @@
-import Profile from "../models/Profile.js";
-import Campaign from "../models/Campaign.js";
-import Review from "../models/Review.js";
+import { query } from "../config/postgres.js";
+import { formatProfile, formatCampaign } from "../utils/formatters.js";
 
 // =========================================================================
 // 1. AI PITCH GENERATOR
@@ -10,19 +9,19 @@ export const generatePitch = async (req, res) => {
     const {
       brandName,
       brandNiche,
-      brandBudget,
       creatorName,
       creatorCategory,
       creatorFollowers,
-      dealType = "PAID", // "PAID" | "BARTER" | "HYBRID"
-      tone = "professional", // "professional" | "high_energy" | "creative" | "barter_focus"
+      tone = "professional",
       customPoints = "",
     } = req.body;
 
     const creatorDisplayName = creatorName || "Creator";
     const brandDisplayName = brandName || "Brand Team";
     const niche = creatorCategory || brandNiche || "Content Creation";
-    const followersCount = creatorFollowers ? `${Number(creatorFollowers).toLocaleString()} engaged followers` : "a highly targeted community";
+    const followersCount = creatorFollowers
+      ? `${Number(creatorFollowers).toLocaleString()} engaged followers`
+      : "a highly targeted community";
 
     const pitchesByTone = {
       professional: [
@@ -81,37 +80,41 @@ export const getSmartMatches = async (req, res) => {
     let targetLocation = location || "";
     let requireBarter = isBarter === "true" || isBarter === true;
 
-    // If campaignId is provided, pull exact campaign criteria
+    // Pull campaign criteria if campaignId provided
     if (campaignId) {
-      const campaign = await Campaign.findById(campaignId).lean();
-      if (campaign) {
-        targetCategory = targetCategory || campaign.category || campaign.niche || "";
-        targetBudget = targetBudget || Number(campaign.maxBudget || campaign.budget || 0);
-        targetMinFollowers = targetMinFollowers || Number(campaign.minFollowers || 0);
+      const campRes = await query(`SELECT * FROM campaigns WHERE id::text = $1;`, [campaignId]);
+      if (campRes.rows.length > 0) {
+        const campaign = campRes.rows[0];
+        targetCategory = targetCategory || campaign.category || "";
+        targetBudget = targetBudget || Number(campaign.max_budget_per_creator || campaign.total_budget || 0);
+        targetMinFollowers = targetMinFollowers || Number(campaign.min_followers || 0);
         targetLocation = targetLocation || campaign.location || "";
-        if (campaign.isBarterAllowed) requireBarter = true;
+        if (campaign.is_barter_allowed) requireBarter = true;
       }
     }
 
     // Fetch live active creators
-    const creators = await Profile.find({
-      role: "creator",
-      isSuspended: { $ne: true },
-      isDeleted: { $ne: true },
-      email: { $not: /@pravixo\.test|@test\.com/i },
-    }).lean();
+    const { rows: creators } = await query(
+      `
+      SELECT * FROM profiles
+      WHERE role = 'creator'
+        AND is_suspended = false
+        AND is_deleted = false
+        AND email NOT ILIKE '%@pravixo.test'
+        AND email NOT ILIKE '%@test.com';
+      `
+    );
 
-    // Filter out dummy/test profiles
     const validCreators = creators.filter(
       (p) =>
         !/task20|impostor|suspended|test brand|dummy|alice referrer|bob creator|charlie creator/i.test(
-          p.fullName || ""
+          p.full_name || ""
         )
     );
 
-    // Calculate AI Match Score for each creator
-    const scoredCreators = validCreators.map((creator) => {
-      let score = 50; // base score
+    const scoredCreators = validCreators.map((rawCreator) => {
+      const creator = formatProfile(rawCreator);
+      let score = 50;
       const matchReasons = [];
 
       const totalFollowers =
@@ -126,7 +129,6 @@ export const getSmartMatches = async (req, res) => {
       const creatorLoc = (creator.location || "").toLowerCase();
       const creatorPrice = Number(creator.startingPrice || 0);
 
-      // 1. Category / Niche Alignment (up to +30 pts)
       if (targetCategory && targetCategory !== "All") {
         const targetCatLower = targetCategory.toLowerCase();
         if (creatorCat.includes(targetCatLower) || targetCatLower.includes(creatorCat)) {
@@ -139,7 +141,6 @@ export const getSmartMatches = async (req, res) => {
         score += 15;
       }
 
-      // 2. Budget & Barter Compatibility (up to +20 pts)
       if (requireBarter && creator.isBarterAllowed) {
         score += 20;
         matchReasons.push("Barter Friendly Partner 🤝");
@@ -156,7 +157,6 @@ export const getSmartMatches = async (req, res) => {
         score += 10;
       }
 
-      // 3. Followers / Reach (up to +15 pts)
       if (targetMinFollowers > 0) {
         if (totalFollowers >= targetMinFollowers) {
           score += 15;
@@ -169,7 +169,6 @@ export const getSmartMatches = async (req, res) => {
         matchReasons.push("Established Reach");
       }
 
-      // 4. Location Match (up to +10 pts)
       if (targetLocation && targetLocation !== "All") {
         if (creatorLoc.includes(targetLocation.toLowerCase())) {
           score += 10;
@@ -177,13 +176,11 @@ export const getSmartMatches = async (req, res) => {
         }
       }
 
-      // 5. Verification status boost (+5 pts)
       if (creator.verificationStatus === "verified") {
         score += 5;
         matchReasons.push("Verified Creator ⭐");
       }
 
-      // Normalize score between 60% and 99%
       const finalScore = Math.min(99, Math.max(65, Math.round(score)));
 
       return {
@@ -194,7 +191,6 @@ export const getSmartMatches = async (req, res) => {
       };
     });
 
-    // Sort by highest match score first
     scoredCreators.sort((a, b) => b.matchScore - a.matchScore);
 
     return res.status(200).json({

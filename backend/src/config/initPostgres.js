@@ -545,7 +545,403 @@ export const initPostgresTables = async () => {
     );
   `);
 
+  // 25. Portfolios Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS portfolios (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      image_url TEXT NOT NULL,
+      cloudinary_public_id TEXT DEFAULT '',
+      media_type VARCHAR(50) DEFAULT 'image',
+      type VARCHAR(50) DEFAULT 'post',
+      caption TEXT DEFAULT '',
+      brand_tag VARCHAR(255) DEFAULT '',
+      likes_count INT DEFAULT 0,
+      views_count INT DEFAULT 0,
+      comments_count INT DEFAULT 0,
+      shares_count INT DEFAULT 0,
+      aspect_ratio VARCHAR(20) DEFAULT '1:1',
+      sort_order INT DEFAULT 0,
+      liked_by_users JSONB DEFAULT '[]'::jsonb,
+      comments JSONB DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 26. Portfolio Images Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS portfolio_images (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      image_storage_id TEXT NOT NULL,
+      image_url TEXT DEFAULT '',
+      sort_order INT DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 27. Push Subscriptions Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL,
+      keys JSONB NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, endpoint)
+    );
+  `);
+
+  // 28. Referrals Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS referrals (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      referrer_creator_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      referred_creator_id UUID UNIQUE REFERENCES profiles(id) ON DELETE CASCADE,
+      referral_code VARCHAR(255) NOT NULL,
+      status VARCHAR(50) DEFAULT 'registered',
+      qualification_condition VARCHAR(100) DEFAULT 'profile_verified',
+      qualified_at TIMESTAMPTZ,
+      reward_amount NUMERIC DEFAULT 500,
+      currency VARCHAR(10) DEFAULT 'INR',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 29. Referral Settings Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS referral_settings (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      is_enabled BOOLEAN DEFAULT TRUE,
+      reward_amount NUMERIC DEFAULT 500,
+      currency VARCHAR(10) DEFAULT 'INR',
+      qualification_trigger VARCHAR(100) DEFAULT 'profile_verified',
+      max_referrals_per_user INT DEFAULT 0,
+      campaign_expiry_date TIMESTAMPTZ,
+      referral_type VARCHAR(50),
+      commission_percent NUMERIC DEFAULT 5.0,
+      commission_source VARCHAR(50) DEFAULT 'creator_share',
+      terms JSONB DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 30. Referral Rewards Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS referral_rewards (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      referral_id UUID REFERENCES referrals(id) ON DELETE CASCADE,
+      recipient_profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      amount NUMERIC DEFAULT 0,
+      currency VARCHAR(10) DEFAULT 'INR',
+      status VARCHAR(50) DEFAULT 'pending',
+      credited_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 31. Payment Audit Logs Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS payment_audit_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      payment_id UUID,
+      action VARCHAR(255) NOT NULL,
+      details JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 32. Webhook Logs Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS webhook_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_type VARCHAR(255) NOT NULL,
+      payload JSONB DEFAULT '{}'::jsonb,
+      headers JSONB DEFAULT '{}'::jsonb,
+      status VARCHAR(50) DEFAULT 'received',
+      error_message TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 33. Campaign Tasks Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS campaign_tasks (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
+      creator_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      brand_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      connection_id UUID REFERENCES connections(id) ON DELETE CASCADE,
+      conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+      title VARCHAR(255) NOT NULL,
+      description TEXT NOT NULL,
+      deliverables TEXT NOT NULL,
+      priority VARCHAR(50) NOT NULL DEFAULT 'medium',
+      status VARCHAR(50) NOT NULL DEFAULT 'assigned',
+      due_date BIGINT NOT NULL,
+      started_at BIGINT,
+      completed_at BIGINT,
+      submission_link TEXT,
+      notes TEXT,
+      attachment_link TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 34. Contact Inquiries Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS contact_inquiries (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      subject VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      status VARCHAR(50) DEFAULT 'unread',
+      admin_notes TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 35. Follows Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS follows (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      follower_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      following_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(follower_id, following_id)
+    );
+  `);
+
+  // 36. Offers Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS offers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      creator_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      brand_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      creator_or_brand_type VARCHAR(50) NOT NULL,
+      offer_title VARCHAR(255) NOT NULL,
+      condition_text TEXT NOT NULL,
+      offer_category VARCHAR(50) DEFAULT 'discount',
+      discount_percent NUMERIC,
+      monetary_bonus NUMERIC,
+      validity_hours INT NOT NULL,
+      expires_at TIMESTAMPTZ,
+      status VARCHAR(50) DEFAULT 'pending_approval',
+      rejection_reason TEXT DEFAULT '',
+      approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+      approved_at TIMESTAMPTZ,
+      deleted_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+      deleted_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 37. Subscription Packages Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS subscription_packages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      price NUMERIC NOT NULL,
+      original_price NUMERIC DEFAULT 0,
+      billing_period VARCHAR(50) NOT NULL,
+      badge VARCHAR(100) DEFAULT '',
+      features JSONB DEFAULT '[]'::jsonb,
+      active BOOLEAN DEFAULT TRUE,
+      target_role VARCHAR(50) DEFAULT 'both',
+      sort_order INT DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 38. Subscription Offers Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS subscription_offers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      description TEXT NOT NULL,
+      discount_percentage NUMERIC,
+      discount_amount NUMERIC,
+      banner_image_url TEXT,
+      banner_storage_id TEXT,
+      expiry_date BIGINT NOT NULL,
+      button_text VARCHAR(100) NOT NULL,
+      target_users VARCHAR(50) NOT NULL,
+      package_id UUID REFERENCES subscription_packages(id) ON DELETE CASCADE,
+      active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 39. Offer Analytics Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS offer_analytics (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      offer_id UUID REFERENCES subscription_offers(id) ON DELETE CASCADE,
+      views INT DEFAULT 0,
+      clicks INT DEFAULT 0,
+      upgrades INT DEFAULT 0,
+      revenue NUMERIC DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 40. User Subscriptions Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_subscriptions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      package_id UUID REFERENCES subscription_packages(id) ON DELETE CASCADE,
+      offer_id UUID REFERENCES subscription_offers(id) ON DELETE SET NULL,
+      start_date BIGINT NOT NULL,
+      expiry_date BIGINT,
+      status VARCHAR(50) DEFAULT 'active',
+      amount_paid NUMERIC DEFAULT 0,
+      razorpay_order_id VARCHAR(255),
+      razorpay_payment_id VARCHAR(255),
+      razorpay_signature VARCHAR(255),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 41. Popup Settings Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS popup_settings (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      show_popup BOOLEAN DEFAULT FALSE,
+      popup_frequency VARCHAR(50) DEFAULT 'every_login',
+      target_users VARCHAR(50) DEFAULT 'both',
+      popup_expiry BIGINT,
+      active_offer_id UUID REFERENCES subscription_offers(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 42. Pro Tips Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS pro_tips (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title VARCHAR(255) NOT NULL,
+      content TEXT NOT NULL,
+      category VARCHAR(100) DEFAULT '',
+      image TEXT DEFAULT '',
+      icon_name VARCHAR(100) DEFAULT 'Lightbulb',
+      author VARCHAR(255) DEFAULT '',
+      is_published BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 43. Trust Reviews Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS trust_reviews (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source VARCHAR(50) NOT NULL,
+      reviewer_name VARCHAR(255) NOT NULL,
+      review_text TEXT NOT NULL,
+      rating NUMERIC NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 44. Video Reviews Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS video_reviews (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      thumbnail_url TEXT,
+      video_url TEXT,
+      reviewer_name VARCHAR(255) NOT NULL,
+      reviewer_avatar TEXT DEFAULT '',
+      reviewer_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+      target_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+      target_name VARCHAR(255) DEFAULT '',
+      target_avatar TEXT DEFAULT '',
+      campaign_name VARCHAR(255) DEFAULT '',
+      review_type VARCHAR(50) DEFAULT 'video',
+      review_text TEXT NOT NULL,
+      rating NUMERIC DEFAULT 5,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // Column upgrades for profiles table
+  await query(`
+    ALTER TABLE profiles
+      ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS aadhar_url TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS aadhar_storage_id TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS pan_url TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS pan_storage_id TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS gst_number VARCHAR(255) DEFAULT '',
+      ADD COLUMN IF NOT EXISTS gst_certificate_url TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS gst_certificate_storage_id TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS media_kit_bio TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS media_kit_tagline TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS audience_highlights JSONB DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS past_brands_worked_with JSONB DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS pref_niches TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS pref_budget TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS pref_reach TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS pref_regions TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS website TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS company_size VARCHAR(100) DEFAULT '',
+      ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS unsubscribe_token VARCHAR(255) DEFAULT '',
+      ADD COLUMN IF NOT EXISTS referral_code VARCHAR(255) DEFAULT '',
+      ADD COLUMN IF NOT EXISTS referral_count INT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS referred_by_user_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
+  `);
+
+  // Column upgrades for referral_rewards table
+  await query(`
+    ALTER TABLE referral_rewards
+      ADD COLUMN IF NOT EXISTS referrer_creator_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS referred_creator_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS reward_amount NUMERIC DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS wallet_transaction_id UUID;
+  `);
+
+  // Column upgrades for social_connections table
+  await query(`
+    ALTER TABLE social_connections
+      ADD COLUMN IF NOT EXISTS failure_count INT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS account_health VARCHAR(50) DEFAULT 'healthy',
+      ADD COLUMN IF NOT EXISTS last_error TEXT,
+      ADD COLUMN IF NOT EXISTS subscribers BIGINT DEFAULT 0;
+  `);
+
+  // Column upgrades for referral_settings table
+  await query(`
+    ALTER TABLE referral_settings
+      ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS reward_amount NUMERIC DEFAULT 500,
+      ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'INR',
+      ADD COLUMN IF NOT EXISTS qualification_trigger VARCHAR(100) DEFAULT 'profile_verified',
+      ADD COLUMN IF NOT EXISTS max_referrals_per_user INT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS campaign_expiry_date TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS terms JSONB DEFAULT '[]'::jsonb;
+  `);
+
   console.log("✅ All Full PostgreSQL tables initialized successfully in Supabase!");
 };
 
 export default initPostgresTables;
+

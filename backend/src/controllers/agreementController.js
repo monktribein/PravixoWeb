@@ -1,17 +1,21 @@
-import mongoose from "mongoose";
-import Agreement from "../models/Agreement.js";
-import Connection from "../models/Connection.js";
-import Campaign from "../models/Campaign.js";
-import Profile from "../models/Profile.js";
-import Notification from "../models/Notification.js";
-import Conversation from "../models/Conversation.js";
-import Message from "../models/Message.js";
+import { query } from "../config/postgres.js";
+import {
+  formatAgreement,
+  formatConnection,
+  formatProfile,
+  formatCampaign,
+  formatMessage,
+} from "../utils/formatters.js";
 import { buildAgreementPdfBuffer, uploadAgreementPdf } from "../services/agreementPdfService.js";
 
-/**
- * Standard legal and operational terms for Pravixo Platform Collaborations
- */
-const generateAgreementTerms = (brandName, creatorName, campaignTitle, creatorAmount, pravixoFee, brandTotal) => [
+const generateAgreementTerms = (
+  brandName,
+  creatorName,
+  campaignTitle,
+  creatorAmount,
+  pravixoFee,
+  brandTotal
+) => [
   {
     sectionNumber: 1,
     title: "1. Parties to the Agreement",
@@ -30,17 +34,27 @@ const generateAgreementTerms = (brandName, creatorName, campaignTitle, creatorAm
   {
     sectionNumber: 4,
     title: "4. Creator Compensation",
-    content: `Upon satisfactory completion and Brand approval of all required deliverables, Creator is entitled to receive full agreed net compensation of ₹${Number(creatorAmount).toLocaleString("en-IN")} (80% net payout after 20% Pravixo platform service fee deduction from total campaign budget).`,
+    content: `Upon satisfactory completion and Brand approval of all required deliverables, Creator is entitled to receive full agreed net compensation of ₹${Number(
+      creatorAmount
+    ).toLocaleString(
+      "en-IN"
+    )} (80% net payout after 20% Pravixo platform service fee deduction from total campaign budget).`,
   },
   {
     sectionNumber: 5,
     title: "5. Pravixo Platform Service Fee",
-    content: `Pravixo charges a 20% platform administration and escrow guarantee service fee of ₹${Number(pravixoFee).toLocaleString("en-IN")}, deducted from the total campaign budget of ₹${Number(brandTotal).toLocaleString("en-IN")}.`,
+    content: `Pravixo charges a 20% platform administration and escrow guarantee service fee of ₹${Number(
+      pravixoFee
+    ).toLocaleString("en-IN")}, deducted from the total campaign budget of ₹${Number(
+      brandTotal
+    ).toLocaleString("en-IN")}.`,
   },
   {
     sectionNumber: 6,
     title: "6. Total Brand Payment & Escrow Security",
-    content: `The Brand shall deposit total funding of ₹${Number(brandTotal).toLocaleString("en-IN")} into Pravixo Escrow prior to creator work commencement. Funds remain secured until completion and review criteria are fulfilled.`,
+    content: `The Brand shall deposit total funding of ₹${Number(brandTotal).toLocaleString(
+      "en-IN"
+    )} into Pravixo Escrow prior to creator work commencement. Funds remain secured until completion and review criteria are fulfilled.`,
   },
   {
     sectionNumber: 7,
@@ -74,44 +88,57 @@ const generateAgreementTerms = (brandName, creatorName, campaignTitle, creatorAm
   },
 ];
 
-/**
- * Generate a unique authoritative Agreement Reference ID
- * Format: PRV-AGR-YYYY-XXXXXX
- */
 const generateUniqueAgreementId = async () => {
   const year = new Date().getFullYear();
-  const count = await Agreement.countDocuments();
+  const countRes = await query(`SELECT COUNT(*)::int as count FROM agreements`);
+  const count = countRes.rows[0]?.count || 0;
   const sequence = String(count + 1).padStart(6, "0");
   let candidate = `PRV-AGR-${year}-${sequence}`;
 
-  // Ensure uniqueness
-  let exists = await Agreement.findOne({ agreementId: candidate });
+  let exists = await query(`SELECT id FROM agreements WHERE agreement_id = $1 LIMIT 1`, [candidate]);
   let counter = 1;
-  while (exists) {
+  while (exists.rows.length > 0) {
     candidate = `PRV-AGR-${year}-${String(count + 1 + counter).padStart(6, "0")}`;
-    exists = await Agreement.findOne({ agreementId: candidate });
+    exists = await query(`SELECT id FROM agreements WHERE agreement_id = $1 LIMIT 1`, [candidate]);
     counter++;
   }
   return candidate;
 };
 
-/**
- * 1. Generate or Retrieve Agreement for a Collaboration
- * POST /api/agreements/collaboration/:connectionId/generate
- */
+// Helper: Find Profile
+const findProfile = async (idOrUserId) => {
+  if (!idOrUserId) return null;
+  const res = await query(
+    `SELECT * FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+    [String(idOrUserId)]
+  );
+  return res.rows[0] ? formatProfile(res.rows[0]) : null;
+};
+
+// Helper: Find Connection
+const findConnection = async (id) => {
+  if (!id) return null;
+  const res = await query(`SELECT * FROM connections WHERE id::text = $1 LIMIT 1`, [String(id)]);
+  return res.rows[0] ? formatConnection(res.rows[0]) : null;
+};
+
+// Helper: Find Agreement
+const findAgreement = async (idOrAgreementId) => {
+  if (!idOrAgreementId) return null;
+  const res = await query(
+    `SELECT * FROM agreements WHERE id::text = $1 OR agreement_id = $1 LIMIT 1`,
+    [String(idOrAgreementId)]
+  );
+  return res.rows[0] ? formatAgreement(res.rows[0]) : null;
+};
+
+// 1. Generate or Retrieve Agreement for a Collaboration
 export const generateAgreement = async (req, res) => {
   try {
     const { connectionId } = req.params;
     const { forceRegenerate } = req.body || {};
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid collaboration connection ID.",
-      });
-    }
-
-    const connection = await Connection.findById(connectionId);
+    const connection = await findConnection(connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -119,10 +146,10 @@ export const generateAgreement = async (req, res) => {
       });
     }
 
-    // Authorization check: Must be Brand, Creator, or Admin
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(connection.brandId) === String(req.user._id);
-      const isCreator = String(connection.creatorId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isBrand = String(connection.brandId) === userProfileId;
+      const isCreator = String(connection.creatorId) === userProfileId;
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -131,7 +158,6 @@ export const generateAgreement = async (req, res) => {
       }
     }
 
-    // Validate collaboration state
     if (connection.status !== "accepted") {
       return res.status(400).json({
         success: false,
@@ -139,29 +165,24 @@ export const generateAgreement = async (req, res) => {
       });
     }
 
-    // Fetch Brand and Creator profiles
     const [brandProfile, creatorProfile] = await Promise.all([
-      Profile.findById(connection.brandId),
-      Profile.findById(connection.creatorId),
+      findProfile(connection.brandId),
+      findProfile(connection.creatorId),
     ]);
 
-    if (!brandProfile) {
+    if (!brandProfile || !creatorProfile) {
       return res.status(404).json({
         success: false,
-        message: "Brand profile not found.",
-      });
-    }
-    if (!creatorProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Creator profile not found.",
+        message: "Brand or Creator profile not found.",
       });
     }
 
-    // Fetch Campaign
     let campaign = null;
     if (connection.campaignId) {
-      campaign = await Campaign.findById(connection.campaignId);
+      const campRes = await query(`SELECT * FROM campaigns WHERE id = $1 LIMIT 1`, [
+        connection.campaignId,
+      ]);
+      campaign = campRes.rows[0] ? formatCampaign(campRes.rows[0]) : null;
     }
 
     if (!campaign) {
@@ -171,19 +192,20 @@ export const generateAgreement = async (req, res) => {
       });
     }
 
-    // Financial calculations & validation
-    const brandTotal = Number(connection.brandTotal) || (Number(connection.creatorAmount) ? Math.round(Number(connection.creatorAmount) / 0.8) : 0);
+    const brandTotal =
+      Number(connection.brandTotal) ||
+      (Number(connection.creatorAmount) ? Math.round(Number(connection.creatorAmount) / 0.8) : 0);
     if (brandTotal <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Cannot generate agreement: Collaboration budget amount has not been agreed or is ₹0.",
+        message:
+          "Cannot generate agreement: Collaboration budget amount has not been agreed or is ₹0.",
       });
     }
 
-    const pravixoFee = Number(connection.pravixoFee) || Math.round(brandTotal * 0.20);
-    const creatorAmount = Number(connection.creatorAmount) || (brandTotal - pravixoFee);
+    const pravixoFee = Number(connection.pravixoFee) || Math.round(brandTotal * 0.2);
+    const creatorAmount = Number(connection.creatorAmount) || brandTotal - pravixoFee;
 
-    // Deliverables snapshot preparation
     let deliverablesSnapshot = [];
     if (connection.deliverablesTracking && connection.deliverablesTracking.length > 0) {
       deliverablesSnapshot = connection.deliverablesTracking
@@ -209,12 +231,13 @@ export const generateAgreement = async (req, res) => {
       });
     }
 
-    // Check if an existing agreement already exists for this collaboration
-    const existingAgreements = await Agreement.find({ collaborationId: connection._id }).sort({ version: -1 });
-    const latestAgreement = existingAgreements[0] || null;
+    const existingRes = await query(
+      `SELECT * FROM agreements WHERE collaboration_id = $1 ORDER BY version DESC LIMIT 1`,
+      [connection.id]
+    );
+    const latestAgreement = existingRes.rows[0] ? formatAgreement(existingRes.rows[0]) : null;
 
     if (latestAgreement && !forceRegenerate) {
-      // Return existing generated agreement snapshot
       return res.status(200).json({
         success: true,
         message: "Existing agreement retrieved successfully.",
@@ -223,13 +246,11 @@ export const generateAgreement = async (req, res) => {
       });
     }
 
-    // Determine version number
     const nextVersion = latestAgreement ? latestAgreement.version + 1 : 1;
     const agreementId = await generateUniqueAgreementId();
 
-    // Prepare Brand Snapshot
     const brandSnapshot = {
-      brandId: String(brandProfile._id),
+      brandId: String(brandProfile.id),
       fullName: brandProfile.fullName || "Brand",
       handle: brandProfile.handle || "",
       email: brandProfile.email || "",
@@ -241,9 +262,8 @@ export const generateAgreement = async (req, res) => {
       avatarUrl: brandProfile.avatarUrl || "",
     };
 
-    // Prepare Creator Snapshot
     const creatorSnapshot = {
-      creatorId: String(creatorProfile._id),
+      creatorId: String(creatorProfile.id),
       fullName: creatorProfile.fullName || "Creator",
       handle: creatorProfile.handle || "",
       email: creatorProfile.email || "",
@@ -255,9 +275,8 @@ export const generateAgreement = async (req, res) => {
       avatarUrl: creatorProfile.avatarUrl || "",
     };
 
-    // Prepare Campaign Snapshot
     const campaignSnapshot = {
-      campaignId: String(campaign._id),
+      campaignId: String(campaign.id),
       title: campaign.title || "Campaign",
       description: campaign.description || "",
       category: campaign.category || "",
@@ -267,7 +286,6 @@ export const generateAgreement = async (req, res) => {
       totalBudget: campaign.totalBudget || 0,
     };
 
-    // Prepare Financials Snapshot
     const financialsSnapshot = {
       creatorAmount,
       pravixoFee,
@@ -275,7 +293,6 @@ export const generateAgreement = async (req, res) => {
       currency: "INR",
     };
 
-    // Generate Standard Terms
     const terms = generateAgreementTerms(
       brandSnapshot.fullName,
       creatorSnapshot.fullName,
@@ -285,24 +302,32 @@ export const generateAgreement = async (req, res) => {
       brandTotal
     );
 
-    const agreement = await Agreement.create({
-      agreementId,
-      collaborationId: connection._id,
-      campaignId: campaign._id,
-      brandId: brandProfile._id,
-      creatorId: creatorProfile._id,
-      version: nextVersion,
-      status: "GENERATED",
-      brandSnapshot,
-      creatorSnapshot,
-      campaignSnapshot,
-      deliverablesSnapshot,
-      financialsSnapshot,
-      terms,
-      generatedAt: Date.now(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+    const now = Date.now();
+    const insRes = await query(
+      `INSERT INTO agreements (
+        agreement_id, collaboration_id, campaign_id, brand_id, creator_id,
+        version, status, brand_snapshot, creator_snapshot, campaign_snapshot,
+        deliverables_snapshot, financials_snapshot, terms, generated_at, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'GENERATED', $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13, NOW(), NOW())
+      RETURNING *`,
+      [
+        agreementId,
+        connection.id,
+        campaign.id,
+        brandProfile.id,
+        creatorProfile.id,
+        nextVersion,
+        JSON.stringify(brandSnapshot),
+        JSON.stringify(creatorSnapshot),
+        JSON.stringify(campaignSnapshot),
+        JSON.stringify(deliverablesSnapshot),
+        JSON.stringify(financialsSnapshot),
+        JSON.stringify(terms),
+        now,
+      ]
+    );
+
+    const agreement = formatAgreement(insRes.rows[0]);
 
     res.status(201).json({
       success: true,
@@ -320,22 +345,12 @@ export const generateAgreement = async (req, res) => {
   }
 };
 
-/**
- * 2. Get latest agreement for a collaboration
- * GET /api/agreements/collaboration/:connectionId
- */
+// 2. Get latest agreement for a collaboration
 export const getAgreementByCollaboration = async (req, res) => {
   try {
     const { connectionId } = req.params;
+    const connection = await findConnection(connectionId);
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid collaboration connection ID.",
-      });
-    }
-
-    const connection = await Connection.findById(connectionId).lean();
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -343,10 +358,10 @@ export const getAgreementByCollaboration = async (req, res) => {
       });
     }
 
-    // Security check: Brand, Creator, or Admin
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(connection.brandId) === String(req.user._id);
-      const isCreator = String(connection.creatorId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isBrand = String(connection.brandId) === userProfileId;
+      const isCreator = String(connection.creatorId) === userProfileId;
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -355,9 +370,12 @@ export const getAgreementByCollaboration = async (req, res) => {
       }
     }
 
-    const agreement = await Agreement.findOne({ collaborationId: connection._id }).sort({ version: -1 });
+    const agrRes = await query(
+      `SELECT * FROM agreements WHERE collaboration_id = $1 ORDER BY version DESC LIMIT 1`,
+      [connection.id]
+    );
 
-    if (!agreement) {
+    if (agrRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "No agreement found for this collaboration.",
@@ -366,7 +384,7 @@ export const getAgreementByCollaboration = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: agreement,
+      data: formatAgreement(agrRes.rows[0]),
     });
   } catch (error) {
     console.error("Get agreement by collaboration error:", error);
@@ -378,22 +396,12 @@ export const getAgreementByCollaboration = async (req, res) => {
   }
 };
 
-/**
- * 3. Get all agreement versions for a collaboration
- * GET /api/agreements/collaboration/:connectionId/versions
- */
+// 3. Get all agreement versions for a collaboration
 export const getAgreementVersions = async (req, res) => {
   try {
     const { connectionId } = req.params;
+    const connection = await findConnection(connectionId);
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid collaboration connection ID.",
-      });
-    }
-
-    const connection = await Connection.findById(connectionId).lean();
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -401,10 +409,10 @@ export const getAgreementVersions = async (req, res) => {
       });
     }
 
-    // Security check: Brand, Creator, or Admin
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(connection.brandId) === String(req.user._id);
-      const isCreator = String(connection.creatorId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isBrand = String(connection.brandId) === userProfileId;
+      const isCreator = String(connection.creatorId) === userProfileId;
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -413,11 +421,14 @@ export const getAgreementVersions = async (req, res) => {
       }
     }
 
-    const versions = await Agreement.find({ collaborationId: connection._id }).sort({ version: -1 });
+    const versRes = await query(
+      `SELECT * FROM agreements WHERE collaboration_id = $1 ORDER BY version DESC`,
+      [connection.id]
+    );
 
     res.status(200).json({
       success: true,
-      data: versions,
+      data: versRes.rows.map(formatAgreement),
     });
   } catch (error) {
     console.error("Get agreement versions error:", error);
@@ -429,21 +440,11 @@ export const getAgreementVersions = async (req, res) => {
   }
 };
 
-/**
- * 4. Get agreement by unique Agreement ID or Mongo ID
- * GET /api/agreements/:agreementId
- */
+// 4. Get agreement by unique Agreement ID or DB ID
 export const getAgreementById = async (req, res) => {
   try {
     const { agreementId } = req.params;
-
-    let agreement = null;
-    if (mongoose.Types.ObjectId.isValid(agreementId)) {
-      agreement = await Agreement.findById(agreementId);
-    }
-    if (!agreement) {
-      agreement = await Agreement.findOne({ agreementId });
-    }
+    const agreement = await findAgreement(agreementId);
 
     if (!agreement) {
       return res.status(404).json({
@@ -452,10 +453,10 @@ export const getAgreementById = async (req, res) => {
       });
     }
 
-    // Security check
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(agreement.brandId) === String(req.user._id);
-      const isCreator = String(agreement.creatorId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isBrand = String(agreement.brandId) === userProfileId;
+      const isCreator = String(agreement.creatorId) === userProfileId;
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -478,23 +479,13 @@ export const getAgreementById = async (req, res) => {
   }
 };
 
-/**
- * 5. Sign / Accept Agreement (Brand, Creator, or Admin)
- * POST /api/agreements/:agreementId/sign
- */
+// 5. Sign / Accept Agreement
 export const signAgreement = async (req, res) => {
   try {
     const { agreementId } = req.params;
     const { signatureMethod = "DIGITAL_ACCEPTANCE" } = req.body || {};
 
-    let agreement = null;
-    if (mongoose.Types.ObjectId.isValid(agreementId)) {
-      agreement = await Agreement.findById(agreementId);
-    }
-    if (!agreement) {
-      agreement = await Agreement.findOne({ agreementId });
-    }
-
+    const agreement = await findAgreement(agreementId);
     if (!agreement) {
       return res.status(404).json({
         success: false,
@@ -502,8 +493,8 @@ export const signAgreement = async (req, res) => {
       });
     }
 
-    const userId = req.user._id;
-    const userRole = req.user.role;
+    const userId = req.user?.id || req.user?._id;
+    const userRole = req.user?.role;
     const isBrand = String(agreement.brandId) === String(userId) && userRole === "brand";
     const isCreator = String(agreement.creatorId) === String(userId) && userRole === "creator";
     const isAdmin = userRole === "admin";
@@ -521,15 +512,19 @@ export const signAgreement = async (req, res) => {
     let notificationText = "";
     let notificationType = "";
 
+    let brandSig = agreement.brandSignature || {};
+    let creatorSig = agreement.creatorSignature || {};
+    let adminSig = agreement.adminSignature || {};
+
     if (isBrand) {
-      if (agreement.brandSignature && agreement.brandSignature.signed) {
+      if (brandSig.signed) {
         return res.status(400).json({
           success: false,
           message: "You have already signed this agreement version.",
           data: agreement,
         });
       }
-      agreement.brandSignature = {
+      brandSig = {
         signed: true,
         userId,
         name: req.user.fullName || agreement.brandSnapshot?.fullName || "Brand Representative",
@@ -541,14 +536,14 @@ export const signAgreement = async (req, res) => {
       notificationText = `The Brand has signed the collaboration agreement for "${agreement.campaignSnapshot?.title}".`;
       notificationRecipients.push(agreement.creatorId);
     } else if (isCreator) {
-      if (agreement.creatorSignature && agreement.creatorSignature.signed) {
+      if (creatorSig.signed) {
         return res.status(400).json({
           success: false,
           message: "You have already signed this agreement version.",
           data: agreement,
         });
       }
-      agreement.creatorSignature = {
+      creatorSig = {
         signed: true,
         userId,
         name: req.user.fullName || agreement.creatorSnapshot?.fullName || "Creator",
@@ -560,14 +555,14 @@ export const signAgreement = async (req, res) => {
       notificationText = `The Creator has signed the collaboration agreement for "${agreement.campaignSnapshot?.title}".`;
       notificationRecipients.push(agreement.brandId);
     } else if (isAdmin) {
-      if (agreement.adminSignature && agreement.adminSignature.signed) {
+      if (adminSig.signed) {
         return res.status(400).json({
           success: false,
           message: "Admin signature is already recorded for this agreement version.",
           data: agreement,
         });
       }
-      agreement.adminSignature = {
+      adminSig = {
         signed: true,
         userId,
         name: req.user.fullName || "Pravixo Compliance Admin",
@@ -577,58 +572,68 @@ export const signAgreement = async (req, res) => {
       };
     }
 
-    // Determine overall signatureStatus
-    const brandSigned = Boolean(agreement.brandSignature?.signed);
-    const creatorSigned = Boolean(agreement.creatorSignature?.signed);
-    const adminSigned = Boolean(agreement.adminSignature?.signed);
+    let signatureStatus = "PARTIALLY_SIGNED";
+    let fullySignedAt = agreement.fullySignedAt || null;
 
-    if (brandSigned && creatorSigned && adminSigned) {
-      agreement.signatureStatus = "FULLY_SIGNED";
-      agreement.fullySignedAt = now;
+    if (brandSig.signed && creatorSig.signed && adminSig.signed) {
+      signatureStatus = "FULLY_SIGNED";
+      fullySignedAt = now;
       notificationType = "agreement_fully_signed";
       notificationText = `The collaboration agreement for "${agreement.campaignSnapshot?.title}" is now fully signed by all parties.`;
-      
-      const adminProfiles = await Profile.find({ role: "admin" }).select("_id").lean();
-      const adminIds = adminProfiles.map((a) => a._id);
-      
+
+      const adminProfiles = await query(`SELECT id FROM profiles WHERE role = 'admin'`);
+      const adminIds = adminProfiles.rows.map((a) => a.id);
       notificationRecipients = [agreement.brandId, agreement.creatorId, ...adminIds];
-    } else {
-      agreement.signatureStatus = "PARTIALLY_SIGNED";
     }
 
-    agreement.updatedAt = now;
-    await agreement.save();
+    const updRes = await query(
+      `UPDATE agreements
+       SET brand_signature = $1::jsonb,
+           creator_signature = $2::jsonb,
+           admin_signature = $3::jsonb,
+           signature_status = $4,
+           fully_signed_at = $5,
+           updated_at = NOW()
+       WHERE id = $6
+       RETURNING *`,
+      [
+        JSON.stringify(brandSig),
+        JSON.stringify(creatorSig),
+        JSON.stringify(adminSig),
+        signatureStatus,
+        fullySignedAt,
+        agreement.id,
+      ]
+    );
 
-    // Send notifications to counterparties
+    const updatedAgreement = formatAgreement(updRes.rows[0]);
+
     if (notificationRecipients.length > 0 && notificationText && notificationType) {
-      try {
-        const notifDocs = notificationRecipients
-          .filter((recipientId) => String(recipientId) !== String(userId))
-          .map((recipientId) => ({
-            recipientId,
-            senderId: userId,
-            type: notificationType,
-            text: notificationText,
-            targetUrl: "/messages",
-            metadata: { agreementId: agreement._id, version: agreement.version },
-            read: false,
-            createdAt: now,
-          }));
-        if (notifDocs.length > 0) {
-          await Notification.insertMany(notifDocs);
+      for (const recId of notificationRecipients) {
+        if (String(recId) !== String(userId)) {
+          await query(
+            `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, metadata, read, created_at, created_at_dt)
+             VALUES ($1, $2, $3, $4, '/messages', $5::jsonb, false, $6, NOW())`,
+            [
+              recId,
+              userId,
+              notificationType,
+              notificationText,
+              JSON.stringify({ agreementId: agreement.id, version: agreement.version }),
+              now,
+            ]
+          ).catch((e) => console.warn("Signature notification error:", e.message));
         }
-      } catch (notifErr) {
-        console.error("Failed to send signature notification:", notifErr);
       }
     }
 
     res.status(200).json({
       success: true,
       message:
-        agreement.signatureStatus === "FULLY_SIGNED"
+        signatureStatus === "FULLY_SIGNED"
           ? "Agreement signed successfully! The agreement is now FULLY_SIGNED."
           : "Agreement signature recorded successfully.",
-      data: agreement,
+      data: updatedAgreement,
     });
   } catch (error) {
     console.error("Sign agreement error:", error);
@@ -640,21 +645,11 @@ export const signAgreement = async (req, res) => {
   }
 };
 
-/**
- * 6. Get signatures details for an agreement
- * GET /api/agreements/:agreementId/signatures
- */
+// 6. Get signatures details
 export const getAgreementSignatures = async (req, res) => {
   try {
     const { agreementId } = req.params;
-
-    let agreement = null;
-    if (mongoose.Types.ObjectId.isValid(agreementId)) {
-      agreement = await Agreement.findById(agreementId).lean();
-    }
-    if (!agreement) {
-      agreement = await Agreement.findOne({ agreementId }).lean();
-    }
+    const agreement = await findAgreement(agreementId);
 
     if (!agreement) {
       return res.status(404).json({
@@ -663,10 +658,10 @@ export const getAgreementSignatures = async (req, res) => {
       });
     }
 
-    // Security check
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(agreement.brandId) === String(req.user._id);
-      const isCreator = String(agreement.creatorId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isBrand = String(agreement.brandId) === userProfileId;
+      const isCreator = String(agreement.creatorId) === userProfileId;
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -697,21 +692,11 @@ export const getAgreementSignatures = async (req, res) => {
   }
 };
 
-/**
- * 7. Generate or Retrieve Final Signed Agreement PDF
- * POST /api/agreements/:agreementId/generate-pdf
- */
+// 7. Generate or Retrieve Final Signed Agreement PDF
 export const generateAgreementPdf = async (req, res) => {
   try {
     const { agreementId } = req.params;
-
-    let agreement = null;
-    if (mongoose.Types.ObjectId.isValid(agreementId)) {
-      agreement = await Agreement.findById(agreementId);
-    }
-    if (!agreement) {
-      agreement = await Agreement.findOne({ agreementId });
-    }
+    const agreement = await findAgreement(agreementId);
 
     if (!agreement) {
       return res.status(404).json({
@@ -720,10 +705,10 @@ export const generateAgreementPdf = async (req, res) => {
       });
     }
 
-    // Security check: Must be Brand, Creator, or Admin
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(agreement.brandId) === String(req.user._id);
-      const isCreator = String(agreement.creatorId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isBrand = String(agreement.brandId) === userProfileId;
+      const isCreator = String(agreement.creatorId) === userProfileId;
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -732,16 +717,15 @@ export const generateAgreementPdf = async (req, res) => {
       }
     }
 
-    // Task 17 Eligibility Rule: Must be FULLY_SIGNED
     if (agreement.signatureStatus !== "FULLY_SIGNED") {
       return res.status(400).json({
         success: false,
-        message: "Cannot generate final PDF: Agreement has not been fully signed by Brand, Creator, and Admin.",
+        message:
+          "Cannot generate final PDF: Agreement has not been fully signed by Brand, Creator, and Admin.",
         signatureStatus: agreement.signatureStatus,
       });
     }
 
-    // Duplicate Generation Protection: If PDF already exists for this exact version, return existing
     if (agreement.pdfUrl && agreement.pdfVersion === agreement.version) {
       return res.status(200).json({
         success: true,
@@ -756,7 +740,6 @@ export const generateAgreementPdf = async (req, res) => {
       });
     }
 
-    // Generate PDF Buffer
     const pdfBuffer = await buildAgreementPdfBuffer(agreement);
     const deterministicFilename = `${agreement.agreementId}-v${agreement.version}`;
 
@@ -768,17 +751,18 @@ export const generateAgreementPdf = async (req, res) => {
       uploadedUrl = uploadResult.secure_url || uploadResult.url;
       uploadedPublicId = uploadResult.public_id;
     } catch (uploadError) {
-      console.warn("Cloudinary upload failed, falling back to base64 data URI:", uploadError.message);
+      console.warn("Cloudinary upload failed, falling back to base64 URI:", uploadError.message);
       uploadedUrl = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
       uploadedPublicId = deterministicFilename;
     }
 
-    // Save PDF reference on agreement
-    agreement.pdfUrl = uploadedUrl;
-    agreement.pdfPublicId = uploadedPublicId;
-    agreement.pdfGeneratedAt = Date.now();
-    agreement.pdfVersion = agreement.version;
-    await agreement.save();
+    const now = Date.now();
+    await query(
+      `UPDATE agreements
+       SET pdf_url = $1, pdf_public_id = $2, pdf_generated_at = $3, pdf_version = $4, updated_at = NOW()
+       WHERE id = $5`,
+      [uploadedUrl, uploadedPublicId, now, agreement.version, agreement.id]
+    );
 
     res.status(200).json({
       success: true,
@@ -786,8 +770,8 @@ export const generateAgreementPdf = async (req, res) => {
       data: {
         agreementId: agreement.agreementId,
         version: agreement.version,
-        pdfUrl: agreement.pdfUrl,
-        pdfGeneratedAt: agreement.pdfGeneratedAt,
+        pdfUrl: uploadedUrl,
+        pdfGeneratedAt: now,
         isExisting: false,
       },
     });
@@ -801,21 +785,11 @@ export const generateAgreementPdf = async (req, res) => {
   }
 };
 
-/**
- * 8. Get / Stream Agreement PDF
- * GET /api/agreements/:agreementId/pdf
- */
+// 8. Get / Stream Agreement PDF
 export const getAgreementPdf = async (req, res) => {
   try {
     const { agreementId } = req.params;
-
-    let agreement = null;
-    if (mongoose.Types.ObjectId.isValid(agreementId)) {
-      agreement = await Agreement.findById(agreementId);
-    }
-    if (!agreement) {
-      agreement = await Agreement.findOne({ agreementId });
-    }
+    const agreement = await findAgreement(agreementId);
 
     if (!agreement) {
       return res.status(404).json({
@@ -824,10 +798,10 @@ export const getAgreementPdf = async (req, res) => {
       });
     }
 
-    // Security check
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(agreement.brandId) === String(req.user._id);
-      const isCreator = String(agreement.creatorId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isBrand = String(agreement.brandId) === userProfileId;
+      const isCreator = String(agreement.creatorId) === userProfileId;
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -843,12 +817,10 @@ export const getAgreementPdf = async (req, res) => {
       });
     }
 
-    // If Cloudinary URL, redirect to CDN asset
     if (agreement.pdfUrl.startsWith("http")) {
       return res.redirect(agreement.pdfUrl);
     }
 
-    // Otherwise return PDF info JSON
     res.status(200).json({
       success: true,
       data: {
@@ -868,21 +840,11 @@ export const getAgreementPdf = async (req, res) => {
   }
 };
 
-/**
- * 9. Send Final Signed Agreement PDF to Collaboration Chat
- * POST /api/agreements/:agreementId/send-chat
- */
+// 9. Send Final Signed Agreement PDF to Collaboration Chat
 export const sendAgreementPdfToChat = async (req, res) => {
   try {
     const { agreementId } = req.params;
-
-    let agreement = null;
-    if (mongoose.Types.ObjectId.isValid(agreementId)) {
-      agreement = await Agreement.findById(agreementId);
-    }
-    if (!agreement) {
-      agreement = await Agreement.findOne({ agreementId });
-    }
+    const agreement = await findAgreement(agreementId);
 
     if (!agreement) {
       return res.status(404).json({
@@ -891,8 +853,7 @@ export const sendAgreementPdfToChat = async (req, res) => {
       });
     }
 
-    // Security check: Must be Brand, Creator, or Admin
-    const userId = req.user?._id;
+    const userId = req.user?.id || req.user?._id;
     const userRole = req.user?.role;
     const isBrand = String(agreement.brandId) === String(userId);
     const isCreator = String(agreement.creatorId) === String(userId);
@@ -905,7 +866,6 @@ export const sendAgreementPdfToChat = async (req, res) => {
       });
     }
 
-    // Requirement: Must be FULLY_SIGNED
     if (agreement.signatureStatus !== "FULLY_SIGNED") {
       return res.status(400).json({
         success: false,
@@ -913,7 +873,6 @@ export const sendAgreementPdfToChat = async (req, res) => {
       });
     }
 
-    // Requirement: PDF must exist
     if (!agreement.pdfUrl) {
       return res.status(400).json({
         success: false,
@@ -921,38 +880,41 @@ export const sendAgreementPdfToChat = async (req, res) => {
       });
     }
 
-    // Find Collaboration Conversation
-    const convFilter = {
-      creatorId: agreement.creatorId,
-      brandId: agreement.brandId,
-    };
-    if (agreement.campaignId) {
-      convFilter.campaignId = agreement.campaignId;
+    const convRes = await query(
+      `SELECT id FROM conversations 
+       WHERE creator_id = $1 AND brand_id = $2 
+         AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+       LIMIT 1`,
+      [agreement.creatorId, agreement.brandId, agreement.campaignId || null]
+    );
+
+    let conversationId = convRes.rows[0]?.id;
+    if (!conversationId) {
+      const newConv = await query(
+        `INSERT INTO conversations (creator_id, brand_id, campaign_id, status)
+         VALUES ($1, $2, $3, 'active')
+         RETURNING id`,
+        [agreement.creatorId, agreement.brandId, agreement.campaignId || null]
+      );
+      conversationId = newConv.rows[0].id;
     }
 
-    let conversation = await Conversation.findOne(convFilter);
-    if (!conversation) {
-      conversation = await Conversation.create({
-        creatorId: agreement.creatorId,
-        brandId: agreement.brandId,
-        campaignId: agreement.campaignId || null,
-        status: "active",
-      });
-    }
+    // Check duplicate message
+    const msgCheck = await query(
+      `SELECT * FROM messages 
+       WHERE conversation_id = $1 
+         AND message_type = 'agreement_document' 
+         AND metadata->>'agreementId' = $2 
+         AND metadata->>'version' = $3
+       LIMIT 1`,
+      [conversationId, agreement.agreementId, String(agreement.version)]
+    );
 
-    // Idempotency / Duplicate check: Check if this agreement version has already been sent to this conversation
-    const existingAgreementMessage = await Message.findOne({
-      conversationId: conversation._id,
-      messageType: "agreement_document",
-      "metadata.agreementId": agreement.agreementId,
-      "metadata.version": agreement.version,
-    });
-
-    if (existingAgreementMessage) {
+    if (msgCheck.rows.length > 0) {
       return res.status(200).json({
         success: true,
         message: "Agreement PDF was already sent to this conversation.",
-        data: existingAgreementMessage,
+        data: formatMessage(msgCheck.rows[0]),
         isExisting: true,
       });
     }
@@ -960,42 +922,48 @@ export const sendAgreementPdfToChat = async (req, res) => {
     const now = Date.now();
     const senderName = req.user?.fullName || (isAdmin ? "Pravixo Admin" : isBrand ? "Brand" : "Creator");
 
-    const message = await Message.create({
-      conversationId: conversation._id,
-      senderId: userId,
-      text: `📄 [Official Collaboration Agreement] ${agreement.title || "Pravixo Collaboration Agreement"} (${agreement.agreementId} v${agreement.version}) has been fully signed by all parties.`,
-      messageType: "agreement_document",
-      metadata: {
-        agreementId: agreement.agreementId,
-        version: agreement.version,
-        title: agreement.title,
-        pdfUrl: agreement.pdfUrl,
-        sentAt: now,
-        sentBy: senderName,
-        signatureStatus: "FULLY_SIGNED",
-        brandName: agreement.brandSnapshot?.fullName || "Brand",
-        creatorName: agreement.creatorSnapshot?.fullName || "Creator",
-        campaignTitle: agreement.campaignSnapshot?.title || "Campaign",
-      },
-      read: false,
-    });
+    const insMsg = await query(
+      `INSERT INTO messages (
+        conversation_id, sender_id, text, message_type, metadata, read, created_at, updated_at
+      ) VALUES ($1, $2, $3, 'agreement_document', $4::jsonb, false, NOW(), NOW())
+      RETURNING *`,
+      [
+        conversationId,
+        userId,
+        `📄 [Official Collaboration Agreement] Collaboration Agreement (${agreement.agreementId} v${agreement.version}) has been fully signed by all parties.`,
+        JSON.stringify({
+          agreementId: agreement.agreementId,
+          version: agreement.version,
+          pdfUrl: agreement.pdfUrl,
+          sentAt: now,
+          sentBy: senderName,
+          signatureStatus: "FULLY_SIGNED",
+          brandName: agreement.brandSnapshot?.fullName || "Brand",
+          creatorName: agreement.creatorSnapshot?.fullName || "Creator",
+          campaignTitle: agreement.campaignSnapshot?.title || "Campaign",
+        }),
+      ]
+    );
+    const message = formatMessage(insMsg.rows[0]);
 
-    // Notify the counterparties
     const recipients = [];
     if (String(agreement.brandId) !== String(userId)) recipients.push(agreement.brandId);
     if (String(agreement.creatorId) !== String(userId)) recipients.push(agreement.creatorId);
 
     for (const rId of recipients) {
-      await Notification.create({
-        recipientId: rId,
-        senderId: userId,
-        type: "agreement_shared_in_chat",
-        text: `The fully signed agreement for "${agreement.campaignSnapshot?.title || "campaign"}" has been posted in your collaboration chat.`,
-        targetUrl: "/messages",
-        metadata: { agreementId: agreement._id, messageId: message._id },
-        read: false,
-        createdAt: now,
-      }).catch((e) => console.warn("Failed to send notification for chat agreement:", e.message));
+      await query(
+        `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, metadata, read, created_at, created_at_dt)
+         VALUES ($1, $2, 'agreement_shared_in_chat', $3, '/messages', $4::jsonb, false, $5, NOW())`,
+        [
+          rId,
+          userId,
+          `The fully signed agreement for "${
+            agreement.campaignSnapshot?.title || "campaign"
+          }" has been posted in your collaboration chat.`,
+          JSON.stringify({ agreementId: agreement.id, messageId: message.id }),
+          now,
+        ]
+      ).catch((e) => console.warn("Chat notification error:", e.message));
     }
 
     return res.status(201).json({
@@ -1013,5 +981,3 @@ export const sendAgreementPdfToChat = async (req, res) => {
     });
   }
 };
-
-

@@ -1,37 +1,48 @@
-import mongoose from "mongoose";
-import Conversation from "../models/Conversation.js";
-import Message from "../models/Message.js";
-import Profile from "../models/Profile.js";
-import Campaign from "../models/Campaign.js";
-import Connection from "../models/Connection.js";
+import { query } from "../config/postgres.js";
+import {
+  formatConversation,
+  formatMessage,
+  formatProfile,
+  formatCampaign,
+} from "../utils/formatters.js";
+
+// Helper to check valid UUID
+const isUuid = (str) =>
+  typeof str === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
 
 // Start conversation
 export const startConversation = async (req, res) => {
   try {
     const { creatorId, brandId, adminId, targetUserId, initialMessage, campaignId } = req.body;
 
-    // Support both direct targetUserId and traditional creatorId/brandId
     let creator = creatorId;
     let brand = brandId;
     let admin = adminId || (req.user?.role === "admin" ? req.user._id : null);
     let convType = "brand_creator";
 
     if (targetUserId) {
-      const targetProfile = await Profile.findById(targetUserId);
-      if (!targetProfile) {
+      const targetProfRes = await query(
+        "SELECT id, role FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1",
+        [targetUserId.trim()]
+      );
+
+      if (targetProfRes.rows.length === 0) {
         return res.status(404).json({
           success: false,
           message: "Target user not found.",
         });
       }
 
+      const targetProfile = targetProfRes.rows[0];
+
       if (admin || req.user?.role === "admin") {
         admin = admin || req.user?._id;
         if (targetProfile.role === "creator") {
-          creator = targetProfile._id;
+          creator = targetProfile.id;
           convType = "admin_creator";
         } else {
-          brand = targetProfile._id;
+          brand = targetProfile.id;
           convType = "admin_brand";
         }
       }
@@ -40,9 +51,9 @@ export const startConversation = async (req, res) => {
     } else if (admin && brand) {
       convType = "admin_brand";
     } else if (req.body.support || req.body.contactTeam) {
-      const adminProf = await Profile.findOne({ role: "admin" }).select("_id").lean();
-      if (adminProf) {
-        admin = adminProf._id;
+      const adminProfRes = await query("SELECT id FROM profiles WHERE role = 'admin' LIMIT 1");
+      if (adminProfRes.rows.length > 0) {
+        admin = adminProfRes.rows[0].id;
         if (req.user?.role === "brand" || brand) {
           brand = brand || req.user?._id;
           convType = "admin_brand";
@@ -62,47 +73,57 @@ export const startConversation = async (req, res) => {
       });
     }
 
-    let query = {};
+    let existingQuery = "";
+    let existingParams = [];
+
     if (convType === "admin_creator") {
-      query = { adminId: admin, creatorId: creator, conversationType: "admin_creator" };
+      existingQuery = "SELECT * FROM conversations WHERE admin_id::text = $1 AND creator_id::text = $2 AND conversation_type = 'admin_creator' LIMIT 1";
+      existingParams = [admin, creator];
     } else if (convType === "admin_brand") {
-      query = { adminId: admin, brandId: brand, conversationType: "admin_brand" };
+      existingQuery = "SELECT * FROM conversations WHERE admin_id::text = $1 AND brand_id::text = $2 AND conversation_type = 'admin_brand' LIMIT 1";
+      existingParams = [admin, brand];
     } else {
-      query = { creatorId: creator, brandId: brand, conversationType: "brand_creator" };
-      if (campaignId) query.campaignId = campaignId;
+      if (campaignId) {
+        existingQuery = "SELECT * FROM conversations WHERE creator_id::text = $1 AND brand_id::text = $2 AND conversation_type = 'brand_creator' AND campaign_id::text = $3 LIMIT 1";
+        existingParams = [creator, brand, campaignId];
+      } else {
+        existingQuery = "SELECT * FROM conversations WHERE creator_id::text = $1 AND brand_id::text = $2 AND conversation_type = 'brand_creator' LIMIT 1";
+        existingParams = [creator, brand];
+      }
     }
 
-    let conversation = await Conversation.findOne(query);
+    const existingRes = await query(existingQuery, existingParams);
+    let conversation;
 
-    if (!conversation) {
-      conversation = await Conversation.create({
-        creatorId: creator || null,
-        brandId: brand || null,
-        adminId: admin || null,
-        conversationType: convType,
-        campaignId: campaignId || null,
-        status: "pending",
-      });
+    if (existingRes.rows.length > 0) {
+      conversation = existingRes.rows[0];
+    } else {
+      const insertRes = await query(
+        `INSERT INTO conversations (
+          creator_id, brand_id, admin_id, conversation_type, campaign_id, status
+        ) VALUES ($1, $2, $3, $4, $5, 'pending')
+        RETURNING *`,
+        [creator || null, brand || null, admin || null, convType, campaignId || null]
+      );
+      conversation = insertRes.rows[0];
     }
 
     if (initialMessage && initialMessage.trim()) {
-      await Message.create({
-        conversationId: conversation._id,
-        senderId,
-        text: initialMessage.trim(),
-        read: false,
-      });
+      await query(
+        `INSERT INTO messages (conversation_id, sender_id, text, read, message_type)
+         VALUES ($1, $2, $3, false, 'text')`,
+        [conversation.id, senderId, initialMessage.trim()]
+      );
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      data: conversation._id,
-      conversation,
+      data: conversation.id,
+      conversation: formatConversation(conversation),
     });
   } catch (error) {
     console.error("Start conversation error:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to start conversation.",
     });
@@ -121,82 +142,120 @@ export const getConversations = async (req, res) => {
       });
     }
 
-    let filter = {};
+    let sql = "";
+    let params = [];
+
     if (role === "creator") {
-      filter = { creatorId: profileId };
+      sql = "SELECT * FROM conversations WHERE creator_id::text = $1 ORDER BY updated_at DESC";
+      params = [profileId.trim()];
     } else if (role === "brand") {
-      filter = { brandId: profileId };
+      sql = "SELECT * FROM conversations WHERE brand_id::text = $1 ORDER BY updated_at DESC";
+      params = [profileId.trim()];
     } else if (role === "admin") {
-      filter = {
-        $or: [
-          { adminId: profileId },
-          { conversationType: { $in: ["admin_creator", "admin_brand"] } },
-        ],
-      };
+      sql = "SELECT * FROM conversations WHERE admin_id::text = $1 OR conversation_type IN ('admin_creator', 'admin_brand') ORDER BY updated_at DESC";
+      params = [profileId.trim()];
     }
 
-    const conversations = await Conversation.find(filter).sort({
-      createdAt: -1,
-    });
+    const convRes = await query(sql, params);
+    const conversations = convRes.rows;
 
     const results = await Promise.all(
-      conversations.map(async (conversation) => {
+      conversations.map(async (conv) => {
         let otherId = null;
-
         if (role === "creator") {
-          otherId = conversation.adminId || conversation.brandId;
+          otherId = conv.admin_id || conv.brand_id;
         } else if (role === "brand") {
-          otherId = conversation.adminId || conversation.creatorId;
+          otherId = conv.admin_id || conv.creator_id;
         } else if (role === "admin") {
-          otherId = conversation.creatorId || conversation.brandId;
+          otherId = conv.creator_id || conv.brand_id;
         }
 
         let otherProfile = null;
         if (otherId) {
-          otherProfile = await Profile.findById(otherId)
-            .select("fullName email handle avatarUrl gender role")
-            .lean();
+          const profRes = await query(
+            "SELECT id, full_name, email, handle, avatar_url, gender, role FROM profiles WHERE id::text = $1 OR user_id = $1",
+            [String(otherId)]
+          );
+          if (profRes.rows.length > 0) {
+            const p = profRes.rows[0];
+            otherProfile = {
+              _id: p.id,
+              fullName: p.full_name,
+              email: p.email,
+              handle: p.handle,
+              avatarUrl: p.avatar_url,
+              gender: p.gender,
+              role: p.role,
+            };
+          }
         }
 
-        // If other user is an admin or system admin representation
-        if (!otherProfile && conversation.adminId && (role === "creator" || role === "brand")) {
-          otherProfile = await Profile.findById(conversation.adminId)
-            .select("fullName email handle avatarUrl gender role")
-            .lean();
+        if (!otherProfile && conv.admin_id && (role === "creator" || role === "brand")) {
+          const profRes = await query(
+            "SELECT id, full_name, email, handle, avatar_url, gender, role FROM profiles WHERE id::text = $1",
+            [String(conv.admin_id)]
+          );
+          if (profRes.rows.length > 0) {
+            const p = profRes.rows[0];
+            otherProfile = {
+              _id: p.id,
+              fullName: p.full_name,
+              email: p.email,
+              handle: p.handle,
+              avatarUrl: p.avatar_url,
+              gender: p.gender,
+              role: p.role,
+            };
+          }
         }
 
-        const campaign = conversation.campaignId
-          ? await Campaign.findById(conversation.campaignId).lean()
-          : null;
+        let campaign = null;
+        if (conv.campaign_id) {
+          const campRes = await query(
+            "SELECT * FROM campaigns WHERE id::text = $1",
+            [String(conv.campaign_id)]
+          );
+          if (campRes.rows.length > 0) {
+            campaign = formatCampaign(campRes.rows[0]);
+          }
+        }
 
         let connection = null;
-        if (conversation.creatorId && conversation.brandId) {
-          const connFilter = {
-            creatorId: conversation.creatorId,
-            brandId: conversation.brandId,
-          };
-          if (conversation.campaignId) {
-            connFilter.campaignId = conversation.campaignId;
+        if (conv.creator_id && conv.brand_id) {
+          let connSql = "SELECT * FROM connections WHERE creator_id = $1 AND brand_id = $2";
+          let connParams = [conv.creator_id, conv.brand_id];
+          if (conv.campaign_id) {
+            connSql += " AND campaign_id = $3";
+            connParams.push(conv.campaign_id);
           }
-          connection = await Connection.findOne(connFilter).lean();
+          connSql += " LIMIT 1";
+          const connRes = await query(connSql, connParams);
+          if (connRes.rows.length > 0) {
+            const c = connRes.rows[0];
+            connection = {
+              _id: c.id,
+              id: c.id,
+              status: c.status,
+              collaborationStatus: c.collaboration_status,
+              creatorAmount: Number(c.creator_amount || 0),
+              brandTotal: Number(c.brand_total || 0),
+            };
+          }
         }
 
-        const messages = await Message.find({
-          conversationId: conversation._id,
-        })
-          .sort({ createdAt: -1 })
-          .lean();
-
-        const lastMessage = messages[0];
+        const msgRes = await query(
+          "SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC",
+          [conv.id]
+        );
+        const messages = msgRes.rows.map(formatMessage);
+        const lastMessage = messages[0] || null;
 
         const unreadCount = messages.filter(
-          (message) =>
-            message.senderId.toString() !== profileId &&
-            !message.read
+          (m) => String(m.senderId) !== String(profileId) && !m.read
         ).length;
 
         return {
-          ...conversation.toObject(),
+          ...formatConversation(conv),
           otherProfile: otherProfile || {
             fullName: "Pravixo Admin",
             role: "admin",
@@ -206,24 +265,20 @@ export const getConversations = async (req, res) => {
           unreadCount,
           campaign,
           connection,
-          isNew:
-            conversation.status === "pending" &&
-            lastMessage?.senderId?.toString() !== profileId,
+          isNew: conv.status === "pending" && String(lastMessage?.senderId) !== String(profileId),
         };
       })
     );
 
-    // Sort by recent activity/lastMessage timestamp first so latest conversations always appear at the top
     const sortedResults = results.sort((a, b) => {
       const timeA = new Date(a.lastMessage?.createdAt || a.updatedAt || a.createdAt || 0).getTime();
       const timeB = new Date(b.lastMessage?.createdAt || b.updatedAt || b.createdAt || 0).getTime();
       return timeB - timeA;
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: sortedResults.filter((item) => {
-        // Exclude conversations permanently deleted by this role
         if (role === "creator" && item.deletedForCreator) return false;
         if (role === "brand" && item.deletedForBrand) return false;
         return item.lastMessage || item.conversationType?.startsWith("admin_");
@@ -231,8 +286,7 @@ export const getConversations = async (req, res) => {
     });
   } catch (error) {
     console.error("Get conversations error:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch conversations.",
     });
@@ -245,66 +299,93 @@ export const getConversationDetails = async (req, res) => {
     const { conversationId } = req.params;
     const { profileId } = req.query;
 
-    if (
-      !mongoose.Types.ObjectId.isValid(conversationId) ||
-      !mongoose.Types.ObjectId.isValid(profileId)
-    ) {
+    if (!conversationId || !profileId) {
       return res.status(400).json({
         success: false,
         message: "Invalid ID.",
       });
     }
 
-    const conversation = await Conversation.findById(conversationId).lean();
-
-    if (!conversation) {
+    const convRes = await query("SELECT * FROM conversations WHERE id::text = $1", [conversationId.trim()]);
+    if (convRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Conversation not found.",
       });
     }
 
+    const conversation = convRes.rows[0];
     let otherId = null;
-    const myIdStr = profileId.toString();
+    const myIdStr = String(profileId);
 
-    if (conversation.creatorId && conversation.creatorId.toString() === myIdStr) {
-      otherId = conversation.adminId || conversation.brandId;
-    } else if (conversation.brandId && conversation.brandId.toString() === myIdStr) {
-      otherId = conversation.adminId || conversation.creatorId;
-    } else if (conversation.adminId && conversation.adminId.toString() === myIdStr) {
-      otherId = conversation.creatorId || conversation.brandId;
+    if (conversation.creator_id && String(conversation.creator_id) === myIdStr) {
+      otherId = conversation.admin_id || conversation.brand_id;
+    } else if (conversation.brand_id && String(conversation.brand_id) === myIdStr) {
+      otherId = conversation.admin_id || conversation.creator_id;
+    } else if (conversation.admin_id && String(conversation.admin_id) === myIdStr) {
+      otherId = conversation.creator_id || conversation.brand_id;
     } else {
-      // Fallback for admin user looking at any conversation
-      otherId = conversation.creatorId || conversation.brandId || conversation.adminId;
+      otherId = conversation.creator_id || conversation.brand_id || conversation.admin_id;
     }
 
     let otherProfile = null;
     if (otherId) {
-      otherProfile = await Profile.findById(otherId)
-        .select("fullName email handle avatarUrl gender role")
-        .lean();
+      const profRes = await query(
+        "SELECT id, full_name, email, handle, avatar_url, gender, role FROM profiles WHERE id::text = $1 OR user_id = $1",
+        [String(otherId)]
+      );
+      if (profRes.rows.length > 0) {
+        const p = profRes.rows[0];
+        otherProfile = {
+          _id: p.id,
+          fullName: p.full_name,
+          email: p.email,
+          handle: p.handle,
+          avatarUrl: p.avatar_url,
+          gender: p.gender,
+          role: p.role,
+        };
+      }
     }
 
-    const campaign = conversation.campaignId
-      ? await Campaign.findById(conversation.campaignId).lean()
-      : null;
+    let campaign = null;
+    if (conversation.campaign_id) {
+      const campRes = await query(
+        "SELECT * FROM campaigns WHERE id::text = $1",
+        [String(conversation.campaign_id)]
+      );
+      if (campRes.rows.length > 0) {
+        campaign = formatCampaign(campRes.rows[0]);
+      }
+    }
 
     let connection = null;
-    if (conversation.creatorId && conversation.brandId) {
-      const connFilter = {
-        creatorId: conversation.creatorId,
-        brandId: conversation.brandId,
-      };
-      if (conversation.campaignId) {
-        connFilter.campaignId = conversation.campaignId;
+    if (conversation.creator_id && conversation.brand_id) {
+      let connSql = "SELECT * FROM connections WHERE creator_id = $1 AND brand_id = $2";
+      let connParams = [conversation.creator_id, conversation.brand_id];
+      if (conversation.campaign_id) {
+        connSql += " AND campaign_id = $3";
+        connParams.push(conversation.campaign_id);
       }
-      connection = await Connection.findOne(connFilter).lean();
+      connSql += " LIMIT 1";
+      const connRes = await query(connSql, connParams);
+      if (connRes.rows.length > 0) {
+        const c = connRes.rows[0];
+        connection = {
+          _id: c.id,
+          id: c.id,
+          status: c.status,
+          collaborationStatus: c.collaboration_status,
+          creatorAmount: Number(c.creator_amount || 0),
+          brandTotal: Number(c.brand_total || 0),
+        };
+      }
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
-        ...conversation,
+        ...formatConversation(conversation),
         otherProfile: otherProfile || {
           fullName: "Pravixo Admin",
           role: "admin",
@@ -316,8 +397,7 @@ export const getConversationDetails = async (req, res) => {
     });
   } catch (error) {
     console.error("Conversation details error:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch conversation details.",
     });
@@ -330,28 +410,19 @@ export const markAsRead = async (req, res) => {
     const { conversationId } = req.params;
     const { profileId } = req.body;
 
-    const myId = profileId ? (mongoose.Types.ObjectId.isValid(profileId) ? new mongoose.Types.ObjectId(profileId) : profileId) : null;
-
-    if (myId) {
-      await Message.updateMany(
-        {
-          conversationId,
-          senderId: { $ne: myId },
-          read: false,
-        },
-        {
-          $set: { read: true },
-        }
+    if (profileId && conversationId) {
+      await query(
+        "UPDATE messages SET read = true WHERE conversation_id::text = $1 AND sender_id::text != $2 AND read = false",
+        [conversationId.trim(), String(profileId).trim()]
       );
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
     });
   } catch (error) {
     console.error("Mark as read error:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to mark messages as read.",
     });
@@ -363,27 +434,25 @@ export const toggleArchive = async (req, res) => {
   try {
     const { conversationId } = req.params;
 
-    const conversation = await Conversation.findById(conversationId);
+    const convRes = await query(
+      "UPDATE conversations SET archived = NOT archived, updated_at = NOW() WHERE id::text = $1 RETURNING *",
+      [conversationId.trim()]
+    );
 
-    if (!conversation) {
+    if (convRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Conversation not found.",
       });
     }
 
-    conversation.archived = !conversation.archived;
-
-    await conversation.save();
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      data: conversation,
+      data: formatConversation(convRes.rows[0]),
     });
   } catch (error) {
     console.error("Toggle archive error:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to update archive status.",
     });
@@ -396,8 +465,8 @@ export const deleteUserConversation = async (req, res) => {
     const { conversationId } = req.params;
     const { profileId, role, deleteFromDb = true } = req.body;
 
-    const conversation = await Conversation.findById(conversationId);
-    if (!conversation) {
+    const checkRes = await query("SELECT id FROM conversations WHERE id::text = $1", [conversationId.trim()]);
+    if (checkRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Conversation not found.",
@@ -405,9 +474,8 @@ export const deleteUserConversation = async (req, res) => {
     }
 
     if (deleteFromDb) {
-      // Permanently remove all messages and the conversation from DB
-      await Message.deleteMany({ conversationId });
-      await Conversation.findByIdAndDelete(conversationId);
+      await query("DELETE FROM messages WHERE conversation_id::text = $1", [conversationId.trim()]);
+      await query("DELETE FROM conversations WHERE id::text = $1", [conversationId.trim()]);
 
       return res.status(200).json({
         success: true,
@@ -415,15 +483,17 @@ export const deleteUserConversation = async (req, res) => {
         deletedConversationId: conversationId,
       });
     } else {
-      // Soft-delete per role
+      let setClause = "archived = true";
       if (role === "creator") {
-        conversation.deletedForCreator = true;
+        setClause = "deleted_for_creator = true";
       } else if (role === "brand") {
-        conversation.deletedForBrand = true;
-      } else {
-        conversation.archived = true;
+        setClause = "deleted_for_brand = true";
       }
-      await conversation.save();
+
+      await query(
+        `UPDATE conversations SET ${setClause}, updated_at = NOW() WHERE id::text = $1`,
+        [conversationId.trim()]
+      );
 
       return res.status(200).json({
         success: true,
@@ -432,7 +502,7 @@ export const deleteUserConversation = async (req, res) => {
     }
   } catch (error) {
     console.error("Delete conversation error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to delete conversation.",
     });

@@ -1,5 +1,4 @@
-import Profile from "../models/Profile.js";
-import Notification from "../models/Notification.js";
+import { query } from "../config/postgres.js";
 import { sendPushToUsers } from "../utils/webPush.js";
 
 // POST /api/admin/broadcast
@@ -15,21 +14,18 @@ export const sendBroadcast = async (req, res) => {
       });
     }
 
-    // Build role filter based on audience
-    let roleFilter = {};
+    let roleFilter = "";
     if (audience === "creators") {
-      roleFilter = { role: "creator" };
+      roleFilter = "AND role = 'creator'";
     } else if (audience === "brands") {
-      roleFilter = { role: "brand" };
+      roleFilter = "AND role = 'brand'";
     } else {
-      // "all"
-      roleFilter = { role: { $in: ["creator", "brand"] } };
+      roleFilter = "AND role IN ('creator', 'brand')";
     }
 
-    // Exclude deleted profiles
-    roleFilter.isDeleted = { $ne: true };
-
-    const recipients = await Profile.find(roleFilter).select("_id").lean();
+    const { rows: recipients } = await query(
+      `SELECT id FROM profiles WHERE is_deleted = false ${roleFilter};`
+    );
 
     if (!recipients || recipients.length === 0) {
       return res.status(200).json({
@@ -39,24 +35,22 @@ export const sendBroadcast = async (req, res) => {
       });
     }
 
-    const recipientIds = recipients.map((r) => r._id);
-    const now = Date.now();
+    const recipientIds = recipients.map((r) => r.id);
+    const fullText = `${title.trim()}: ${message.trim()}`;
 
-    // 1. Bulk create in-app notifications
-    const notifications = recipientIds.map((userId) => ({
-      recipientId: userId,
-      senderId: adminId || userId,
-      type: "admin_broadcast",
-      text: `${title.trim()}: ${message.trim()}`,
-      targetUrl: targetUrl || "/",
-      createdAt: now,
-    }));
+    // Bulk insert in-app notifications
+    for (const userId of recipientIds) {
+      await query(
+        `
+        INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, read, created_at)
+        VALUES ($1, $2, 'admin_broadcast', $3, $4, false, NOW())
+        ON CONFLICT DO NOTHING;
+        `,
+        [userId, adminId || userId, fullText, targetUrl || "/"]
+      ).catch((err) => console.error("Broadcast in-app insert error:", err.message));
+    }
 
-    await Notification.insertMany(notifications, { ordered: false }).catch((err) =>
-      console.error("Broadcast in-app insert error:", err.message)
-    );
-
-    // 2. Chunk web push to avoid overloading network/VAPID in batches of 500
+    // Chunk web push
     const chunkSize = 500;
     for (let i = 0; i < recipientIds.length; i += chunkSize) {
       const chunk = recipientIds.slice(i, i + chunkSize);

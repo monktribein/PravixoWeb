@@ -5,7 +5,7 @@ dotenv.config();
 dns.setDefaultResultOrder("ipv4first");
 
 import app from "./app.js";
-import connectDB from "./config/db.js";
+import { connectPostgres, initPostgresTables } from "./config/db.js";
 
 import { startSocialSyncJob } from "./jobs/socialSyncJob.js";
 import { startPaymentReleaseJob } from "./jobs/paymentReleaseJob.js";
@@ -16,10 +16,13 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
-    await connectDB();
+    // Connect to Supabase PostgreSQL (MongoDB removed)
+    await connectPostgres();
+    await initPostgresTables();
 
     app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`✅ Server running on http://localhost:${PORT}`);
+      console.log(`✅ Database: Supabase PostgreSQL`);
 
       // Start cron jobs AFTER database connection
       startSocialSyncJob();
@@ -28,11 +31,7 @@ const startServer = async () => {
       initPayoutEventListener();
     });
   } catch (error) {
-    console.error(
-      "Server startup failed:",
-      error.message
-    );
-
+    console.error("Server startup failed:", error.message);
     process.exit(1);
   }
 };

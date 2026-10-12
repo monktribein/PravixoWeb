@@ -1,5 +1,6 @@
 import express from "express";
-import ContactInquiry from "../models/ContactInquiry.js";
+import { query } from "../config/postgres.js";
+import { formatContactInquiry } from "../utils/formatters.js";
 
 const router = express.Router();
 
@@ -15,18 +16,19 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const inquiry = await ContactInquiry.create({
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      subject: subject.trim(),
-      message: message.trim(),
-      status: "unread",
-    });
+    const { rows } = await query(
+      `
+      INSERT INTO contact_inquiries (name, email, subject, message, status)
+      VALUES ($1, $2, $3, $4, 'unread')
+      RETURNING *;
+      `,
+      [name.trim(), email.trim().toLowerCase(), subject.trim(), message.trim()]
+    );
 
     return res.status(201).json({
       success: true,
       message: "Inquiry received successfully! Our team will get back to you shortly.",
-      data: inquiry,
+      data: formatContactInquiry(rows[0]),
     });
   } catch (error) {
     console.error("Contact inquiry creation error:", error);
@@ -40,10 +42,12 @@ router.post("/", async (req, res) => {
 // Admin: Get all inquiries
 router.get("/admin/all", async (req, res) => {
   try {
-    const inquiries = await ContactInquiry.find().sort({ createdAt: -1 });
+    const { rows } = await query(
+      `SELECT * FROM contact_inquiries ORDER BY created_at DESC;`
+    );
     return res.json({
       success: true,
-      data: inquiries,
+      data: rows.map(formatContactInquiry),
     });
   } catch (error) {
     console.error("Fetch inquiries error:", error);
@@ -60,16 +64,19 @@ router.patch("/admin/:id", async (req, res) => {
     const { id } = req.params;
     const { status, adminNotes } = req.body;
 
-    const updated = await ContactInquiry.findByIdAndUpdate(
-      id,
-      {
-        ...(status && { status }),
-        ...(adminNotes !== undefined && { adminNotes }),
-      },
-      { new: true }
+    const { rows } = await query(
+      `
+      UPDATE contact_inquiries SET
+        status = COALESCE($1, status),
+        admin_notes = COALESCE($2, admin_notes),
+        updated_at = NOW()
+      WHERE id::text = $3
+      RETURNING *;
+      `,
+      [status || null, adminNotes !== undefined ? adminNotes : null, id]
     );
 
-    if (!updated) {
+    if (rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Inquiry not found.",
@@ -79,7 +86,7 @@ router.patch("/admin/:id", async (req, res) => {
     return res.json({
       success: true,
       message: "Inquiry updated successfully.",
-      data: updated,
+      data: formatContactInquiry(rows[0]),
     });
   } catch (error) {
     console.error("Update inquiry error:", error);
@@ -94,9 +101,12 @@ router.patch("/admin/:id", async (req, res) => {
 router.delete("/admin/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await ContactInquiry.findByIdAndDelete(id);
+    const { rows } = await query(
+      `DELETE FROM contact_inquiries WHERE id::text = $1 RETURNING *;`,
+      [id]
+    );
 
-    if (!deleted) {
+    if (rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Inquiry not found.",
@@ -106,7 +116,7 @@ router.delete("/admin/:id", async (req, res) => {
     return res.json({
       success: true,
       message: "Inquiry deleted successfully.",
-      data: deleted,
+      data: formatContactInquiry(rows[0]),
     });
   } catch (error) {
     console.error("Delete inquiry error:", error);

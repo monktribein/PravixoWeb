@@ -1,16 +1,12 @@
 import "dotenv/config";
 import crypto from "crypto";
-import Otp from "../models/Otp.js";
-import ResetToken from "../models/ResetToken.js";
-import Profile from "../models/Profile.js";
-
+import { query } from "../config/postgres.js";
 import nodemailer from "nodemailer";
 
 // =====================================
-// BASE EMAIL SENDER (Direct SMTP with Vercel Proxy Fallback)
+// BASE EMAIL SENDER
 // =====================================
 const sendEmail = async ({ to, subject, html, text, origin }) => {
-  // 1. Direct SMTP if environment variables exist
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
       const port = Number(process.env.SMTP_PORT) || 465;
@@ -37,81 +33,74 @@ const sendEmail = async ({ to, subject, html, text, origin }) => {
       return { success: true, messageId: info.messageId };
     } catch (err) {
       console.warn("[OTP Mailer] Direct SMTP attempt failed:", err.message);
-      // If no proxy fallback possible, throw clear error
       if (!origin && !process.env.VERCEL_EMAIL_API_URL && !process.env.FRONTEND_URL) {
         throw err;
       }
     }
   }
 
-  // 2. Vercel Proxy Mailer Fallback
   const baseOrigin = origin || process.env.VERCEL_EMAIL_API_URL || process.env.FRONTEND_URL || "https://pravixo.com";
   const cleanOrigin = baseOrigin.replace(/\/$/, "");
   const vercelApiUrl = `${cleanOrigin}/api/send-email`;
   const authSecret = process.env.VERCEL_API_SECRET || "fallback-secret-key-123";
 
-  try {
-    const response = await fetch(vercelApiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authSecret}`,
-      },
-      body: JSON.stringify({ to, subject, html, text }),
-    });
+  const response = await fetch(vercelApiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${authSecret}`,
+    },
+    body: JSON.stringify({ to, subject, html, text }),
+  });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Email Proxy Error (${response.status}): ${JSON.stringify(errorData)}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("[OTP Mailer] Vercel proxy failed:", error.message);
-    throw error;
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(`Email Proxy Error (${response.status}): ${JSON.stringify(errorData)}`);
   }
+
+  return await response.json();
 };
 
 // =====================================
 // HASH OTP
 // =====================================
-const hashOtp = (otp) => {
-  return crypto.createHash("sha256").update(otp).digest("hex");
-};
+const hashOtp = (otp) => crypto.createHash("sha256").update(otp).digest("hex");
 
 // =====================================
 // GENERATE OTP
 // =====================================
-const generateOtp = () => {
-  return crypto.randomInt(100000, 1000000).toString();
-};
+const generateOtp = () => crypto.randomInt(100000, 1000000).toString();
 
 // =====================================
-// SEND OTP
+// SEND OTP — PostgreSQL only
 // =====================================
 export const sendOtp = async (email, origin) => {
   try {
     const normalizedEmail = email.trim().toLowerCase();
-    const derivedUserId = `user_${Buffer.from(normalizedEmail).toString("base64").replace(/=/g, "")}`;
-    const existingProfile = await Profile.findOne({ userId: derivedUserId });
 
-    if (existingProfile) {
+    // Check if email already registered in Supabase PostgreSQL
+    const existingResult = await query(
+      "SELECT id FROM profiles WHERE email = $1",
+      [normalizedEmail]
+    );
+
+    if (existingResult.rows.length > 0) {
       const error = new Error("This email is already registered. Please sign in instead.");
       error.statusCode = 400;
       throw error;
     }
 
-    await Otp.deleteMany({ email: normalizedEmail });
+    // Delete any existing OTPs for this email
+    await query("DELETE FROM otps WHERE email = $1", [normalizedEmail]);
+
     const otpCode = generateOtp();
     const codeHash = hashOtp(otpCode);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    await Otp.create({
-      email: normalizedEmail,
-      codeHash,
-      expiresAt,
-      verified: false,
-    });
+    await query(
+      "INSERT INTO otps (email, code_hash, expires_at, verified) VALUES ($1, $2, $3, $4)",
+      [normalizedEmail, codeHash, expiresAt, false]
+    );
 
     console.log("=========================================");
     console.log(`[DEV] OTP Code for ${normalizedEmail}: ${otpCode}`);
@@ -143,46 +132,62 @@ export const sendOtp = async (email, origin) => {
 };
 
 // =====================================
-// VERIFY OTP
+// VERIFY OTP — PostgreSQL only
 // =====================================
 export const verifyOtp = async (email, otp) => {
   const normalizedEmail = email.trim().toLowerCase();
-  const otpRecord = await Otp.findOne({ email: normalizedEmail }).sort({ createdAt: -1 });
 
-  if (!otpRecord) return { success: false, message: "No verification code found." };
-  if (new Date() > otpRecord.expiresAt) {
-    await Otp.deleteMany({ email: normalizedEmail });
+  const result = await query(
+    "SELECT * FROM otps WHERE email = $1 ORDER BY created_at DESC LIMIT 1",
+    [normalizedEmail]
+  );
+
+  if (result.rows.length === 0) return { success: false, message: "No verification code found." };
+
+  const otpRecord = result.rows[0];
+
+  if (new Date() > new Date(otpRecord.expires_at)) {
+    await query("DELETE FROM otps WHERE email = $1", [normalizedEmail]);
     return { success: false, message: "Verification code has expired." };
   }
 
   const inputHash = hashOtp(otp);
-  if (inputHash !== otpRecord.codeHash) return { success: false, message: "Invalid verification code." };
+  if (inputHash !== otpRecord.code_hash) return { success: false, message: "Invalid verification code." };
 
-  otpRecord.verified = true;
-  await otpRecord.save();
+  await query("UPDATE otps SET verified = true WHERE id = $1", [otpRecord.id]);
 
   return { success: true, message: "Email verified successfully." };
 };
 
 // =====================================
-// SEND RESET LINK
+// SEND RESET LINK — PostgreSQL only
 // =====================================
 export const sendResetLink = async (email, origin) => {
   const normalizedEmail = email.trim().toLowerCase();
-  const derivedUserId = `user_${Buffer.from(normalizedEmail).toString("base64").replace(/=/g, "")}`;
-  const existingProfile = await Profile.findOne({ userId: derivedUserId });
 
-  if (!existingProfile) {
+  const existingResult = await query(
+    "SELECT id FROM profiles WHERE email = $1",
+    [normalizedEmail]
+  );
+
+  if (existingResult.rows.length === 0) {
     const error = new Error("No account found with this email address.");
     error.statusCode = 404;
     throw error;
   }
 
-  await ResetToken.deleteMany({ email: normalizedEmail });
+  // Use otps table to store reset tokens (simple approach)
+  await query("DELETE FROM otps WHERE email = $1 AND verified = false", [normalizedEmail]);
+
   const token = crypto.randomBytes(16).toString("hex");
+  const tokenHash = hashOtp(token);
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-  await ResetToken.create({ email: normalizedEmail, token, expiresAt });
+  await query(
+    "INSERT INTO otps (email, code_hash, expires_at, verified) VALUES ($1, $2, $3, $4)",
+    [normalizedEmail, tokenHash, expiresAt, false]
+  );
+
   const resetLink = `${origin}/reset-password?email=${encodeURIComponent(normalizedEmail)}&token=${token}`;
 
   console.log("=========================================");

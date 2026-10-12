@@ -1,7 +1,15 @@
-import Offer from "../models/Offer.js";
-import Profile from "../models/Profile.js";
-import Notification from "../models/Notification.js";
+import { query } from "../config/postgres.js";
+import { formatOffer, formatProfile } from "../utils/formatters.js";
 import { sendPushToUsers, sendPushToUser } from "../utils/webPush.js";
+
+const resolveProfile = async (idOrUserId) => {
+  if (!idOrUserId) return null;
+  const res = await query(
+    `SELECT * FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+    [idOrUserId]
+  );
+  return res.rows[0] || null;
+};
 
 // POST /api/offers
 export const createOffer = async (req, res) => {
@@ -38,10 +46,7 @@ export const createOffer = async (req, res) => {
       });
     }
 
-    const userProfile = await Profile.findById(userProfileId)
-      .select("fullName handle role email avatarUrl")
-      .lean();
-
+    const userProfile = await resolveProfile(userProfileId);
     if (!userProfile) {
       return res.status(404).json({
         success: false,
@@ -72,43 +77,58 @@ export const createOffer = async (req, res) => {
       }
     }
 
-    const offer = await Offer.create({
-      creatorId: isCreator ? userProfileId : null,
-      brandId: isBrand ? userProfileId : null,
-      creatorOrBrandType: roleType,
-      offerTitle: offerTitle.trim(),
-      conditionText: conditionText.trim(),
-      offerCategory,
-      discountPercent: numDiscount,
-      monetaryBonus: monetaryBonus ? Number(monetaryBonus) : null,
-      validityHours: numericValidity,
-      status: "pending_approval",
-    });
+    const { rows } = await query(
+      `
+      INSERT INTO offers (
+        creator_id, brand_id, creator_or_brand_type, offer_title, condition_text,
+        offer_category, discount_percent, monetary_bonus, validity_hours, status,
+        created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, 'pending_approval',
+        NOW(), NOW()
+      )
+      RETURNING *;
+      `,
+      [
+        isCreator ? userProfile.id : null,
+        isBrand ? userProfile.id : null,
+        roleType,
+        offerTitle.trim(),
+        conditionText.trim(),
+        offerCategory,
+        numDiscount,
+        monetaryBonus ? Number(monetaryBonus) : null,
+        numericValidity,
+      ]
+    );
 
-    // Notify Admins about new offer submission
-    const admins = await Profile.find({ role: "admin", isDeleted: { $ne: true } })
-      .select("_id")
-      .lean();
+    const offer = rows[0];
 
-    if (admins && admins.length > 0) {
-      const adminNotifications = admins.map((adm) => ({
-        recipientId: adm._id,
-        senderId: userProfileId,
-        type: "admin_message",
-        text: `New ${roleType} offer submitted by ${userProfile.fullName || userProfile.handle}: "${offerTitle.trim()}" awaiting review.`,
-        targetUrl: "/offers",
-        createdAt: Date.now(),
-      }));
-
-      Notification.insertMany(adminNotifications, { ordered: false }).catch((err) =>
-        console.error("Admin offer notification error:", err.message)
-      );
+    // Notify Admins
+    try {
+      const adminRes = await query(`SELECT id FROM profiles WHERE role = 'admin' AND is_deleted = false;`);
+      for (const adm of adminRes.rows) {
+        await query(
+          `
+          INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, read, created_at)
+          VALUES ($1, $2, 'admin_message', $3, '/offers', false, NOW());
+          `,
+          [
+            adm.id,
+            userProfile.id,
+            `New ${roleType} offer submitted by ${userProfile.full_name || userProfile.handle}: "${offerTitle.trim()}" awaiting review.`,
+          ]
+        );
+      }
+    } catch (err) {
+      console.error("Admin offer notification error:", err.message);
     }
 
     return res.status(201).json({
       success: true,
       message: "Offer submitted successfully and sent to admin for approval.",
-      data: offer,
+      data: formatOffer(offer),
     });
   } catch (error) {
     console.error("createOffer error:", error);
@@ -126,103 +146,103 @@ export const approveOffer = async (req, res) => {
     const { offerId } = req.params;
     const adminId = req.user?._id || null;
 
-    const offer = await Offer.findById(offerId)
-      .populate("creatorId", "fullName handle avatarUrl profilePicture")
-      .populate("brandId", "fullName handle avatarUrl profilePicture");
-
-    if (!offer) {
+    const findRes = await query(`SELECT * FROM offers WHERE id::text = $1;`, [offerId]);
+    if (findRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Offer not found.",
       });
     }
 
+    const offer = findRes.rows[0];
+
     if (offer.status === "active") {
       return res.status(200).json({
         success: true,
         message: "Offer is already active.",
-        data: offer,
+        data: formatOffer(offer),
       });
     }
 
     const now = Date.now();
-    const expiresAt = new Date(now + offer.validityHours * 60 * 60 * 1000);
+    const expiresAt = new Date(now + Number(offer.validity_hours) * 60 * 60 * 1000);
 
-    offer.status = "active";
-    if (adminId) {
-      offer.approvedBy = adminId;
-    }
-    offer.approvedAt = new Date(now);
-    offer.expiresAt = expiresAt;
-    offer.rejectionReason = "";
-    await offer.save();
+    const updRes = await query(
+      `
+      UPDATE offers SET
+        status = 'active',
+        approved_by = $1,
+        approved_at = NOW(),
+        expires_at = $2,
+        rejection_reason = '',
+        updated_at = NOW()
+      WHERE id = $3
+      RETURNING *;
+      `,
+      [adminId || null, expiresAt, offer.id]
+    );
 
-    const isCreatorOffer = offer.creatorOrBrandType === "creator";
-    const sender = isCreatorOffer ? offer.creatorId : offer.brandId;
-    const senderName = sender?.fullName || sender?.handle || (isCreatorOffer ? "A creator" : "A brand");
-    const rawSenderId = sender?._id || adminId;
+    const updatedOffer = updRes.rows[0];
 
-    // Determine target audience for push + in-app
+    const isCreatorOffer = offer.creator_or_brand_type === "creator";
+    const senderId = isCreatorOffer ? offer.creator_id : offer.brand_id;
     const targetRole = isCreatorOffer ? "brand" : "creator";
     const targetUrl = isCreatorOffer ? "/dashboard/customer" : "/dashboard/influencer";
 
-    // Notify owner
-    if (sender?._id && (adminId || sender._id)) {
-      Notification.create({
-        recipientId: sender._id,
-        senderId: adminId || sender._id,
-        type: "admin_message",
-        text: `Your offer "${offer.offerTitle}" has been approved by admin and is now live!`,
-        targetUrl,
-        createdAt: now,
-      }).catch((err) => console.error("Owner notification error:", err.message));
+    let senderName = isCreatorOffer ? "A creator" : "A brand";
+    if (senderId) {
+      const sProf = await query(`SELECT full_name, handle FROM profiles WHERE id = $1;`, [senderId]);
+      if (sProf.rows.length > 0) {
+        senderName = sProf.rows[0].full_name || sProf.rows[0].handle || senderName;
+      }
 
-      sendPushToUser(sender._id, {
+      // Notify owner
+      await query(
+        `
+        INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, read, created_at)
+        VALUES ($1, $2, 'admin_message', $3, $4, false, NOW());
+        `,
+        [senderId, adminId || senderId, `Your offer "${offer.offer_title}" has been approved by admin and is now live!`, targetUrl]
+      ).catch((err) => console.error("Owner notification error:", err.message));
+
+      sendPushToUser(senderId, {
         title: "Offer Approved & Live! 🎉",
-        body: `Your offer "${offer.offerTitle}" is now visible to all ${targetRole}s.`,
+        body: `Your offer "${offer.offer_title}" is now visible to all ${targetRole}s.`,
         url: targetUrl,
       }).catch((err) => console.error("Owner push error:", err.message));
     }
 
     // Broadcast to target audience
-    const audienceProfiles = await Profile.find({ role: targetRole, isDeleted: { $ne: true } })
-      .select("_id")
-      .lean();
+    const audienceRes = await query(
+      `SELECT id FROM profiles WHERE role = $1 AND is_deleted = false;`,
+      [targetRole]
+    );
 
-    if (audienceProfiles && audienceProfiles.length > 0 && rawSenderId) {
-      const recipientIds = audienceProfiles.map((p) => p._id);
-      const pushTitle = isCreatorOffer
-        ? `New Creator Deal! 🔥 ${offer.discountPercent ? offer.discountPercent + "% off" : offer.offerTitle}`
-        : `New Brand Opportunity! 💼 ${offer.offerTitle}`;
+    if (audienceRes.rows.length > 0 && senderId) {
+      const recipientIds = audienceRes.rows.map((p) => p.id);
+      const notifText = `${senderName} launched an exclusive offer: ${offer.offer_title} — "${offer.condition_text}"`;
 
-      const notifText = `${senderName} launched an exclusive offer: ${offer.offerTitle} — "${offer.conditionText}"`;
+      for (const rId of recipientIds) {
+        await query(
+          `
+          INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, read, created_at)
+          VALUES ($1, $2, 'new_offer', $3, $4, false, NOW());
+          `,
+          [rId, senderId, notifText, targetUrl]
+        ).catch((err) => console.error("Audience notification error:", err.message));
+      }
 
-      // Bulk in-app notifications
-      const inAppNotifs = recipientIds.map((rId) => ({
-        recipientId: rId,
-        senderId: rawSenderId,
-        type: "new_offer",
-        text: notifText,
-        targetUrl,
-        createdAt: now,
-      }));
-
-      Notification.insertMany(inAppNotifs, { ordered: false }).catch((err) =>
-        console.error("Audience in-app notification error:", err.message)
-      );
-
-      // Web Push
       sendPushToUsers(recipientIds, {
-        title: pushTitle,
-        body: `${senderName}: ${offer.conditionText}`,
+        title: isCreatorOffer ? `New Creator Deal! 🔥 ${offer.offer_title}` : `New Brand Opportunity! 💼 ${offer.offer_title}`,
+        body: `${senderName}: ${offer.condition_text}`,
         url: targetUrl,
       }).catch((err) => console.error("Audience push error:", err.message));
     }
 
     return res.status(200).json({
       success: true,
-      message: `Offer approved and broadcasted to ${audienceProfiles?.length || 0} ${targetRole}s.`,
-      data: offer,
+      message: `Offer approved and broadcasted to ${audienceRes.rows.length} ${targetRole}s.`,
+      data: formatOffer(updatedOffer),
     });
   } catch (error) {
     console.error("approveOffer error:", error);
@@ -241,36 +261,37 @@ export const rejectOffer = async (req, res) => {
     const { reason = "Does not meet guidelines." } = req.body;
     const adminId = req.user?._id || null;
 
-    const offer = await Offer.findById(offerId);
-    if (!offer) {
+    const findRes = await query(`SELECT * FROM offers WHERE id::text = $1;`, [offerId]);
+    if (findRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Offer not found.",
       });
     }
 
-    offer.status = "rejected";
-    offer.rejectionReason = reason;
-    await offer.save();
+    const offer = findRes.rows[0];
 
-    const rawOwner = offer.creatorId || offer.brandId;
-    const ownerId = rawOwner?._id || rawOwner;
-    if (ownerId && (adminId || ownerId)) {
-      const targetUrl = offer.creatorOrBrandType === "creator" ? "/dashboard/influencer" : "/dashboard/customer";
-      Notification.create({
-        recipientId: ownerId,
-        senderId: adminId || ownerId,
-        type: "admin_message",
-        text: `Your offer "${offer.offerTitle}" was rejected by admin. Reason: ${reason}`,
-        targetUrl,
-        createdAt: Date.now(),
-      }).catch((err) => console.error("Reject notification error:", err.message));
+    const updRes = await query(
+      `UPDATE offers SET status = 'rejected', rejection_reason = $1, updated_at = NOW() WHERE id = $2 RETURNING *;`,
+      [reason, offer.id]
+    );
+
+    const ownerId = offer.creator_id || offer.brand_id;
+    if (ownerId) {
+      const targetUrl = offer.creator_or_brand_type === "creator" ? "/dashboard/influencer" : "/dashboard/customer";
+      await query(
+        `
+        INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, read, created_at)
+        VALUES ($1, $2, 'admin_message', $3, $4, false, NOW());
+        `,
+        [ownerId, adminId || ownerId, `Your offer "${offer.offer_title}" was rejected by admin. Reason: ${reason}`, targetUrl]
+      ).catch((err) => console.error("Reject notification error:", err.message));
     }
 
     return res.status(200).json({
       success: true,
       message: "Offer rejected successfully.",
-      data: offer,
+      data: formatOffer(updRes.rows[0]),
     });
   } catch (error) {
     console.error("rejectOffer error:", error);
@@ -285,30 +306,38 @@ export const rejectOffer = async (req, res) => {
 // GET /api/offers/active
 export const getActiveOffers = async (req, res) => {
   try {
-    const { audience } = req.query; // optional "creator" (offers for creators) or "brand" (offers for brands)
+    const { audience } = req.query;
 
-    let query = {
-      status: "active",
-      expiresAt: { $gt: new Date() },
-    };
-
+    let roleFilter = "";
     if (audience === "brand") {
-      // Offers created by creators for brands
-      query.creatorOrBrandType = "creator";
+      roleFilter = "AND o.creator_or_brand_type = 'creator'";
     } else if (audience === "creator") {
-      // Offers created by brands for creators
-      query.creatorOrBrandType = "brand";
+      roleFilter = "AND o.creator_or_brand_type = 'brand'";
     }
 
-    const offers = await Offer.find(query)
-      .populate("creatorId", "fullName avatarUrl handle category profilePicture")
-      .populate("brandId", "fullName avatarUrl handle category profilePicture companyName")
-      .sort({ approvedAt: -1, createdAt: -1 })
-      .lean();
+    const { rows } = await query(
+      `
+      SELECT
+        o.*,
+        row_to_json(cr.*) as creator,
+        row_to_json(br.*) as brand
+      FROM offers o
+      LEFT JOIN profiles cr ON cr.id = o.creator_id
+      LEFT JOIN profiles br ON br.id = o.brand_id
+      WHERE o.status = 'active' AND o.expires_at > NOW() ${roleFilter}
+      ORDER BY o.approved_at DESC, o.created_at DESC;
+      `
+    );
+
+    const formatted = rows.map((r) => ({
+      ...formatOffer(r),
+      creatorId: formatProfile(r.creator),
+      brandId: formatProfile(r.brand),
+    }));
 
     return res.status(200).json({
       success: true,
-      data: offers || [],
+      data: formatted,
     });
   } catch (error) {
     console.error("getActiveOffers error:", error);
@@ -331,15 +360,23 @@ export const getMyOffers = async (req, res) => {
       });
     }
 
-    const offers = await Offer.find({
-      $or: [{ creatorId: profileId }, { brandId: profileId }],
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const resolved = await resolveProfile(profileId);
+    if (!resolved) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const { rows } = await query(
+      `
+      SELECT * FROM offers
+      WHERE creator_id = $1 OR brand_id = $1
+      ORDER BY created_at DESC;
+      `,
+      [resolved.id]
+    );
 
     return res.status(200).json({
       success: true,
-      data: offers || [],
+      data: rows.map(formatOffer),
     });
   } catch (error) {
     console.error("getMyOffers error:", error);
@@ -354,17 +391,34 @@ export const getMyOffers = async (req, res) => {
 // GET /api/offers/admin/all (Admin Only)
 export const getAllOffersAdmin = async (req, res) => {
   try {
-    const offers = await Offer.find()
-      .populate("creatorId", "fullName avatarUrl handle email role")
-      .populate("brandId", "fullName avatarUrl handle email role")
-      .populate("approvedBy", "fullName email")
-      .populate("deletedBy", "fullName email")
-      .sort({ createdAt: -1 })
-      .lean();
+    const { rows } = await query(
+      `
+      SELECT
+        o.*,
+        row_to_json(cr.*) as creator,
+        row_to_json(br.*) as brand,
+        row_to_json(app.*) as approved_by_user,
+        row_to_json(del.*) as deleted_by_user
+      FROM offers o
+      LEFT JOIN profiles cr ON cr.id = o.creator_id
+      LEFT JOIN profiles br ON br.id = o.brand_id
+      LEFT JOIN profiles app ON app.id = o.approved_by
+      LEFT JOIN profiles del ON del.id = o.deleted_by
+      ORDER BY o.created_at DESC;
+      `
+    );
+
+    const formatted = rows.map((r) => ({
+      ...formatOffer(r),
+      creatorId: formatProfile(r.creator),
+      brandId: formatProfile(r.brand),
+      approvedBy: formatProfile(r.approved_by_user),
+      deletedBy: formatProfile(r.deleted_by_user),
+    }));
 
     return res.status(200).json({
       success: true,
-      data: offers || [],
+      data: formatted,
     });
   } catch (error) {
     console.error("getAllOffersAdmin error:", error);
@@ -382,50 +436,33 @@ export const deleteOffer = async (req, res) => {
     const { offerId } = req.params;
     const adminId = req.user?._id || null;
 
-    const offer = await Offer.findById(offerId);
-    if (!offer) {
+    const findRes = await query(`SELECT * FROM offers WHERE id::text = $1;`, [offerId]);
+    if (findRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Offer not found.",
       });
     }
 
-    if (offer.status === "deleted") {
-      return res.status(200).json({
-        success: true,
-        message: "Offer is already deleted.",
-        data: offer,
-      });
-    }
+    const offer = findRes.rows[0];
 
-    offer.status = "deleted";
-    if (adminId) {
-      offer.deletedBy = adminId;
-    }
-    offer.deletedAt = new Date();
-    await offer.save();
-
-    const rawOwner = offer.creatorId || offer.brandId;
-    const ownerId = rawOwner?._id || rawOwner;
-    if (ownerId && (adminId || ownerId)) {
-      try {
-        await Notification.create({
-          recipientId: ownerId,
-          senderId: adminId || ownerId,
-          type: "admin_message",
-          text: `Your offer "${offer.offerTitle}" was removed by admin.`,
-          targetUrl: offer.creatorOrBrandType === "creator" ? "/dashboard/influencer" : "/dashboard/customer",
-          createdAt: Date.now(),
-        });
-      } catch (notifErr) {
-        console.error("Failed to send offer deletion notification:", notifErr.message);
-      }
-    }
+    const updRes = await query(
+      `
+      UPDATE offers SET
+        status = 'deleted',
+        deleted_by = $1,
+        deleted_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $2
+      RETURNING *;
+      `,
+      [adminId || null, offer.id]
+    );
 
     return res.status(200).json({
       success: true,
       message: "Offer deleted successfully.",
-      data: offer,
+      data: formatOffer(updRes.rows[0]),
     });
   } catch (error) {
     console.error("deleteOffer error:", error);

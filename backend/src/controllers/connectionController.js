@@ -1,15 +1,44 @@
-import mongoose from "mongoose";
-import Connection from "../models/Connection.js";
-import Profile from "../models/Profile.js";
-import Campaign from "../models/Campaign.js";
-import Conversation from "../models/Conversation.js";
-import Message from "../models/Message.js";
-import SocialConnection from "../models/SocialConnection.js";
-import Notification from "../models/Notification.js";
-import Review from "../models/Review.js";
-import Payment from "../models/Payment.js";
-import Submission from "../models/Submission.js";
+import { query } from "../config/postgres.js";
+import {
+  formatConnection,
+  formatProfile,
+  formatCampaign,
+  formatConversation,
+  formatMessage,
+  formatPayment,
+  formatSubmission,
+} from "../utils/formatters.js";
 import { sendPushToUser } from "../utils/webPush.js";
+
+// Helper to find profile by UUID or user_id
+const findProfile = async (idOrUserId) => {
+  if (!idOrUserId) return null;
+  const res = await query(
+    `SELECT * FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+    [String(idOrUserId)]
+  );
+  return res.rows[0] ? formatProfile(res.rows[0]) : null;
+};
+
+// Helper to find campaign by ID
+const findCampaign = async (id) => {
+  if (!id) return null;
+  const res = await query(
+    `SELECT * FROM campaigns WHERE id::text = $1 LIMIT 1`,
+    [String(id)]
+  );
+  return res.rows[0] ? formatCampaign(res.rows[0]) : null;
+};
+
+// Helper to find connection by ID
+const findConnection = async (id) => {
+  if (!id) return null;
+  const res = await query(
+    `SELECT * FROM connections WHERE id::text = $1 LIMIT 1`,
+    [String(id)]
+  );
+  return res.rows[0] ? formatConnection(res.rows[0]) : null;
+};
 
 // 1. Send connection request
 export const sendRequest = async (req, res) => {
@@ -23,39 +52,37 @@ export const sendRequest = async (req, res) => {
       });
     }
 
-    // Role check: Ensure Creator can only connect with Brand, and Brand can only connect with Creator
-    if (mongoose.Types.ObjectId.isValid(creatorId) && mongoose.Types.ObjectId.isValid(brandId)) {
-      const [creatorProfile, brandProfile] = await Promise.all([
-        Profile.findById(creatorId),
-        Profile.findById(brandId),
-      ]);
+    const [creatorProfile, brandProfile] = await Promise.all([
+      findProfile(creatorId),
+      findProfile(brandId),
+    ]);
 
-      if (creatorProfile && brandProfile) {
-        if (creatorProfile.role === "creator" && brandProfile.role === "creator") {
-          return res.status(400).json({
-            success: false,
-            message: "A creator cannot connect with another creator. Connections can only be built between Brands and Creators.",
-          });
-        }
-        if (creatorProfile.role === "brand" && brandProfile.role === "brand") {
-          return res.status(400).json({
-            success: false,
-            message: "A brand cannot connect with another brand. Connections can only be built between Brands and Creators.",
-          });
-        }
-      }
+    if (!creatorProfile || !brandProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Creator or Brand profile not found.",
+      });
     }
 
-    const filter = { creatorId, brandId };
+    // Role check: Connections can only be built between Brands and Creators
+    if (creatorProfile.role === "creator" && brandProfile.role === "creator") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A creator cannot connect with another creator. Connections can only be built between Brands and Creators.",
+      });
+    }
+    if (creatorProfile.role === "brand" && brandProfile.role === "brand") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A brand cannot connect with another brand. Connections can only be built between Brands and Creators.",
+      });
+    }
 
+    let validCampaignId = null;
     if (campaignId) {
-      if (!mongoose.Types.ObjectId.isValid(campaignId)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid campaign ID.",
-        });
-      }
-      const camp = await Campaign.findById(campaignId);
+      const camp = await findCampaign(campaignId);
       if (!camp) {
         return res.status(404).json({
           success: false,
@@ -74,52 +101,68 @@ export const sendRequest = async (req, res) => {
           message: "Campaign is currently inactive.",
         });
       }
-      filter.campaignId = campaignId;
-    } else {
-      filter.campaignId = null;
+      validCampaignId = camp.id;
     }
 
-    const existing = await Connection.findOne(filter);
+    // Check existing connection
+    const existingRes = await query(
+      `SELECT * FROM connections 
+       WHERE creator_id = $1 AND brand_id = $2 
+         AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+       LIMIT 1`,
+      [creatorProfile.id, brandProfile.id, validCampaignId]
+    );
 
-    if (existing) {
+    if (existingRes.rows.length > 0) {
       return res.status(409).json({
         success: false,
         message: "Connection request already exists.",
       });
     }
 
-    const connection = await Connection.create({
-      creatorId,
-      brandId,
-      campaignId,
-      pitch,
-      status: "pending",
-      creatorNotificationSeen: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+    // Insert new connection
+    const insertRes = await query(
+      `INSERT INTO connections (
+         creator_id, brand_id, campaign_id, pitch, status, 
+         creator_notification_seen, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, 'pending', false, NOW(), NOW())
+       RETURNING *`,
+      [creatorProfile.id, brandProfile.id, validCampaignId, pitch]
+    );
 
-    // Create a pending conversation immediately so it appears in Messages
-    let conversation = await Conversation.findOne(filter);
+    const connection = formatConnection(insertRes.rows[0]);
 
-    if (!conversation) {
-      conversation = await Conversation.create({
-        creatorId,
-        brandId,
-        campaignId,
-        status: "pending",
-      });
+    // Create or find pending conversation
+    let convRes = await query(
+      `SELECT * FROM conversations 
+       WHERE creator_id = $1 AND brand_id = $2 
+         AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+       LIMIT 1`,
+      [creatorProfile.id, brandProfile.id, validCampaignId]
+    );
+
+    let conversationRow = convRes.rows[0];
+    if (!conversationRow) {
+      const newConvRes = await query(
+        `INSERT INTO conversations (creator_id, brand_id, campaign_id, status)
+         VALUES ($1, $2, $3, 'pending')
+         RETURNING *`,
+        [creatorProfile.id, brandProfile.id, validCampaignId]
+      );
+      conversationRow = newConvRes.rows[0];
     }
 
-    await Message.create({
-      conversationId: conversation._id,
-      senderId: senderId || brandId, // fallback to brandId if not provided
-      text: pitch,
-      read: false,
-    });
+    // Insert initial pitch message
+    const actualSenderProfile = senderId ? await findProfile(senderId) : brandProfile;
+    await query(
+      `INSERT INTO messages (conversation_id, sender_id, text, read)
+       VALUES ($1, $2, $3, false)`,
+      [conversationRow.id, actualSenderProfile ? actualSenderProfile.id : brandProfile.id, pitch]
+    );
 
     res.status(201).json({ success: true, data: connection });
   } catch (error) {
+    console.error("sendRequest error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to send connection request.",
@@ -131,15 +174,7 @@ export const sendRequest = async (req, res) => {
 export const acceptRequest = async (req, res) => {
   try {
     const { connectionId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
-
-    const connection = await Connection.findById(connectionId);
+    const connection = await findConnection(connectionId);
 
     if (!connection) {
       return res.status(404).json({
@@ -157,7 +192,10 @@ export const acceptRequest = async (req, res) => {
         });
       }
 
-      if (String(connection.brandId) !== String(req.user._id)) {
+      if (
+        String(connection.brandId) !== String(req.user._id) &&
+        String(connection.brandId) !== String(req.user.id)
+      ) {
         return res.status(403).json({
           success: false,
           message: "Unauthorized: You do not own this campaign/request.",
@@ -175,18 +213,17 @@ export const acceptRequest = async (req, res) => {
     // If request belongs to a campaign, validate budget limits
     let campaign = null;
     if (connection.campaignId) {
-      campaign = await Campaign.findById(connection.campaignId);
+      campaign = await findCampaign(connection.campaignId);
       if (campaign) {
         const totalBudget = Number(campaign.totalBudget) || 0;
         const minBudget = Number(campaign.minBudgetPerCreator) || 0;
 
         if (totalBudget > 0 && minBudget > 0) {
-          // Count currently accepted connections
-          const approvedCount = await Connection.countDocuments({
-            campaignId: campaign._id,
-            status: "accepted",
-          });
-
+          const countRes = await query(
+            `SELECT COUNT(*)::int as count FROM connections WHERE campaign_id = $1 AND status = 'accepted'`,
+            [campaign.id]
+          );
+          const approvedCount = countRes.rows[0]?.count || 0;
           const currentApprovedBudget = approvedCount * minBudget;
           const remainingBudget = totalBudget - currentApprovedBudget;
 
@@ -200,24 +237,28 @@ export const acceptRequest = async (req, res) => {
       }
     }
 
-    connection.status = "accepted";
-    connection.creatorNotificationSeen = false;
-    connection.updatedAt = Date.now();
-
     // Lock in the agreed amount for payment on approval
-    const finalBrandTotal = connection.proposedAmount || connection.brandTotal || (campaign?.minBudgetPerCreator || 0);
+    const finalBrandTotal =
+      connection.proposedAmount || connection.brandTotal || (campaign?.minBudgetPerCreator || 0);
+    let pravixoFee = 0;
+    let creatorAmount = 0;
+    let collaborationStatus = connection.collaborationStatus || "NEGOTIATING";
+    let agreedAt = connection.agreedAt || null;
+
     if (finalBrandTotal > 0) {
-      const pravixoFee = Math.round(finalBrandTotal * 0.20);
-      const creatorAmount = finalBrandTotal - pravixoFee;
-      connection.brandTotal = finalBrandTotal;
-      connection.pravixoFee = pravixoFee;
-      connection.creatorAmount = creatorAmount;
-      connection.collaborationStatus = "AMOUNT_AGREED";
-      connection.agreedAt = Date.now();
+      pravixoFee = Math.round(finalBrandTotal * 0.2);
+      creatorAmount = finalBrandTotal - pravixoFee;
+      collaborationStatus = "AMOUNT_AGREED";
+      agreedAt = Date.now();
     }
 
-    // Task 5: Derive deliverablesTracking snapshot from Campaign
-    if (campaign && campaign.deliverables && (!connection.deliverablesTracking || connection.deliverablesTracking.length === 0)) {
+    // Derive deliverablesTracking snapshot from Campaign if empty
+    let deliverablesTracking = connection.deliverablesTracking || [];
+    if (
+      campaign &&
+      campaign.deliverables &&
+      (!deliverablesTracking || deliverablesTracking.length === 0)
+    ) {
       const delivs = [];
       const now = Date.now();
       if (campaign.deliverables.reels > 0) {
@@ -260,87 +301,114 @@ export const acceptRequest = async (req, res) => {
           updatedAt: now,
         });
       }
-      connection.deliverablesTracking = delivs;
+      deliverablesTracking = delivs;
     }
 
-    await connection.save();
+    const updateRes = await query(
+      `UPDATE connections
+       SET status = 'accepted',
+           creator_notification_seen = false,
+           brand_total = $1,
+           pravixo_fee = $2,
+           creator_amount = $3,
+           collaboration_status = $4,
+           agreed_at = $5,
+           deliverables_tracking = $6::jsonb,
+           updated_at = NOW()
+       WHERE id = $7
+       RETURNING *`,
+      [
+        finalBrandTotal,
+        pravixoFee,
+        creatorAmount,
+        collaborationStatus,
+        agreedAt,
+        JSON.stringify(deliverablesTracking),
+        connection.id,
+      ]
+    );
 
-    let conversation;
+    const updatedConnection = formatConnection(updateRes.rows[0]);
 
-    const conversationFilter = {
-      creatorId: connection.creatorId,
-      brandId: connection.brandId,
-    };
+    // Activate or create conversation
+    let convRes = await query(
+      `SELECT * FROM conversations 
+       WHERE creator_id = $1 AND brand_id = $2 
+         AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+       LIMIT 1`,
+      [connection.creatorId, connection.brandId, connection.campaignId || null]
+    );
 
-    if (connection.campaignId) {
-      conversationFilter.campaignId = connection.campaignId;
+    let conversationRow = convRes.rows[0];
+    if (!conversationRow) {
+      const newConvRes = await query(
+        `INSERT INTO conversations (creator_id, brand_id, campaign_id, status)
+         VALUES ($1, $2, $3, 'active')
+         RETURNING *`,
+        [connection.creatorId, connection.brandId, connection.campaignId || null]
+      );
+      conversationRow = newConvRes.rows[0];
     } else {
-      conversationFilter.campaignId = null;
+      await query(`UPDATE conversations SET status = 'active', updated_at = NOW() WHERE id = $1`, [
+        conversationRow.id,
+      ]);
     }
 
-    conversation = await Conversation.findOne(conversationFilter);
-
-    if (!conversation) {
-      conversation = await Conversation.create({
-        creatorId: connection.creatorId,
-        brandId: connection.brandId,
-        campaignId: connection.campaignId,
-        status: "active",
-      });
-    } else {
-      conversation.status = "active";
-      await conversation.save();
-    }
-
-    const existingMsg = await Message.findOne({
-      conversationId: conversation._id,
-    });
-
-    if (!existingMsg) {
-      await Message.create({
-        conversationId: conversation._id,
-        senderId: connection.creatorId,
-        text: connection.pitch,
-        read: false,
-      });
+    // Ensure initial pitch message is present
+    const msgCheck = await query(
+      `SELECT id FROM messages WHERE conversation_id = $1 LIMIT 1`,
+      [conversationRow.id]
+    );
+    if (msgCheck.rows.length === 0) {
+      await query(
+        `INSERT INTO messages (conversation_id, sender_id, text, read)
+         VALUES ($1, $2, $3, false)`,
+        [conversationRow.id, connection.creatorId, connection.pitch]
+      );
     }
 
     // Notify Creator
-    const brandProfile = await Profile.findById(connection.brandId).select("fullName").lean();
+    const brandProfile = await findProfile(connection.brandId);
     const brandName = brandProfile?.fullName || "A Brand";
     const campaignTitle = campaign?.title || "Collaboration";
     const approveText = `${brandName} approved your request for "${campaignTitle}".`;
-    
-    // Add approval message to chat history
-    await Message.create({
-      conversationId: conversation._id,
-      senderId: connection.brandId,
-      text: `[Collaboration Approved] 🎉 ${brandName} approved your application for "${campaignTitle}". Next step: Brand will fund the campaign escrow to activate the collaboration.`,
-      messageType: "system",
-      read: false,
-    }).catch((msgErr) => console.warn("Could not post approval message to chat:", msgErr));
 
-    await Notification.create({
-      recipientId: connection.creatorId,
-      senderId: connection.brandId,
-      type: "campaign_request_approved",
-      text: approveText,
-      targetUrl: `/messages?conversationId=${conversation._id}`,
-      createdAt: Date.now(),
-    });
+    // Add approval message to chat
+    await query(
+      `INSERT INTO messages (conversation_id, sender_id, text, message_type, read)
+       VALUES ($1, $2, $3, 'system', false)`,
+      [
+        conversationRow.id,
+        connection.brandId,
+        `[Collaboration Approved] 🎉 ${brandName} approved your application for "${campaignTitle}". Next step: Brand will fund the campaign escrow to activate the collaboration.`,
+      ]
+    ).catch((err) => console.warn("Could not post approval message to chat:", err));
+
+    // Create Notification
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+       VALUES ($1, $2, 'campaign_request_approved', $3, $4, $5, NOW())`,
+      [
+        connection.creatorId,
+        connection.brandId,
+        approveText,
+        `/messages?conversationId=${conversationRow.id}`,
+        Date.now(),
+      ]
+    );
 
     sendPushToUser(connection.creatorId, {
       title: "Campaign Request Approved! 🎉",
       body: approveText,
-      url: `/messages?conversationId=${conversation._id}`,
+      url: `/messages?conversationId=${conversationRow.id}`,
     }).catch((err) => console.error("Request approval push error:", err.message));
 
     res.status(200).json({
       success: true,
       message: "Request approved successfully.",
       data: {
-        connection,
-        conversationId: conversation._id,
+        connection: updatedConnection,
+        conversationId: conversationRow.id,
       },
     });
   } catch (error) {
@@ -359,15 +427,7 @@ export const rejectRequest = async (req, res) => {
     const { connectionId } = req.params;
     const { reason } = req.body || {};
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
-
-    const connection = await Connection.findById(connectionId);
-
+    const connection = await findConnection(connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -375,7 +435,6 @@ export const rejectRequest = async (req, res) => {
       });
     }
 
-    // Security check: Must be authenticated brand and brand must own this request
     if (req.user) {
       if (req.user.role !== "brand") {
         return res.status(403).json({
@@ -384,7 +443,10 @@ export const rejectRequest = async (req, res) => {
         });
       }
 
-      if (String(connection.brandId) !== String(req.user._id)) {
+      if (
+        String(connection.brandId) !== String(req.user._id) &&
+        String(connection.brandId) !== String(req.user.id)
+      ) {
         return res.status(403).json({
           success: false,
           message: "Unauthorized: You do not own this campaign/request.",
@@ -399,51 +461,57 @@ export const rejectRequest = async (req, res) => {
       });
     }
 
-    connection.status = "rejected";
-    connection.creatorNotificationSeen = false;
-    connection.updatedAt = Date.now();
+    const updateRes = await query(
+      `UPDATE connections 
+       SET status = 'rejected', creator_notification_seen = false, updated_at = NOW() 
+       WHERE id = $1 
+       RETURNING *`,
+      [connection.id]
+    );
 
-    await connection.save();
+    const updatedConnection = formatConnection(updateRes.rows[0]);
 
     // Notify Creator
     let campaign = null;
     if (connection.campaignId) {
-      campaign = await Campaign.findById(connection.campaignId).select("title").lean();
+      campaign = await findCampaign(connection.campaignId);
     }
     const campaignTitle = campaign?.title || "Campaign Collaboration";
-    const brandProfile = await Profile.findById(connection.brandId).select("fullName").lean();
+    const brandProfile = await findProfile(connection.brandId);
     const brandName = brandProfile?.fullName || "A Brand";
     const declineReasonText = reason && reason.trim() ? `: "${reason.trim()}"` : "";
     const rejectText = `${brandName} declined your request for "${campaignTitle}"${declineReasonText}.`;
 
-    // Add rejection reason to chat history if conversation exists
     try {
-      const conv = await Conversation.findOne({
-        creatorId: connection.creatorId,
-        brandId: connection.brandId,
-        campaignId: connection.campaignId,
-      });
-      if (conv) {
-        await Message.create({
-          conversationId: conv._id,
-          senderId: connection.brandId,
-          text: `[Collaboration Declined] ${brandName} declined this collaboration${reason && reason.trim() ? `. Reason: "${reason.trim()}"` : ""}.`,
-          messageType: "system",
-          read: false,
-        });
+      const convRes = await query(
+        `SELECT id FROM conversations 
+         WHERE creator_id = $1 AND brand_id = $2 
+           AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+         LIMIT 1`,
+        [connection.creatorId, connection.brandId, connection.campaignId || null]
+      );
+      if (convRes.rows.length > 0) {
+        await query(
+          `INSERT INTO messages (conversation_id, sender_id, text, message_type, read)
+           VALUES ($1, $2, $3, 'system', false)`,
+          [
+            convRes.rows[0].id,
+            connection.brandId,
+            `[Collaboration Declined] ${brandName} declined this collaboration${
+              reason && reason.trim() ? `. Reason: "${reason.trim()}"` : ""
+            }.`,
+          ]
+        );
       }
     } catch (chatErr) {
       console.warn("Could not post rejection message to chat:", chatErr);
     }
 
-    await Notification.create({
-      recipientId: connection.creatorId,
-      senderId: connection.brandId,
-      type: "campaign_request_rejected",
-      text: rejectText,
-      targetUrl: "/dashboard/influencer",
-      createdAt: Date.now(),
-    });
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+       VALUES ($1, $2, 'campaign_request_rejected', $3, '/dashboard/influencer', $4, NOW())`,
+      [connection.creatorId, connection.brandId, rejectText, Date.now()]
+    );
 
     sendPushToUser(connection.creatorId, {
       title: "Campaign Request Update",
@@ -454,7 +522,7 @@ export const rejectRequest = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Request declined.",
-      data: connection,
+      data: updatedConnection,
     });
   } catch (error) {
     console.error("Reject request error:", error);
@@ -470,27 +538,32 @@ export const rejectRequest = async (req, res) => {
 export const getNavbarNotificationCount = async (req, res) => {
   try {
     const { profileId, role } = req.query;
-
     let count = 0;
 
+    const profile = await findProfile(profileId);
+    const targetUuid = profile?.id || profileId;
+
     if (role === "brand") {
-      count = await Connection.countDocuments({
-        brandId: profileId,
-        status: "pending",
-      });
+      const result = await query(
+        `SELECT COUNT(*)::int as count FROM connections 
+         WHERE brand_id::text = $1 AND status = 'pending'`,
+        [targetUuid]
+      );
+      count = result.rows[0]?.count || 0;
     } else if (role === "creator") {
-      count = await Connection.countDocuments({
-        creatorId: profileId,
-        creatorNotificationSeen: false,
-        status: { $in: ["accepted", "rejected"] },
-      });
+      const result = await query(
+        `SELECT COUNT(*)::int as count FROM connections 
+         WHERE creator_id::text = $1 
+           AND creator_notification_seen = false 
+           AND status IN ('accepted', 'rejected')`,
+        [targetUuid]
+      );
+      count = result.rows[0]?.count || 0;
     }
 
-    res.json({
-      success: true,
-      data: count,
-    });
+    res.json({ success: true, data: count });
   } catch (error) {
+    console.error("getNavbarNotificationCount error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to get notification count.",
@@ -502,57 +575,59 @@ export const getNavbarNotificationCount = async (req, res) => {
 export const getRequestsForBrand = async (req, res) => {
   try {
     const { brandId } = req.params;
+    const brandProfile = await findProfile(brandId);
+    const brandUuid = brandProfile?.id || brandId;
 
-    const requests = await Connection.find({
-      brandId,
-      status: "pending",
-    }).lean();
+    const reqRes = await query(
+      `SELECT * FROM connections 
+       WHERE brand_id::text = $1 AND status = 'pending'
+       ORDER BY created_at DESC`,
+      [brandUuid]
+    );
 
     const data = await Promise.all(
-      requests.map(async (request) => {
-        const creatorProfile = await Profile.findById(
-          request.creatorId
-        ).lean();
+      reqRes.rows.map(async (row) => {
+        const connection = formatConnection(row);
+        const creatorProfile = await findProfile(connection.creatorId);
+        const campaign = connection.campaignId ? await findCampaign(connection.campaignId) : null;
 
-        const campaign = request.campaignId
-          ? await Campaign.findById(request.campaignId).lean()
-          : null;
+        let followersCount = 0;
+        let platformStr = "Instagram";
+        let creatorRating = 0;
+        let reviewCount = 0;
 
-        const followersCount = creatorProfile
-          ? (creatorProfile.instagramFollowers || 0) +
+        if (creatorProfile) {
+          followersCount =
+            (creatorProfile.instagramFollowers || 0) +
             (creatorProfile.facebookFollowers || 0) +
             (creatorProfile.linkedinFollowers || 0) +
             (creatorProfile.youtubeFollowers || 0) +
             (creatorProfile.quoraFollowers || 0) +
-            (creatorProfile.twitterFollowers || 0)
-          : 0;
+            (creatorProfile.twitterFollowers || 0);
 
-        const socialConns = await SocialConnection.find({
-          profileId: request.creatorId,
-        }).lean();
+          const socialRes = await query(
+            `SELECT platform FROM social_connections WHERE profile_id::text = $1`,
+            [creatorProfile.id]
+          );
+          if (socialRes.rows.length > 0) {
+            platformStr = socialRes.rows
+              .map((c) => c.platform.charAt(0).toUpperCase() + c.platform.slice(1))
+              .join(", ");
+          }
 
-        const platformStr =
-          socialConns
-            .map(
-              (c) =>
-                c.platform.charAt(0).toUpperCase() +
-                c.platform.slice(1)
-            )
-            .join(", ") || "Instagram";
-
-        let creatorRating = 0;
-        let reviewCount = 0;
-        if (request.creatorId) {
-          const reviews = await Review.find({ creatorId: request.creatorId, visible: true }).select("rating").lean();
-          if (reviews.length > 0) {
-            const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
-            creatorRating = Number((sum / reviews.length).toFixed(1));
-            reviewCount = reviews.length;
+          const reviewRes = await query(
+            `SELECT rating FROM reviews WHERE creator_id::text = $1 AND visible = true`,
+            [creatorProfile.id]
+          );
+          if (reviewRes.rows.length > 0) {
+            const sum = reviewRes.rows.reduce((acc, r) => acc + (r.rating || 0), 0);
+            creatorRating = Number((sum / reviewRes.rows.length).toFixed(1));
+            reviewCount = reviewRes.rows.length;
           }
         }
 
         return {
-          ...request,
+          ...connection,
           creatorProfile: creatorProfile
             ? {
                 ...creatorProfile,
@@ -569,6 +644,7 @@ export const getRequestsForBrand = async (req, res) => {
 
     res.json({ success: true, data });
   } catch (error) {
+    console.error("getRequestsForBrand error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch brand requests.",
@@ -580,43 +656,63 @@ export const getRequestsForBrand = async (req, res) => {
 export const getRequestsForCreator = async (req, res) => {
   try {
     const { creatorId } = req.params;
+    const creator = await findProfile(creatorId);
+    const creatorUuid = creator?.id || creatorId;
 
-    const requests = await Connection.find({ creatorId })
-      .populate("campaignId")
-      .populate("paymentId")
-      .lean();
+    const reqRes = await query(
+      `SELECT * FROM connections 
+       WHERE creator_id::text = $1
+       ORDER BY created_at DESC`,
+      [creatorUuid]
+    );
 
     const data = await Promise.all(
-      requests.map(async (request) => {
-        const brandProfile = await Profile.findById(request.brandId).lean();
-        const campaign = request.campaignId && typeof request.campaignId === "object"
-          ? request.campaignId
-          : request.campaignId ? await Campaign.findById(request.campaignId).lean() : null;
+      reqRes.rows.map(async (row) => {
+        const connection = formatConnection(row);
+        const brandProfile = await findProfile(connection.brandId);
+        const campaign = connection.campaignId ? await findCampaign(connection.campaignId) : null;
 
         let conversationId = null;
-        if (request.status === "accepted") {
-          const conv = await Conversation.findOne({
-            creatorId: request.creatorId,
-            brandId: request.brandId,
-            ...(request.campaignId ? { campaignId: request.campaignId._id || request.campaignId } : {}),
-          }).lean();
-          conversationId = conv?._id || null;
+        if (connection.status === "accepted") {
+          const convRes = await query(
+            `SELECT id FROM conversations 
+             WHERE creator_id = $1 AND brand_id = $2 
+               AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+             LIMIT 1`,
+            [connection.creatorId, connection.brandId, connection.campaignId || null]
+          );
+          conversationId = convRes.rows[0]?.id || null;
         }
 
-        // Retrieve payment details if not already populated
-        let payment = request.paymentId && typeof request.paymentId === "object" ? request.paymentId : null;
+        // Retrieve payment
+        let payment = null;
+        if (connection.paymentId) {
+          const payRes = await query(`SELECT * FROM payments WHERE id::text = $1 LIMIT 1`, [
+            connection.paymentId,
+          ]);
+          payment = payRes.rows[0] ? formatPayment(payRes.rows[0]) : null;
+        }
         if (!payment) {
-          payment = await Payment.findOne({ connectionId: request._id }).lean();
+          const payRes = await query(
+            `SELECT * FROM payments WHERE connection_id::text = $1 LIMIT 1`,
+            [connection.id]
+          );
+          payment = payRes.rows[0] ? formatPayment(payRes.rows[0]) : null;
         }
 
-        // Check submissions count & review status
-        const submissions = await Submission.find({ connectionId: request._id }).lean();
-        const pendingCount = submissions.filter((s) => s.status === "SUBMITTED" || s.status === "RESUBMITTED").length;
+        // Submissions count
+        const subRes = await query(`SELECT * FROM submissions WHERE connection_id::text = $1`, [
+          connection.id,
+        ]);
+        const submissions = subRes.rows.map(formatSubmission);
+        const pendingCount = submissions.filter(
+          (s) => s.status === "SUBMITTED" || s.status === "RESUBMITTED"
+        ).length;
         const approvedCount = submissions.filter((s) => s.status === "APPROVED").length;
         const rejectedCount = submissions.filter((s) => s.status === "REJECTED").length;
 
         return {
-          ...request,
+          ...connection,
           brandProfile,
           campaign,
           conversationId,
@@ -631,6 +727,7 @@ export const getRequestsForCreator = async (req, res) => {
 
     res.json({ success: true, data });
   } catch (error) {
+    console.error("getRequestsForCreator error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch creator requests.",
@@ -643,16 +740,27 @@ export const getConnectionStatus = async (req, res) => {
   try {
     const { creatorId, brandId } = req.query;
 
-    const connection = await Connection.findOne({
-      creatorId,
-      brandId,
-    });
+    const [creatorProfile, brandProfile] = await Promise.all([
+      findProfile(creatorId),
+      findProfile(brandId),
+    ]);
+
+    const cUuid = creatorProfile?.id || creatorId;
+    const bUuid = brandProfile?.id || brandId;
+
+    const result = await query(
+      `SELECT * FROM connections 
+       WHERE creator_id::text = $1 AND brand_id::text = $2 
+       ORDER BY created_at DESC LIMIT 1`,
+      [cUuid, bUuid]
+    );
 
     res.json({
       success: true,
-      data: connection,
+      data: result.rows[0] ? formatConnection(result.rows[0]) : null,
     });
   } catch (error) {
+    console.error("getConnectionStatus error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to get connection status.",
@@ -664,16 +772,16 @@ export const getConnectionStatus = async (req, res) => {
 export const markCreatorNotificationsSeen = async (req, res) => {
   try {
     const { creatorId } = req.params;
+    const profile = await findProfile(creatorId);
+    const creatorUuid = profile?.id || creatorId;
 
-    await Connection.updateMany(
-      {
-        creatorId,
-        creatorNotificationSeen: false,
-        status: { $in: ["accepted", "rejected"] },
-      },
-      {
-        creatorNotificationSeen: true,
-      }
+    await query(
+      `UPDATE connections 
+       SET creator_notification_seen = true, updated_at = NOW()
+       WHERE creator_id::text = $1 
+         AND creator_notification_seen = false 
+         AND status IN ('accepted', 'rejected')`,
+      [creatorUuid]
     );
 
     res.json({
@@ -681,6 +789,7 @@ export const markCreatorNotificationsSeen = async (req, res) => {
       message: "Notifications marked as seen.",
     });
   } catch (error) {
+    console.error("markCreatorNotificationsSeen error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update notifications.",
@@ -692,37 +801,32 @@ export const markCreatorNotificationsSeen = async (req, res) => {
 export const getAllConnections = async (req, res) => {
   try {
     const { profileId, role } = req.query;
+    const profile = await findProfile(profileId);
+    const targetUuid = profile?.id || profileId;
 
-    const filter =
+    const sql =
       role === "brand"
-        ? { brandId: profileId }
-        : { creatorId: profileId };
+        ? `SELECT * FROM connections WHERE brand_id::text = $1 ORDER BY created_at DESC`
+        : `SELECT * FROM connections WHERE creator_id::text = $1 ORDER BY created_at DESC`;
 
-    const list = await Connection.find(filter)
-      .sort({ createdAt: -1 })
-      .lean();
+    const listRes = await query(sql, [targetUuid]);
 
     const data = await Promise.all(
-      list.map(async (connection) => {
-        const otherProfile = await Profile.findById(
-          role === "brand"
-            ? connection.creatorId
-            : connection.brandId
-        ).lean();
+      listRes.rows.map(async (row) => {
+        const connection = formatConnection(row);
+        const otherId = role === "brand" ? connection.creatorId : connection.brandId;
+        const otherProfile = await findProfile(otherId);
 
         let conversationId = null;
         if (connection.status === "accepted") {
-          const convFilter = {
-            creatorId: connection.creatorId,
-            brandId: connection.brandId,
-          };
-          if (connection.campaignId) {
-            convFilter.campaignId = connection.campaignId;
-          } else {
-            convFilter.campaignId = null;
-          }
-          const conversation = await Conversation.findOne(convFilter).select("_id").lean();
-          conversationId = conversation?._id || null;
+          const convRes = await query(
+            `SELECT id FROM conversations 
+             WHERE creator_id = $1 AND brand_id = $2 
+               AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+             LIMIT 1`,
+            [connection.creatorId, connection.brandId, connection.campaignId || null]
+          );
+          conversationId = convRes.rows[0]?.id || null;
         }
 
         return {
@@ -735,6 +839,7 @@ export const getAllConnections = async (req, res) => {
 
     res.json({ success: true, data });
   } catch (error) {
+    console.error("getAllConnections error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch connections.",
@@ -746,36 +851,30 @@ export const getAllConnections = async (req, res) => {
 export const getMyRequestsForCreator = async (req, res) => {
   try {
     const { creatorId } = req.params;
+    const profile = await findProfile(creatorId);
+    const creatorUuid = profile?.id || creatorId;
 
-    const list = await Connection.find({ creatorId }).lean();
+    const listRes = await query(
+      `SELECT * FROM connections WHERE creator_id::text = $1 ORDER BY created_at DESC`,
+      [creatorUuid]
+    );
 
     const data = await Promise.all(
-      list.map(async (connection) => {
-        const brandProfile = await Profile.findById(
-          connection.brandId
-        ).lean();
-
-        const campaign = connection.campaignId
-          ? await Campaign.findById(connection.campaignId).lean()
-          : null;
+      listRes.rows.map(async (row) => {
+        const connection = formatConnection(row);
+        const brandProfile = await findProfile(connection.brandId);
+        const campaign = connection.campaignId ? await findCampaign(connection.campaignId) : null;
 
         let conversationId = null;
-
         if (connection.status === "accepted") {
-          const filter = {
-            creatorId: connection.creatorId,
-            brandId: connection.brandId,
-          };
-
-          if (connection.campaignId) {
-            filter.campaignId = connection.campaignId;
-          } else {
-            filter.campaignId = null;
-          }
-
-          const conversation = await Conversation.findOne(filter).lean();
-
-          conversationId = conversation?._id || null;
+          const convRes = await query(
+            `SELECT id FROM conversations 
+             WHERE creator_id = $1 AND brand_id = $2 
+               AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+             LIMIT 1`,
+            [connection.creatorId, connection.brandId, connection.campaignId || null]
+          );
+          conversationId = convRes.rows[0]?.id || null;
         }
 
         return {
@@ -789,6 +888,7 @@ export const getMyRequestsForCreator = async (req, res) => {
 
     res.json({ success: true, data });
   } catch (error) {
+    console.error("getMyRequestsForCreator error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch creator requests.",
@@ -800,42 +900,53 @@ export const getMyRequestsForCreator = async (req, res) => {
 export const getApprovedCollaborationsForBrand = async (req, res) => {
   try {
     const { brandId } = req.params;
+    const profile = await findProfile(brandId);
+    const brandUuid = profile?.id || brandId;
 
-    const list = await Connection.find({
-      brandId,
-      status: "accepted",
-    }).lean();
+    const listRes = await query(
+      `SELECT * FROM connections 
+       WHERE brand_id::text = $1 AND status = 'accepted'
+       ORDER BY created_at DESC`,
+      [brandUuid]
+    );
 
     const data = await Promise.all(
-      list.map(async (connection) => {
-        const creatorProfile = await Profile.findById(
-          connection.creatorId
-        ).lean();
+      listRes.rows.map(async (row) => {
+        const connection = formatConnection(row);
+        const creatorProfile = await findProfile(connection.creatorId);
+        const campaign = connection.campaignId ? await findCampaign(connection.campaignId) : null;
 
-        const campaign = connection.campaignId
-          ? await Campaign.findById(connection.campaignId).lean()
-          : null;
+        const convRes = await query(
+          `SELECT * FROM conversations 
+           WHERE creator_id = $1 AND brand_id = $2 
+             AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+           LIMIT 1`,
+          [connection.creatorId, connection.brandId, connection.campaignId || null]
+        );
+        const conversation = convRes.rows[0] ? formatConversation(convRes.rows[0]) : null;
 
-        const filter = {
-          creatorId: connection.creatorId,
-          brandId: connection.brandId,
-        };
-
-        if (connection.campaignId) {
-          filter.campaignId = connection.campaignId;
-        } else {
-          filter.campaignId = null;
+        let payment = null;
+        if (connection.paymentId) {
+          const pRes = await query(`SELECT * FROM payments WHERE id::text = $1 LIMIT 1`, [
+            connection.paymentId,
+          ]);
+          payment = pRes.rows[0] ? formatPayment(pRes.rows[0]) : null;
         }
-
-        const conversation = await Conversation.findOne(filter).lean();
-
-        let payment = connection.paymentId && typeof connection.paymentId === "object" ? connection.paymentId : null;
         if (!payment) {
-          payment = await Payment.findOne({ connectionId: connection._id }).lean();
+          const pRes = await query(
+            `SELECT * FROM payments WHERE connection_id::text = $1 LIMIT 1`,
+            [connection.id]
+          );
+          payment = pRes.rows[0] ? formatPayment(pRes.rows[0]) : null;
         }
 
-        const submissions = await Submission.find({ connectionId: connection._id }).lean();
-        const pendingCount = submissions.filter((s) => s.status === "SUBMITTED" || s.status === "RESUBMITTED").length;
+        const subRes = await query(`SELECT * FROM submissions WHERE connection_id::text = $1`, [
+          connection.id,
+        ]);
+        const submissions = subRes.rows.map(formatSubmission);
+        const pendingCount = submissions.filter(
+          (s) => s.status === "SUBMITTED" || s.status === "RESUBMITTED"
+        ).length;
         const approvedCount = submissions.filter((s) => s.status === "APPROVED").length;
         const rejectedCount = submissions.filter((s) => s.status === "REJECTED").length;
 
@@ -843,7 +954,7 @@ export const getApprovedCollaborationsForBrand = async (req, res) => {
           ...connection,
           creatorProfile,
           campaign,
-          conversationId: conversation?._id || null,
+          conversationId: conversation?.id || null,
           conversationStatus: conversation?.status || "inactive",
           payment,
           submissionsCount: submissions.length,
@@ -856,6 +967,7 @@ export const getApprovedCollaborationsForBrand = async (req, res) => {
 
     res.json({ success: true, data });
   } catch (error) {
+    console.error("getApprovedCollaborationsForBrand error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch approved collaborations.",
@@ -869,13 +981,6 @@ export const proposeCollaborationAmount = async (req, res) => {
     const { connectionId } = req.params;
     const { amount } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
-
     const numericAmount = Number(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
       return res.status(400).json({
@@ -884,7 +989,7 @@ export const proposeCollaborationAmount = async (req, res) => {
       });
     }
 
-    const connection = await Connection.findById(connectionId);
+    const connection = await findConnection(connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -892,10 +997,14 @@ export const proposeCollaborationAmount = async (req, res) => {
       });
     }
 
-    // Security check: User must be part of this collaboration (brand or creator)
+    // Security check
     if (req.user) {
-      const isBrand = String(connection.brandId) === String(req.user._id);
-      const isCreator = String(connection.creatorId) === String(req.user._id);
+      const isBrand =
+        String(connection.brandId) === String(req.user._id) ||
+        String(connection.brandId) === String(req.user.id);
+      const isCreator =
+        String(connection.creatorId) === String(req.user._id) ||
+        String(connection.creatorId) === String(req.user.id);
 
       if (!isBrand && !isCreator) {
         return res.status(403).json({
@@ -905,11 +1014,10 @@ export const proposeCollaborationAmount = async (req, res) => {
       }
     }
 
-    // If campaign linked, check budget constraints
+    // Budget constraints validation if campaign linked
     if (connection.campaignId) {
-      const campaign = await Campaign.findById(connection.campaignId);
+      const campaign = await findCampaign(connection.campaignId);
       if (campaign) {
-        // 1. Check max budget per creator
         if (campaign.maxBudgetPerCreator && campaign.maxBudgetPerCreator > 0) {
           if (numericAmount > campaign.maxBudgetPerCreator) {
             return res.status(400).json({
@@ -919,19 +1027,16 @@ export const proposeCollaborationAmount = async (req, res) => {
           }
         }
 
-        // 2. Check total committed creator amounts for this campaign (excluding this collaboration)
         if (campaign.totalBudget && campaign.totalBudget > 0) {
-          const agreedConnections = await Connection.find({
-            campaignId: campaign._id,
-            collaborationStatus: "AMOUNT_AGREED",
-            _id: { $ne: connection._id },
-          }).lean();
-
-          const totalCommitted = agreedConnections.reduce(
-            (acc, curr) => acc + (curr.creatorAmount || 0),
+          const agreedRes = await query(
+            `SELECT creator_amount FROM connections 
+             WHERE campaign_id = $1 AND collaboration_status = 'AMOUNT_AGREED' AND id != $2`,
+            [campaign.id, connection.id]
+          );
+          const totalCommitted = agreedRes.rows.reduce(
+            (acc, curr) => acc + Number(curr.creator_amount || 0),
             0
           );
-
           const remainingBudget = campaign.totalBudget - totalCommitted;
 
           if (numericAmount > remainingBudget) {
@@ -944,38 +1049,49 @@ export const proposeCollaborationAmount = async (req, res) => {
       }
     }
 
-    const senderProfileId = req.user ? req.user._id : (connection.brandId);
-    const recipientId = String(senderProfileId) === String(connection.brandId)
-      ? connection.creatorId
-      : connection.brandId;
+    const senderProfileId = req.user ? req.user.id || req.user._id : connection.brandId;
+    const recipientId =
+      String(senderProfileId) === String(connection.brandId)
+        ? connection.creatorId
+        : connection.brandId;
 
-    connection.proposedAmount = numericAmount;
-    connection.proposedBy = senderProfileId;
-    connection.collaborationStatus = "NEGOTIATING";
-    connection.updatedAt = Date.now();
-    await connection.save();
+    const updateRes = await query(
+      `UPDATE connections
+       SET proposed_amount = $1,
+           proposed_by = $2,
+           collaboration_status = 'NEGOTIATING',
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [numericAmount, senderProfileId, connection.id]
+    );
 
-    // Send notification to the other party
-    const senderProfile = await Profile.findById(senderProfileId).select("fullName").lean();
+    const updatedConn = formatConnection(updateRes.rows[0]);
+
+    // Send notification
+    const senderProfile = await findProfile(senderProfileId);
     const senderName = senderProfile?.fullName || "Collaboration partner";
     let campaign = null;
     if (connection.campaignId) {
-      campaign = await Campaign.findById(connection.campaignId).select("title").lean();
+      campaign = await findCampaign(connection.campaignId);
     }
     const campaignTitle = campaign?.title || "campaign";
 
-    await Notification.create({
-      recipientId,
-      senderId: senderProfileId,
-      type: "campaign_amount_proposed",
-      text: `${senderName} proposed a creator payment of ₹${numericAmount.toLocaleString()} for "${campaignTitle}".`,
-      createdAt: Date.now(),
-    });
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, created_at, created_at_dt)
+       VALUES ($1, $2, 'campaign_amount_proposed', $3, $4, NOW())`,
+      [
+        recipientId,
+        senderProfileId,
+        `${senderName} proposed a creator payment of ₹${numericAmount.toLocaleString()} for "${campaignTitle}".`,
+        Date.now(),
+      ]
+    );
 
     res.status(200).json({
       success: true,
       message: "Offer proposed successfully.",
-      data: connection,
+      data: updatedConn,
     });
   } catch (error) {
     console.error("Propose amount error:", error);
@@ -992,14 +1108,7 @@ export const agreeCollaborationAmount = async (req, res) => {
   try {
     const { connectionId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
-
-    const connection = await Connection.findById(connectionId);
+    const connection = await findConnection(connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -1007,10 +1116,13 @@ export const agreeCollaborationAmount = async (req, res) => {
       });
     }
 
-    // Security check: User must be part of this collaboration
     if (req.user) {
-      const isBrand = String(connection.brandId) === String(req.user._id);
-      const isCreator = String(connection.creatorId) === String(req.user._id);
+      const isBrand =
+        String(connection.brandId) === String(req.user._id) ||
+        String(connection.brandId) === String(req.user.id);
+      const isCreator =
+        String(connection.creatorId) === String(req.user._id) ||
+        String(connection.creatorId) === String(req.user.id);
 
       if (!isBrand && !isCreator) {
         return res.status(403).json({
@@ -1028,11 +1140,9 @@ export const agreeCollaborationAmount = async (req, res) => {
       });
     }
 
-    // If campaign linked, re-validate budget constraints
     if (connection.campaignId) {
-      const campaign = await Campaign.findById(connection.campaignId);
+      const campaign = await findCampaign(connection.campaignId);
       if (campaign) {
-        // 1. Check max budget per creator
         if (campaign.maxBudgetPerCreator && campaign.maxBudgetPerCreator > 0) {
           if (finalAmount > campaign.maxBudgetPerCreator) {
             return res.status(400).json({
@@ -1042,19 +1152,16 @@ export const agreeCollaborationAmount = async (req, res) => {
           }
         }
 
-        // 2. Check total committed creator amounts for this campaign
         if (campaign.totalBudget && campaign.totalBudget > 0) {
-          const agreedConnections = await Connection.find({
-            campaignId: campaign._id,
-            collaborationStatus: "AMOUNT_AGREED",
-            _id: { $ne: connection._id },
-          }).lean();
-
-          const totalCommitted = agreedConnections.reduce(
-            (acc, curr) => acc + (curr.brandTotal || curr.creatorAmount || 0),
+          const agreedRes = await query(
+            `SELECT brand_total, creator_amount FROM connections 
+             WHERE campaign_id = $1 AND collaboration_status = 'AMOUNT_AGREED' AND id != $2`,
+            [campaign.id, connection.id]
+          );
+          const totalCommitted = agreedRes.rows.reduce(
+            (acc, curr) => acc + (Number(curr.brand_total) || Number(curr.creator_amount) || 0),
             0
           );
-
           const remainingBudget = campaign.totalBudget - totalCommitted;
 
           if (finalAmount > remainingBudget) {
@@ -1067,48 +1174,54 @@ export const agreeCollaborationAmount = async (req, res) => {
       }
     }
 
-    // Exact calculations:
-    // Brand Total Budget = finalAmount (e.g. ₹1,000)
-    // Pravixo Commission = 20% of brand budget (e.g. ₹200)
-    // Creator Net Earnings = 80% (e.g. ₹800)
     const brandTotal = Math.round(finalAmount);
-    const pravixoFee = Math.round(brandTotal * 0.20);
+    const pravixoFee = Math.round(brandTotal * 0.2);
     const creatorAmount = brandTotal - pravixoFee;
 
-    connection.creatorAmount = creatorAmount;
-    connection.pravixoFee = pravixoFee;
-    connection.brandTotal = brandTotal;
-    connection.collaborationStatus = "AMOUNT_AGREED";
-    connection.agreedAt = Date.now();
-    connection.updatedAt = Date.now();
-    await connection.save();
+    const updateRes = await query(
+      `UPDATE connections 
+       SET creator_amount = $1,
+           pravixo_fee = $2,
+           brand_total = $3,
+           collaboration_status = 'AMOUNT_AGREED',
+           agreed_at = $4,
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING *`,
+      [creatorAmount, pravixoFee, brandTotal, Date.now(), connection.id]
+    );
 
-    // Send notification
-    const agreeingUser = req.user ? req.user._id : (connection.brandId);
-    const recipientId = String(agreeingUser) === String(connection.brandId)
-      ? connection.creatorId
-      : connection.brandId;
+    const updatedConn = formatConnection(updateRes.rows[0]);
 
-    const agreeingProfile = await Profile.findById(agreeingUser).select("fullName").lean();
+    const agreeingUser = req.user ? req.user.id || req.user._id : connection.brandId;
+    const recipientId =
+      String(agreeingUser) === String(connection.brandId)
+        ? connection.creatorId
+        : connection.brandId;
+
+    const agreeingProfile = await findProfile(agreeingUser);
     const agreeingName = agreeingProfile?.fullName || "Collaboration partner";
     let campaign = null;
     if (connection.campaignId) {
-      campaign = await Campaign.findById(connection.campaignId).select("title").lean();
+      campaign = await findCampaign(connection.campaignId);
     }
     const campaignTitle = campaign?.title || "campaign";
 
-    await Notification.create({
-      recipientId,
-      senderId: agreeingUser,
-      type: "campaign_amount_agreed",
-      text: `${agreeingName} agreed to collaboration budget ₹${brandTotal.toLocaleString()} (Creator receives ₹${creatorAmount.toLocaleString()} after 20% platform fee) for "${campaignTitle}".`,
-      createdAt: Date.now(),
-    });
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, created_at, created_at_dt)
+       VALUES ($1, $2, 'campaign_amount_agreed', $3, $4, NOW())`,
+      [
+        recipientId,
+        agreeingUser,
+        `${agreeingName} agreed to collaboration budget ₹${brandTotal.toLocaleString()} (Creator receives ₹${creatorAmount.toLocaleString()} after 20% platform fee) for "${campaignTitle}".`,
+        Date.now(),
+      ]
+    );
 
     res.status(200).json({
       success: true,
       message: "Collaboration payment amount agreed successfully.",
-      data: connection,
+      data: updatedConn,
     });
   } catch (error) {
     console.error("Agree amount error:", error);
@@ -1127,12 +1240,23 @@ export const getCollaborationDetails = async (req, res) => {
     const { creatorId, brandId, campaignId } = req.query;
 
     let connection = null;
-    if (connectionId && mongoose.Types.ObjectId.isValid(connectionId)) {
-      connection = await Connection.findById(connectionId).lean();
+    if (connectionId) {
+      connection = await findConnection(connectionId);
     } else if (creatorId && brandId) {
-      const filter = { creatorId, brandId };
-      if (campaignId) filter.campaignId = campaignId;
-      connection = await Connection.findOne(filter).lean();
+      const [cProf, bProf] = await Promise.all([findProfile(creatorId), findProfile(brandId)]);
+      const cUuid = cProf?.id || creatorId;
+      const bUuid = bProf?.id || brandId;
+      const camp = campaignId ? await findCampaign(campaignId) : null;
+      const campUuid = camp?.id || campaignId || null;
+
+      const result = await query(
+        `SELECT * FROM connections 
+         WHERE creator_id::text = $1 AND brand_id::text = $2 
+           AND (($3::text IS NULL AND campaign_id IS NULL) OR campaign_id::text = $3)
+         ORDER BY created_at DESC LIMIT 1`,
+        [cUuid, bUuid, campUuid]
+      );
+      connection = result.rows[0] ? formatConnection(result.rows[0]) : null;
     }
 
     if (!connection) {
@@ -1142,10 +1266,13 @@ export const getCollaborationDetails = async (req, res) => {
       });
     }
 
-    // Security check: User must be part of this collaboration (or admin)
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(connection.brandId) === String(req.user._id);
-      const isCreator = String(connection.creatorId) === String(req.user._id);
+      const isBrand =
+        String(connection.brandId) === String(req.user._id) ||
+        String(connection.brandId) === String(req.user.id);
+      const isCreator =
+        String(connection.creatorId) === String(req.user._id) ||
+        String(connection.creatorId) === String(req.user.id);
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -1156,7 +1283,7 @@ export const getCollaborationDetails = async (req, res) => {
 
     let campaign = null;
     if (connection.campaignId) {
-      campaign = await Campaign.findById(connection.campaignId).lean();
+      campaign = await findCampaign(connection.campaignId);
     }
 
     res.status(200).json({
@@ -1176,19 +1303,12 @@ export const getCollaborationDetails = async (req, res) => {
   }
 };
 
-// 15. Task 5: Get Deliverables Tracking for a Collaboration
+// 15. Get Deliverables Tracking for a Collaboration
 export const getCollaborationDeliverables = async (req, res) => {
   try {
     const { connectionId } = req.params;
+    let connection = await findConnection(connectionId);
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
-
-    let connection = await Connection.findById(connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -1196,10 +1316,13 @@ export const getCollaborationDeliverables = async (req, res) => {
       });
     }
 
-    // Security check: User must be part of this collaboration (brand or creator) or admin
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(connection.brandId) === String(req.user._id);
-      const isCreator = String(connection.creatorId) === String(req.user._id);
+      const isBrand =
+        String(connection.brandId) === String(req.user._id) ||
+        String(connection.brandId) === String(req.user.id);
+      const isCreator =
+        String(connection.creatorId) === String(req.user._id) ||
+        String(connection.creatorId) === String(req.user.id);
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -1208,9 +1331,9 @@ export const getCollaborationDeliverables = async (req, res) => {
       }
     }
 
-    // Fallback: If deliverablesTracking is empty but campaign exists, snapshot it now
-    if ((!connection.deliverablesTracking || connection.deliverablesTracking.length === 0) && connection.campaignId) {
-      const camp = await Campaign.findById(connection.campaignId).lean();
+    let deliverables = connection.deliverablesTracking || [];
+    if (deliverables.length === 0 && connection.campaignId) {
+      const camp = await findCampaign(connection.campaignId);
       if (camp && camp.deliverables) {
         const delivs = [];
         const now = Date.now();
@@ -1254,21 +1377,23 @@ export const getCollaborationDeliverables = async (req, res) => {
             updatedAt: now,
           });
         }
-        connection.deliverablesTracking = delivs;
-        await connection.save();
+        deliverables = delivs;
+        await query(
+          `UPDATE connections SET deliverables_tracking = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify(deliverables), connection.id]
+        );
       }
     }
 
-    // Calculate progress summary
-    const deliverables = connection.deliverablesTracking || [];
     const totalRequired = deliverables.reduce((sum, d) => sum + (d.requiredQuantity || 0), 0);
     const totalCompleted = deliverables.reduce((sum, d) => sum + (d.completedQuantity || 0), 0);
-    const progressPercent = totalRequired > 0 ? Math.round((totalCompleted / totalRequired) * 100) : 0;
+    const progressPercent =
+      totalRequired > 0 ? Math.round((totalCompleted / totalRequired) * 100) : 0;
 
     res.status(200).json({
       success: true,
       data: {
-        connectionId: connection._id,
+        connectionId: connection.id,
         paymentStatus: connection.paymentStatus,
         isPaid: connection.paymentStatus === "PAID",
         deliverables,
@@ -1289,19 +1414,12 @@ export const getCollaborationDeliverables = async (req, res) => {
   }
 };
 
-// Delete / Dismiss connection request
+// 16. Delete / Dismiss connection request
 export const deleteConnection = async (req, res) => {
   try {
     const { connectionId } = req.params;
+    const connection = await findConnection(connectionId);
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
-
-    const connection = await Connection.findById(connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -1309,9 +1427,8 @@ export const deleteConnection = async (req, res) => {
       });
     }
 
-    // Permission check: Brand owner, Creator owner, or Admin
     if (req.user && req.user.role !== "admin") {
-      const userProfileId = String(req.user._id);
+      const userProfileId = String(req.user._id || req.user.id);
       const isBrandOwner = String(connection.brandId) === userProfileId;
       const isCreatorOwner = String(connection.creatorId) === userProfileId;
 
@@ -1323,7 +1440,7 @@ export const deleteConnection = async (req, res) => {
       }
     }
 
-    await Connection.findByIdAndDelete(connectionId);
+    await query(`DELETE FROM connections WHERE id = $1`, [connection.id]);
 
     return res.status(200).json({
       success: true,
@@ -1340,24 +1457,20 @@ export const deleteConnection = async (req, res) => {
   }
 };
 
-// Update Shipping Address by Creator
+// 17. Update Shipping Address by Creator
 export const updateShippingAddress = async (req, res) => {
   try {
     const { connectionId } = req.params;
     const { fullName, phone, addressLine1, city, state, pincode } = req.body;
 
-    const connection = await Connection.findById(connectionId);
+    const connection = await findConnection(connectionId);
     if (!connection) {
       return res.status(404).json({ success: false, message: "Connection not found." });
     }
 
-    if (!connection.barterDetails) {
-      connection.barterDetails = { isBarter: true };
-    } else {
-      connection.barterDetails.isBarter = true;
-    }
-
-    connection.barterDetails.creatorShippingAddress = {
+    const barterDetails = connection.barterDetails || {};
+    barterDetails.isBarter = true;
+    barterDetails.creatorShippingAddress = {
       fullName: fullName || "",
       phone: phone || "",
       addressLine1: addressLine1 || "",
@@ -1366,13 +1479,18 @@ export const updateShippingAddress = async (req, res) => {
       pincode: pincode || "",
     };
 
-    connection.updatedAt = Date.now();
-    await connection.save();
+    const updateRes = await query(
+      `UPDATE connections 
+       SET barter_details = $1::jsonb, updated_at = NOW() 
+       WHERE id = $2 
+       RETURNING *`,
+      [JSON.stringify(barterDetails), connection.id]
+    );
 
     return res.status(200).json({
       success: true,
       message: "Shipping address updated successfully.",
-      data: connection,
+      data: formatConnection(updateRes.rows[0]),
     });
   } catch (error) {
     console.error("Update shipping address error:", error);
@@ -1380,7 +1498,7 @@ export const updateShippingAddress = async (req, res) => {
   }
 };
 
-// Update Barter Shipment / Tracking by Brand
+// 18. Update Barter Shipment / Tracking by Brand
 export const updateBarterShipping = async (req, res) => {
   try {
     const { connectionId } = req.params;
@@ -1394,40 +1512,42 @@ export const updateBarterShipping = async (req, res) => {
       shippingStatus,
     } = req.body;
 
-    const connection = await Connection.findById(connectionId);
+    const connection = await findConnection(connectionId);
     if (!connection) {
       return res.status(404).json({ success: false, message: "Connection not found." });
     }
 
-    if (!connection.barterDetails) {
-      connection.barterDetails = {};
-    }
-
-    connection.barterDetails.isBarter = true;
-    if (productName) connection.barterDetails.productName = productName;
-    if (productValue != null) connection.barterDetails.productValue = Number(productValue);
-    if (productDescription) connection.barterDetails.productDescription = productDescription;
-    if (courierPartner) connection.barterDetails.courierPartner = courierPartner;
-    if (trackingNumber) connection.barterDetails.trackingNumber = trackingNumber;
-    if (trackingUrl) connection.barterDetails.trackingUrl = trackingUrl;
+    const barterDetails = connection.barterDetails || {};
+    barterDetails.isBarter = true;
+    if (productName) barterDetails.productName = productName;
+    if (productValue != null) barterDetails.productValue = Number(productValue);
+    if (productDescription) barterDetails.productDescription = productDescription;
+    if (courierPartner) barterDetails.courierPartner = courierPartner;
+    if (trackingNumber) barterDetails.trackingNumber = trackingNumber;
+    if (trackingUrl) barterDetails.trackingUrl = trackingUrl;
 
     if (shippingStatus) {
-      connection.barterDetails.shippingStatus = shippingStatus;
-      if (shippingStatus === "DISPATCHED" && !connection.barterDetails.shippedAt) {
-        connection.barterDetails.shippedAt = Date.now();
+      barterDetails.shippingStatus = shippingStatus;
+      if (shippingStatus === "DISPATCHED" && !barterDetails.shippedAt) {
+        barterDetails.shippedAt = Date.now();
       }
-      if (shippingStatus === "DELIVERED" && !connection.barterDetails.deliveredAt) {
-        connection.barterDetails.deliveredAt = Date.now();
+      if (shippingStatus === "DELIVERED" && !barterDetails.deliveredAt) {
+        barterDetails.deliveredAt = Date.now();
       }
     }
 
-    connection.updatedAt = Date.now();
-    await connection.save();
+    const updateRes = await query(
+      `UPDATE connections 
+       SET barter_details = $1::jsonb, updated_at = NOW() 
+       WHERE id = $2 
+       RETURNING *`,
+      [JSON.stringify(barterDetails), connection.id]
+    );
 
     return res.status(200).json({
       success: true,
       message: "Barter shipping details updated successfully.",
-      data: connection,
+      data: formatConnection(updateRes.rows[0]),
     });
   } catch (error) {
     console.error("Update barter shipping error:", error);
@@ -1435,28 +1555,31 @@ export const updateBarterShipping = async (req, res) => {
   }
 };
 
-// Confirm Product Received by Creator
+// 19. Confirm Product Received by Creator
 export const confirmProductReceived = async (req, res) => {
   try {
     const { connectionId } = req.params;
-    const connection = await Connection.findById(connectionId);
+    const connection = await findConnection(connectionId);
     if (!connection) {
       return res.status(404).json({ success: false, message: "Connection not found." });
     }
 
-    if (!connection.barterDetails) {
-      connection.barterDetails = {};
-    }
+    const barterDetails = connection.barterDetails || {};
+    barterDetails.shippingStatus = "CONFIRMED_BY_CREATOR";
+    barterDetails.creatorConfirmedAt = Date.now();
 
-    connection.barterDetails.shippingStatus = "CONFIRMED_BY_CREATOR";
-    connection.barterDetails.creatorConfirmedAt = Date.now();
-    connection.updatedAt = Date.now();
-    await connection.save();
+    const updateRes = await query(
+      `UPDATE connections 
+       SET barter_details = $1::jsonb, updated_at = NOW() 
+       WHERE id = $2 
+       RETURNING *`,
+      [JSON.stringify(barterDetails), connection.id]
+    );
 
     return res.status(200).json({
       success: true,
       message: "Product reception confirmed! You can now proceed with deliverables.",
-      data: connection,
+      data: formatConnection(updateRes.rows[0]),
     });
   } catch (error) {
     console.error("Confirm product received error:", error);

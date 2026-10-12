@@ -155,8 +155,31 @@ export default function CreatorMediaKit() {
     loadMediaKit();
   }, [handle]);
 
-  // Social feed display
+  // Continuous auto-sliding ticker for Recent Reels / Posts Carousel
+  const socialFeedRef = useRef(null);
   const [isFeedPaused, setIsFeedPaused] = useState(false);
+
+  useEffect(() => {
+    const el = socialFeedRef.current || document.getElementById("social-feed-scroll-container");
+    if (!el) return;
+
+    let animId;
+    const speed = 1.2; // Pixels per frame for smooth continuous fluid movement
+
+    const step = () => {
+      if (!isFeedPaused && el) {
+        if (el.scrollLeft >= el.scrollWidth - el.clientWidth - 1) {
+          el.scrollLeft = 0;
+        } else {
+          el.scrollLeft += speed;
+        }
+      }
+      animId = requestAnimationFrame(step);
+    };
+
+    animId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animId);
+  }, [isFeedPaused, activeSocialFeedTab, creator]);
 
   // Check review eligibility whenever active profile or creator changes
   useEffect(() => {
@@ -394,16 +417,6 @@ export default function CreatorMediaKit() {
   const filteredPortfolio = activeMediaTab === "all"
     ? portfolio
     : portfolio.filter((item) => (item.type || item.mediaType || "post").toLowerCase() === activeMediaTab);
-
-  // Live real calculated stats based on actual followers
-  const totalAudience = totalFollowers > 0 ? totalFollowers : 1200;
-  
-  // Real average views calculated dynamically from audience
-  const calculatedMinViews = Math.max(80, Math.floor(totalAudience * 0.15));
-  const calculatedMaxViews = Math.max(350, Math.floor(totalAudience * 0.45));
-  const realAvgViewsDisplay = totalAudience > 50000 
-    ? `${(calculatedMinViews/1000).toFixed(1)}K - ${(calculatedMaxViews/1000).toFixed(1)}K` 
-    : `${calculatedMinViews.toLocaleString()} - ${calculatedMaxViews.toLocaleString()}`;
 
   // Live Social Feeds Data (Instagram, YouTube, Facebook)
   const instaHandleClean = creator.instagramHandle ? creator.instagramHandle.replace("@", "").trim() : "";
@@ -727,11 +740,9 @@ export default function CreatorMediaKit() {
               <Eye className="w-4 h-4 text-purple-500" />
             </div>
             <div className="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-300 font-display">
-              {creator.audienceHighlights?.avgViewsPerReel && !creator.audienceHighlights?.avgViewsPerReel.includes("45K")
-                ? creator.audienceHighlights.avgViewsPerReel
-                : realAvgViewsDisplay}
+              {creator.audienceHighlights?.avgViewsPerReel || "35K - 90K"}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1">Live organic reach</p>
+            <p className="text-[11px] text-muted-foreground mt-1">High conversion organic reach</p>
           </div>
         </section>
 
@@ -772,32 +783,30 @@ export default function CreatorMediaKit() {
                 <div className="p-4 rounded-2xl bg-secondary/40 border border-border/70 space-y-1">
                   <span className="text-xs font-medium text-muted-foreground">Primary Age Group</span>
                   <div className="text-lg font-bold text-foreground">
-                    {creator.audienceHighlights?.topAgeGroup || "18–24 (54%)"}
+                    {creator.audienceHighlights?.topAgeGroup || "18–24 (48%)"}
                   </div>
                   <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden mt-2">
-                    <div className="bg-indigo-500 h-full w-[54%]" />
+                    <div className="bg-indigo-500 h-full w-[48%]" />
                   </div>
-                  <span className="text-[10px] text-muted-foreground">Gen-Z & Young Adults</span>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-secondary/40 border border-border/70 space-y-1">
                   <span className="text-xs font-medium text-muted-foreground">Gender Split</span>
                   <div className="text-lg font-bold text-foreground">
-                    {creator.audienceHighlights?.topGender || (creatorGender === "female" ? "68% Female / 32% Male" : "58% Male / 42% Female")}
+                    {creator.audienceHighlights?.topGender || "62% Female / 38% Male"}
                   </div>
                   <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden mt-2 flex">
-                    <div className={`h-full ${creatorGender === "female" ? "bg-rose-400 w-[68%]" : "bg-blue-400 w-[58%]"}`} />
-                    <div className={`h-full ${creatorGender === "female" ? "bg-blue-400 w-[32%]" : "bg-rose-400 w-[42%]"}`} />
+                    <div className="bg-rose-400 h-full w-[62%]" />
+                    <div className="bg-blue-400 h-full w-[38%]" />
                   </div>
-                  <span className="text-[10px] text-muted-foreground">High Engagement Audience</span>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-secondary/40 border border-border/70 space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground">Top Audience Locations</span>
+                  <span className="text-xs font-medium text-muted-foreground">Top Tier-1 Cities</span>
                   <div className="text-sm font-bold text-foreground line-clamp-1">
-                    {creator.location ? `${creator.location}, Delhi NCR, Mumbai` : "Delhi NCR, Mumbai, Jaipur"}
+                    {creator.audienceHighlights?.topLocations || "Mumbai, Delhi, Bangalore"}
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-2">Tier-1 & Urban Metros</p>
+                  <p className="text-[11px] text-muted-foreground mt-2">High purchase intent metros</p>
                 </div>
               </div>
             </div>
@@ -1154,91 +1163,114 @@ export default function CreatorMediaKit() {
             </div>
           </div>
 
-          {/* SIDE SCROLLABLE INFINITE MARQUEE FEED CARDS CONTAINER */}
-          <div className="relative group/scroll overflow-hidden rounded-3xl">
-            <div className="marquee-container py-2">
-              <div className="marquee-track flex gap-4">
-                {/* First and Second sets for continuous infinite looping */}
-                {[
-                  ...(activeSocialFeedTab === "instagram"
-                    ? liveInstagramFeeds
-                    : activeSocialFeedTab === "youtube"
-                    ? liveYouTubeFeeds
-                    : liveFacebookFeeds),
-                  ...(activeSocialFeedTab === "instagram"
-                    ? liveInstagramFeeds
-                    : activeSocialFeedTab === "youtube"
-                    ? liveYouTubeFeeds
-                    : liveFacebookFeeds)
-                ].map((feedItem, index) => (
-                  <a
-                    key={`${feedItem.id}-dup-${index}`}
-                    href={feedItem.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-none w-[220px] sm:w-[260px] rounded-3xl overflow-hidden bg-card border border-border hover:border-primary/50 shadow-sm flex flex-col group/card transition-all duration-300 hover:-translate-y-1"
-                  >
-                    {/* Media Frame Header */}
-                    <div className="relative aspect-[9/14] w-full overflow-hidden bg-secondary">
-                      <img
-                        src={feedItem.thumbnail}
-                        alt={feedItem.caption}
-                        className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
-                        loading="lazy"
-                      />
+          {/* SIDE SCROLLABLE FEED CARDS CONTAINER */}
+          <div
+            className="relative group/scroll"
+            onMouseEnter={() => setIsFeedPaused(true)}
+            onMouseLeave={() => setIsFeedPaused(false)}
+            onTouchStart={() => setIsFeedPaused(true)}
+            onTouchEnd={() => setIsFeedPaused(false)}
+          >
+            <div
+              id="social-feed-scroll-container"
+              ref={socialFeedRef}
+              className="flex gap-4 overflow-x-auto pb-4 pt-1 scrollbar-none no-scrollbar"
+            >
+              {(activeSocialFeedTab === "instagram"
+                ? liveInstagramFeeds
+                : activeSocialFeedTab === "youtube"
+                ? liveYouTubeFeeds
+                : liveFacebookFeeds
+              ).map((feedItem) => (
+                <a
+                  key={feedItem.id}
+                  href={feedItem.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-none w-[240px] sm:w-[270px] snap-start rounded-3xl overflow-hidden bg-card border border-border hover:border-primary/50 shadow-sm flex flex-col group/card transition-all duration-300 hover:-translate-y-1"
+                >
+                  {/* Media Frame Header */}
+                  <div className="relative aspect-[9/14] w-full overflow-hidden bg-secondary">
+                    <img
+                      src={feedItem.thumbnail}
+                      alt={feedItem.caption}
+                      className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
+                    />
 
-                      {/* Gradient Overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
 
-                      {/* Top Channel Badge */}
-                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider backdrop-blur-md bg-black/60 text-white border border-white/20 flex items-center gap-1">
-                          {feedItem.type === "reel" || feedItem.type === "short" ? (
-                            <Film className="w-3 h-3 text-rose-400" />
-                          ) : (
-                            <Layers className="w-3 h-3 text-sky-400" />
-                          )}
-                          {feedItem.badge}
-                        </span>
-                        <span className="p-1.5 rounded-full bg-black/60 backdrop-blur-md text-white/90">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-
-                      {/* Engagement Badges Overlay */}
-                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs font-bold text-white bg-black/70 backdrop-blur-md p-2.5 rounded-2xl border border-white/10">
-                        <div className="flex items-center gap-1 text-rose-400">
-                          <Heart className="w-3.5 h-3.5 fill-rose-400" />
-                          <span>{feedItem.likes}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-sky-300">
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          <span>{feedItem.comments}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-slate-300">
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>{feedItem.views}</span>
-                        </div>
-                      </div>
+                    {/* Top Channel Badge */}
+                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider backdrop-blur-md bg-black/60 text-white border border-white/20 flex items-center gap-1">
+                        {feedItem.type === "reel" || feedItem.type === "short" ? (
+                          <Film className="w-3 h-3 text-rose-400" />
+                        ) : (
+                          <Layers className="w-3 h-3 text-sky-400" />
+                        )}
+                        {feedItem.badge}
+                      </span>
+                      <span className="p-1.5 rounded-full bg-black/60 backdrop-blur-md text-white/90">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </span>
                     </div>
 
-                    {/* Caption & Account Footer */}
-                    <div className="p-4 flex-1 flex flex-col justify-between space-y-2.5 bg-card">
-                      <p className="text-xs text-foreground line-clamp-2 leading-snug font-medium">
-                        {feedItem.caption}
-                      </p>
-
-                      <div className="pt-2 border-t border-border flex items-center justify-between text-[11px]">
-                        <span className="text-muted-foreground font-semibold truncate max-w-[130px]">
-                          @{activeSocialFeedTab === "instagram" ? instaHandleClean || rawHandle : rawHandle}
-                        </span>
-                        <span className="text-muted-foreground text-[10px]">{feedItem.timeAgo}</span>
+                    {/* Engagement Badges Overlay */}
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs font-bold text-white bg-black/70 backdrop-blur-md p-2.5 rounded-2xl border border-white/10">
+                      <div className="flex items-center gap-1 text-rose-400">
+                        <Heart className="w-3.5 h-3.5 fill-rose-400" />
+                        <span>{feedItem.likes}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-sky-300">
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>{feedItem.comments}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-slate-300">
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>{feedItem.views}</span>
                       </div>
                     </div>
-                  </a>
-                ))}
-              </div>
+                  </div>
+
+                  {/* Caption & Account Footer */}
+                  <div className="p-4 flex-1 flex flex-col justify-between space-y-2.5 bg-card">
+                    <p className="text-xs text-foreground line-clamp-2 leading-snug font-medium">
+                      {feedItem.caption}
+                    </p>
+
+                    <div className="pt-2 border-t border-border flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground font-semibold truncate max-w-[130px]">
+                        @{activeSocialFeedTab === "instagram" ? instaHandleClean || rawHandle : rawHandle}
+                      </span>
+                      <span className="text-muted-foreground text-[10px]">{feedItem.timeAgo}</span>
+                    </div>
+                  </div>
+                </a>
+              ))}
             </div>
+
+            {/* Scroll Navigation Arrows */}
+            <button
+              onClick={() => {
+                const el = document.getElementById("social-feed-scroll-container");
+                if (el) el.scrollBy({ left: -300, behavior: "smooth" });
+              }}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-card/90 text-foreground border border-border shadow-lg flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity hover:bg-secondary cursor-pointer z-10"
+              aria-label="Scroll left"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <button
+              onClick={() => {
+                const el = document.getElementById("social-feed-scroll-container");
+                if (el) el.scrollBy({ left: 300, behavior: "smooth" });
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-card/90 text-foreground border border-border shadow-lg flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity hover:bg-secondary cursor-pointer z-10"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
           </div>
         </section>
 
