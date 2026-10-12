@@ -1,6 +1,5 @@
 import cron from "node-cron";
-import Conversation from "../models/Conversation.js";
-import Message from "../models/Message.js";
+import { query } from "../config/postgres.js";
 
 // Run once a day at midnight
 export const initChatCleanupJob = () => {
@@ -9,26 +8,32 @@ export const initChatCleanupJob = () => {
       console.log("[CRON] Starting 7-day chat cleanup...");
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      // Find all conversations where updatedAt is older than 7 days
-      // Assuming 'updatedAt' reflects the time of the last message sent
-      const staleConvs = await Conversation.find({
-        updatedAt: { $lt: sevenDaysAgo }
-      });
+      // Find all conversations where updated_at is older than 7 days
+      const staleConvs = await query(
+        `SELECT id FROM conversations WHERE updated_at < $1`,
+        [sevenDaysAgo]
+      );
 
-      if (staleConvs.length === 0) {
+      if (staleConvs.rows.length === 0) {
         console.log("[CRON] No stale conversations found.");
         return;
       }
 
-      const convIds = staleConvs.map(c => c._id);
-      
-      // Delete messages
-      const deletedMessages = await Message.deleteMany({ conversationId: { $in: convIds } });
-      
-      // Delete conversations
-      const deletedConvs = await Conversation.deleteMany({ _id: { $in: convIds } });
+      const convIds = staleConvs.rows.map((c) => c.id);
 
-      console.log(`[CRON] Cleaned up ${deletedConvs.deletedCount} conversations and ${deletedMessages.deletedCount} messages.`);
+      // Delete messages
+      const delMsgs = await query(
+        `DELETE FROM messages WHERE conversation_id = ANY($1::uuid[])`,
+        [convIds]
+      );
+
+      // Delete conversations
+      const delConvs = await query(
+        `DELETE FROM conversations WHERE id = ANY($1::uuid[])`,
+        [convIds]
+      );
+
+      console.log(`[CRON] Cleaned up ${delConvs.rowCount || 0} conversations and ${delMsgs.rowCount || 0} messages.`);
     } catch (error) {
       console.error("[CRON] Chat cleanup job failed:", error);
     }

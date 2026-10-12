@@ -43,6 +43,7 @@ import Unsubscribe from "./routes/Unsubscribe";
 import PayoutProcessedModal from "./components/collaboration/PayoutProcessedModal";
 
 import { SmoothScrollProvider } from "./components/layout/SmoothScrollProvider";
+import { ScrollToTopButton } from "./components/layout/ScrollToTopButton";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -237,6 +238,7 @@ export default function App() {
         <AuthProvider>
           <SmoothScrollProvider>
             <Layout />
+            <ScrollToTopButton />
             <PayoutProcessedModal />
             <ThemedToaster />
           </SmoothScrollProvider>

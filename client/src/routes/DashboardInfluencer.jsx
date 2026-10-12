@@ -322,6 +322,7 @@ export function DashboardInfluencer() {
     /^[a-fA-F0-9]{24}$/.test(mongoProfileId);
 
   const profileKey = mongoProfileId || "none";
+  const [pricingRefreshKey, setPricingRefreshKey] = useState(0);
   const [portfolioRefreshKey, setPortfolioRefreshKey] = useState(0);
   const [socialRefreshKey, setSocialRefreshKey] = useState(0);
   const [showPushBanner, setShowPushBanner] = useState(false);
@@ -406,7 +407,7 @@ export function DashboardInfluencer() {
   // PROFILE-DEPENDENT QUERIES
   // =====================================================
   const pricingTiers = useRestQuery(
-    `pricing-${profileKey}`,
+    `pricing-${profileKey}-${pricingRefreshKey}`,
     () => apiGet(`/pricing/profile/${mongoProfileId}`),
     hasValidMongoProfileId
   );
@@ -705,6 +706,27 @@ export function DashboardInfluencer() {
   const [reworkCaption, setReworkCaption] = useState("");
   const [submittingRework, setSubmittingRework] = useState(false);
   const [showCampaignBreakdownDialog, setShowCampaignBreakdownDialog] = useState(false);
+
+  // Lock body scroll and pause Lenis when Breakdown dialog is open
+  useEffect(() => {
+    if (showCampaignBreakdownDialog) {
+      document.body.style.overflow = "hidden";
+      if (window.__lenis) {
+        window.__lenis.stop();
+      }
+    } else {
+      document.body.style.overflow = "";
+      if (window.__lenis) {
+        window.__lenis.start();
+      }
+    }
+    return () => {
+      document.body.style.overflow = "";
+      if (window.__lenis) {
+        window.__lenis.start();
+      }
+    };
+  }, [showCampaignBreakdownDialog]);
 
   const [searchParams] = useSearchParams();
   // Tab State
@@ -1585,34 +1607,51 @@ const CAMPAIGNS_PER_PAGE = 6;
   const savePricing = async () => {
     if (!profile) return;
     try {
-      await upsertPricing({
+      const res = await upsertPricing({
         profileId: mongoProfileId,
         tiers: tiers.map((t, idx) => ({
           id: t.id,
           name: t.name,
-          price: t.price,
+          price: Number(t.price) || 0,
           sortOrder: idx,
         })),
       });
-      toast.success("Pricing updated");
+      const updatedTiers = res?.data || res || [];
+      if (Array.isArray(updatedTiers)) {
+        setTiers(
+          updatedTiers.map((t) => ({
+            id: t._id || t.id,
+            name: t.name,
+            price: Number(t.price) || 0,
+            sortOrder: t.sortOrder,
+          }))
+        );
+      }
+      setPricingRefreshKey((c) => c + 1);
+      if (fetchProfile) fetchProfile();
+      toast.success("Pricing updated successfully!");
     } catch (err) {
-      const e = err ;
-      toast.error(e.message);
+      const e = err;
+      toast.error(e?.response?.data?.message || e?.message || "Failed to update pricing");
     }
   };
 
   const removeTier = async (idx) => {
     const t = tiers[idx];
-    if (t.id) {
+    const newTiers = tiers.filter((_, i) => i !== idx);
+    setTiers(newTiers);
+
+    if (t?.id && typeof t.id === "string" && /^[a-fA-F0-9]{24}$/.test(t.id)) {
       try {
         await removeTierMutation({ id: t.id });
+        setPricingRefreshKey((c) => c + 1);
+        if (fetchProfile) fetchProfile();
+        toast.success("Tier removed");
       } catch (err) {
-        const e = err ;
-        toast.error(e.message);
-        return;
+        // If already deleted or not found, simply continue
+        console.warn("Remove tier backend warning:", err?.message);
       }
     }
-    setTiers(tiers.filter((_, i) => i !== idx));
   };
 
   const onPortfolioUpload = async (e) => {
@@ -2375,8 +2414,14 @@ const CAMPAIGNS_PER_PAGE = 6;
             </div>
 
             {/* Metric 4: Direct Brand Bookings & Collabs */}
-            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+            <div
+              onClick={() => setShowCampaignBreakdownDialog(true)}
+              className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center gap-3 cursor-pointer hover:bg-secondary/70 hover:border-emerald-500/40 hover:scale-[1.02] transition-all group"
+              role="button"
+              tabIndex={0}
+              title="Click to view all active & completed campaigns and collaborations"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                 <TrendingUp className="w-5 h-5" />
               </div>
               <div className="min-w-0">
@@ -2385,8 +2430,11 @@ const CAMPAIGNS_PER_PAGE = 6;
                     ? `${Number(profile?.bookings)} Deals`
                     : `${myRequests?.filter(r => r.status === "accepted")?.length || "2"} Deals`}
                 </div>
-                <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
-                  Collabs
+                <div className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5 flex items-center gap-1">
+                  <span>Collabs</span>
+                  <span className="text-[9px] text-emerald-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                    • View &rarr;
+                  </span>
                 </div>
               </div>
             </div>
@@ -7298,8 +7346,11 @@ const CAMPAIGNS_PER_PAGE = 6;
         open={showCampaignBreakdownDialog}
         onOpenChange={(open) => !open && setShowCampaignBreakdownDialog(false)}
       >
-        <DialogContent className="max-w-2xl rounded-3xl p-6 max-h-[85vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent
+          data-lenis-prevent
+          className="max-w-2xl rounded-3xl p-6 max-h-[85vh] h-[85vh] flex flex-col overscroll-contain"
+        >
+          <DialogHeader className="shrink-0">
             <DialogTitle className="font-display text-lg font-bold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" /> Campaign Escrow & Earnings Breakdown
             </DialogTitle>
@@ -7308,7 +7359,11 @@ const CAMPAIGNS_PER_PAGE = 6;
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-1 space-y-4 py-2 custom-scrollbar text-xs">
+          <div
+            data-lenis-prevent
+            onWheel={(e) => e.stopPropagation()}
+            className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4 py-2 custom-scrollbar text-xs overscroll-contain"
+          >
             {/* Summary Highlights */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-secondary/20 p-3.5 rounded-2xl border border-border/60">
               <div>

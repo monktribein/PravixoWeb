@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import Subscription from "../models/Subscription.js";
+import { query } from "../config/postgres.js";
 
 let isVapidConfigured = false;
 
@@ -34,23 +34,35 @@ export const sendPushToUser = async (userId, payload) => {
     return [];
   }
 
-  const subs = await Subscription.find({ userId });
+  try {
+    const res = await query(
+      "SELECT id, endpoint, keys FROM push_subscriptions WHERE user_id::text = $1",
+      [String(userId).trim()]
+    );
 
-  return Promise.allSettled(
-    subs.map((sub) =>
-      webpush
-        .sendNotification(
-          { endpoint: sub.endpoint, keys: sub.keys },
-          JSON.stringify(payload)
-        )
-        .catch((err) => {
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            return Subscription.deleteOne({ _id: sub._id });
-          }
-          console.error("Push error:", err.message);
-        })
-    )
-  );
+    const subs = res.rows;
+
+    return Promise.allSettled(
+      subs.map((sub) => {
+        const keysObj = typeof sub.keys === "string" ? JSON.parse(sub.keys) : sub.keys;
+        return webpush
+          .sendNotification(
+            { endpoint: sub.endpoint, keys: keysObj },
+            JSON.stringify(payload)
+          )
+          .catch(async (err) => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              await query("DELETE FROM push_subscriptions WHERE id = $1", [sub.id]);
+            } else {
+              console.error("Push error:", err.message);
+            }
+          });
+      })
+    );
+  } catch (err) {
+    console.error("sendPushToUser error:", err.message);
+    return [];
+  }
 };
 
 export const sendPushToUsers = async (userIds, payload) => {

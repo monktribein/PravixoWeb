@@ -1,9 +1,5 @@
-import mongoose from "mongoose";
-import SocialConnection from "../models/SocialConnection.js";
-import SocialAnalytics from "../models/SocialAnalyticsHistory.js";
-import Profile from "../models/Profile.js";
-
-
+import { query } from "../config/postgres.js";
+import { formatSocialConnection } from "../utils/formatters.js";
 import {
   exchangeInstagramCode,
   exchangeFacebookCode,
@@ -12,31 +8,144 @@ import {
   exchangeGoogleCode,
 } from "../services/socialOAuthService.js";
 
+// Helper: resolve profile UUID
+const resolveProfileId = async (idOrUserId) => {
+  if (!idOrUserId) return null;
+  const res = await query(
+    `SELECT id FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+    [idOrUserId]
+  );
+  return res.rows[0]?.id || null;
+};
+
+// =====================================================
+// HELPER: UPDATE PROFILE SOCIAL STATS
+// =====================================================
+const updateProfilePlatformStats = async (
+  profileId,
+  platform,
+  handle,
+  followers
+) => {
+  const resolvedId = await resolveProfileId(profileId);
+  if (!resolvedId) return;
+
+  const platformKey = String(platform).toLowerCase();
+  const followersNum = followers !== undefined ? Number(followers) || 0 : undefined;
+
+  switch (platformKey) {
+    case "instagram":
+      if (followersNum !== undefined) {
+        await query(
+          `UPDATE profiles SET instagram_handle = $1, instagram_followers = $2, updated_at = NOW() WHERE id = $3`,
+          [handle || "", followersNum, resolvedId]
+        );
+      } else {
+        await query(
+          `UPDATE profiles SET instagram_handle = $1, updated_at = NOW() WHERE id = $2`,
+          [handle || "", resolvedId]
+        );
+      }
+      break;
+
+    case "facebook":
+      if (followersNum !== undefined) {
+        await query(
+          `UPDATE profiles SET facebook_handle = $1, facebook_followers = $2, updated_at = NOW() WHERE id = $3`,
+          [handle || "", followersNum, resolvedId]
+        );
+      } else {
+        await query(
+          `UPDATE profiles SET facebook_handle = $1, updated_at = NOW() WHERE id = $2`,
+          [handle || "", resolvedId]
+        );
+      }
+      break;
+
+    case "linkedin":
+      if (followersNum !== undefined) {
+        await query(
+          `UPDATE profiles SET linkedin_handle = $1, linkedin_followers = $2, updated_at = NOW() WHERE id = $3`,
+          [handle || "", followersNum, resolvedId]
+        );
+      } else {
+        await query(
+          `UPDATE profiles SET linkedin_handle = $1, updated_at = NOW() WHERE id = $2`,
+          [handle || "", resolvedId]
+        );
+      }
+      break;
+
+    case "youtube":
+      if (followersNum !== undefined) {
+        await query(
+          `UPDATE profiles SET youtube_handle = $1, youtube_followers = $2, updated_at = NOW() WHERE id = $3`,
+          [handle || "", followersNum, resolvedId]
+        );
+      } else {
+        await query(
+          `UPDATE profiles SET youtube_handle = $1, updated_at = NOW() WHERE id = $2`,
+          [handle || "", resolvedId]
+        );
+      }
+      break;
+
+    case "quora":
+      if (followersNum !== undefined) {
+        await query(
+          `UPDATE profiles SET quora_handle = $1, quora_followers = $2, updated_at = NOW() WHERE id = $3`,
+          [handle || "", followersNum, resolvedId]
+        );
+      } else {
+        await query(
+          `UPDATE profiles SET quora_handle = $1, updated_at = NOW() WHERE id = $2`,
+          [handle || "", resolvedId]
+        );
+      }
+      break;
+
+    case "twitter":
+      if (followersNum !== undefined) {
+        await query(
+          `UPDATE profiles SET twitter_handle = $1, twitter_followers = $2, updated_at = NOW() WHERE id = $3`,
+          [handle || "", followersNum, resolvedId]
+        );
+      } else {
+        await query(
+          `UPDATE profiles SET twitter_handle = $1, updated_at = NOW() WHERE id = $2`,
+          [handle || "", resolvedId]
+        );
+      }
+      break;
+  }
+};
+
 // =====================================================
 // GET ALL CONNECTIONS OF PROFILE
 // =====================================================
 export const getConnections = async (req, res) => {
   try {
     const { profileId } = req.params;
+    const resolvedId = await resolveProfileId(profileId);
 
-    if (!mongoose.Types.ObjectId.isValid(profileId)){
-      return res.status(400).json({
-        success: false,
-        message: "Invalid profile ID.",
+    if (!resolvedId) {
+      return res.status(200).json({
+        success: true,
+        data: [],
       });
     }
 
-    const connections = await SocialConnection.find({ profileId })
-      .sort({ createdAt: -1 })
-      .lean();
+    const { rows } = await query(
+      `SELECT * FROM social_connections WHERE profile_id = $1 ORDER BY created_at DESC`,
+      [resolvedId]
+    );
 
     res.status(200).json({
       success: true,
-      data: connections,
+      data: rows.map(formatSocialConnection),
     });
   } catch (error) {
     console.error("Get social connections error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to fetch social connections.",
@@ -51,16 +160,12 @@ export const getConnectionById = async (req, res) => {
   try {
     const { connectionId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
+    const { rows } = await query(
+      `SELECT * FROM social_connections WHERE id::text = $1`,
+      [connectionId]
+    );
 
-    const connection = await SocialConnection.findById(connectionId).lean();
-
-    if (!connection) {
+    if (rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Social connection not found.",
@@ -69,11 +174,10 @@ export const getConnectionById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: connection,
+      data: formatSocialConnection(rows[0]),
     });
   } catch (error) {
     console.error("Get social connection error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to fetch social connection.",
@@ -88,25 +192,28 @@ export const getHistory = async (req, res) => {
   try {
     const { connectionId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
+    const { rows } = await query(
+      `SELECT * FROM social_analytics WHERE connection_id::text = $1 ORDER BY timestamp DESC LIMIT 30`,
+      [connectionId]
+    );
 
-    const history = await SocialAnalytics.find({ connectionId })
-      .sort({ timestamp: -1 })
-      .limit(30)
-      .lean();
+    const formattedHistory = rows.map((r) => ({
+      _id: r.id,
+      id: r.id,
+      connectionId: r.connection_id,
+      timestamp: Number(r.timestamp),
+      followers: Number(r.followers || 0),
+      views: Number(r.views || 0),
+      engagementRate: Number(r.engagement_rate || 0),
+      createdAt: r.created_at,
+    }));
 
     res.status(200).json({
       success: true,
-      data: history,
+      data: formattedHistory,
     });
   } catch (error) {
     console.error("Get social history error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to fetch social analytics history.",
@@ -116,13 +223,12 @@ export const getHistory = async (req, res) => {
 
 // =====================================================
 // SAVE / UPDATE SOCIAL CONNECTION
-// Replaces Convex saveConnectionInternal
 // =====================================================
 export const saveConnection = async (req, res) => {
   try {
     const {
       profileId,
-      ownerType,
+      ownerType = "creator",
       platform,
       handle,
       accountId,
@@ -135,111 +241,98 @@ export const saveConnection = async (req, res) => {
       engagementRate,
     } = req.body;
 
-    if (
-      !profileId ||
-      !ownerType ||
-      !platform ||
-      !handle ||
-      !accountId
-    ) {
+    if (!profileId || !platform || !handle) {
       return res.status(400).json({
         success: false,
         message: "Required social connection fields are missing.",
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(profileId)) {
+    const resolvedId = await resolveProfileId(profileId);
+    if (!resolvedId) {
       return res.status(400).json({
         success: false,
         message: "Invalid profile ID.",
       });
     }
 
-    const existing = await SocialConnection.findOne({
-      profileId,
-      platform,
-    });
+    const normalizedPlatform = platform.toLowerCase();
+    const cleanHandle = String(handle).trim().replace(/^@/, "");
+    const now = Date.now();
 
-    let connection;
-
-    if (existing) {
-      existing.handle = handle;
-      existing.accountId = accountId;
-      existing.encryptedAccessToken = encryptedAccessToken;
-      existing.encryptedRefreshToken = encryptedRefreshToken;
-      existing.expiresAt = expiresAt;
-      existing.verified = verified;
-
-      existing.syncStatus = "success";
-      existing.lastSyncedAt = Date.now();
-      existing.failureCount = 0;
-      existing.accountHealth = "healthy";
-      existing.lastError = undefined;
-
-      if (followers !== undefined) {
-        existing.followers = followers;
-      }
-
-      if (views !== undefined) {
-        existing.views = views;
-      }
-
-      if (engagementRate !== undefined) {
-        existing.engagementRate = engagementRate;
-      }
-
-      connection = await existing.save();
-    } else {
-      connection = await SocialConnection.create({
-        profileId,
+    const upsertRes = await query(
+      `
+      INSERT INTO social_connections (
+        profile_id, owner_type, platform, handle, account_id,
+        encrypted_access_token, encrypted_refresh_token, expires_at,
+        verified, sync_status, sync_mode, last_synced_at, failure_count,
+        account_health, followers, views, engagement_rate
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8,
+        $9, 'success', 'live', $10, 0,
+        'healthy', $11, $12, $13
+      )
+      ON CONFLICT (profile_id, platform) DO UPDATE SET
+        handle = EXCLUDED.handle,
+        account_id = COALESCE(NULLIF(EXCLUDED.account_id, ''), social_connections.account_id),
+        encrypted_access_token = COALESCE(EXCLUDED.encrypted_access_token, social_connections.encrypted_access_token),
+        encrypted_refresh_token = COALESCE(EXCLUDED.encrypted_refresh_token, social_connections.encrypted_refresh_token),
+        expires_at = COALESCE(EXCLUDED.expires_at, social_connections.expires_at),
+        verified = COALESCE(EXCLUDED.verified, social_connections.verified),
+        sync_status = 'success',
+        sync_mode = 'live',
+        last_synced_at = EXCLUDED.last_synced_at,
+        failure_count = 0,
+        account_health = 'healthy',
+        last_error = NULL,
+        followers = COALESCE(EXCLUDED.followers, social_connections.followers),
+        views = COALESCE(EXCLUDED.views, social_connections.views),
+        engagement_rate = COALESCE(EXCLUDED.engagement_rate, social_connections.engagement_rate),
+        updated_at = NOW()
+      RETURNING *;
+      `,
+      [
+        resolvedId,
         ownerType,
-        platform,
-        handle,
-        accountId,
-        encryptedAccessToken,
-        encryptedRefreshToken,
-        expiresAt,
-        verified,
+        normalizedPlatform,
+        cleanHandle,
+        accountId || `acc_${normalizedPlatform}_${now}`,
+        encryptedAccessToken || null,
+        encryptedRefreshToken || null,
+        expiresAt || null,
+        verified !== undefined ? Boolean(verified) : false,
+        now,
+        followers !== undefined ? Number(followers) : 0,
+        views !== undefined ? Number(views) : 0,
+        engagementRate !== undefined ? Number(engagementRate) : 0,
+      ]
+    );
 
-        syncStatus: "success",
-        syncMode: "live",
-        lastSyncedAt: Date.now(),
+    const connection = upsertRes.rows[0];
 
-        failureCount: 0,
-        accountHealth: "healthy",
-
-        followers,
-        views,
-        engagementRate,
-      });
-    }
-
-    // Save analytics history
+    // Record snapshot
     if (followers !== undefined) {
-      await SocialAnalytics.create({
-        connectionId: connection._id,
-        timestamp: Date.now(),
-        followers,
-        views,
-        engagementRate,
-      });
+      await query(
+        `INSERT INTO social_analytics (connection_id, timestamp, followers, views, engagement_rate) VALUES ($1, $2, $3, $4, $5)`,
+        [connection.id, now, connection.followers, connection.views, connection.engagement_rate]
+      );
     }
 
-    // Update profile social stats
+    // Update profile top-level stats
     await updateProfilePlatformStats(
-      profileId,
-      platform,
-      handle,
-      followers
+      resolvedId,
+      normalizedPlatform,
+      cleanHandle,
+      followers !== undefined ? Number(followers) : undefined
     );
 
     res.status(200).json({
       success: true,
-      data: connection,
+      data: formatSocialConnection(connection),
     });
   } catch (error) {
     console.error("Save social connection error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to save social connection.",
@@ -249,129 +342,109 @@ export const saveConnection = async (req, res) => {
 
 // =====================================================
 // UPDATE CONNECTION STATS
-// Replaces Convex updateConnectionStatsInternal
 // =====================================================
 export const updateConnectionStats = async (req, res) => {
   try {
     const { connectionId } = req.params;
+    const { success, error, followers, views, engagementRate } = req.body;
 
-    const {
-      success,
-      error,
-      followers,
-      views,
-      engagementRate,
-    } = req.body;
+    const findRes = await query(
+      `SELECT * FROM social_connections WHERE id::text = $1`,
+      [connectionId]
+    );
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
-
-    const connection = await SocialConnection.findById(connectionId);
-
-    if (!connection) {
+    if (findRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Connection not found.",
       });
     }
 
-    // -------------------------
-    // SUCCESS
-    // -------------------------
+    const conn = findRes.rows[0];
+    const now = Date.now();
+
     if (success) {
-      connection.syncStatus = "success";
-      connection.lastSyncedAt = Date.now();
-      connection.failureCount = 0;
-      connection.accountHealth = "healthy";
-      connection.lastError = undefined;
+      const newFollowers = followers !== undefined ? Number(followers) : conn.followers;
+      const newViews = views !== undefined ? Number(views) : conn.views;
+      const newEng = engagementRate !== undefined ? Number(engagementRate) : conn.engagement_rate;
 
+      const updRes = await query(
+        `
+        UPDATE social_connections SET
+          sync_status = 'success',
+          last_synced_at = $1,
+          failure_count = 0,
+          account_health = 'healthy',
+          last_error = NULL,
+          followers = $2,
+          views = $3,
+          engagement_rate = $4,
+          updated_at = NOW()
+        WHERE id = $5
+        RETURNING *;
+        `,
+        [now, newFollowers, newViews, newEng, conn.id]
+      );
+
+      // Record snapshot
       if (followers !== undefined) {
-        connection.followers = followers;
-      }
+        await query(
+          `INSERT INTO social_analytics (connection_id, timestamp, followers, views, engagement_rate) VALUES ($1, $2, $3, $4, $5)`,
+          [conn.id, now, newFollowers, newViews, newEng]
+        );
 
-      if (views !== undefined) {
-        connection.views = views;
-      }
-
-      if (engagementRate !== undefined) {
-        connection.engagementRate = engagementRate;
-      }
-
-      await connection.save();
-
-      // Save analytics history
-      if (followers !== undefined) {
-        await SocialAnalytics.create({
-          connectionId,
-          timestamp: Date.now(),
-          followers,
-          views,
-          engagementRate,
-        });
-
-        // Keep only latest 30 records
-        const history = await SocialAnalytics.find({
-          connectionId,
-        })
-          .sort({ timestamp: 1 })
-          .lean();
-
-        if (history.length > 30) {
-          const recordsToDelete = history.slice(
-            0,
-            history.length - 30
-          );
-
-          await SocialAnalytics.deleteMany({
-            _id: {
-              $in: recordsToDelete.map((item) => item._id),
-            },
-          });
-        }
+        // Keep latest 30 snapshots
+        await query(
+          `
+          DELETE FROM social_analytics
+          WHERE connection_id = $1
+            AND id NOT IN (
+              SELECT id FROM social_analytics WHERE connection_id = $1 ORDER BY timestamp DESC LIMIT 30
+            )
+          `,
+          [conn.id]
+        );
       }
 
       // Update profile platform stats
       await updateProfilePlatformStats(
-        connection.profileId,
-        connection.platform,
-        connection.handle,
-        followers ?? connection.followers
+        conn.profile_id,
+        conn.platform,
+        conn.handle,
+        newFollowers
       );
+
+      return res.status(200).json({
+        success: true,
+        data: formatSocialConnection(updRes.rows[0]),
+      });
+    } else {
+      const newFailCount = Number(conn.failure_count || 0) + 1;
+      let newHealth = "healthy";
+      if (newFailCount >= 5) newHealth = "error";
+      else if (newFailCount >= 2) newHealth = "warning";
+
+      const updRes = await query(
+        `
+        UPDATE social_connections SET
+          failure_count = $1,
+          sync_status = 'failed',
+          last_error = $2,
+          account_health = $3,
+          updated_at = NOW()
+        WHERE id = $4
+        RETURNING *;
+        `,
+        [newFailCount, error || "Unknown error", newHealth, conn.id]
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: formatSocialConnection(updRes.rows[0]),
+      });
     }
-
-    // -------------------------
-    // FAILED
-    // -------------------------
-    else {
-      connection.failureCount =
-        (connection.failureCount || 0) + 1;
-
-      connection.syncStatus = "failed";
-      connection.lastError =
-        error || "Unknown error";
-
-      if (connection.failureCount >= 5) {
-        connection.accountHealth = "error";
-      } else if (connection.failureCount >= 2) {
-        connection.accountHealth = "warning";
-      } else {
-        connection.accountHealth = "healthy";
-      }
-
-      await connection.save();
-    }
-
-    res.status(200).json({
-      success: true,
-      data: connection,
-    });
   } catch (error) {
     console.error("Update social stats error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to update social statistics.",
@@ -386,79 +459,55 @@ export const disconnectPlatform = async (req, res) => {
   try {
     const { connectionId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
+    const findRes = await query(
+      `SELECT * FROM social_connections WHERE id::text = $1`,
+      [connectionId]
+    );
 
-    const connection =
-      await SocialConnection.findById(connectionId);
-
-    if (!connection) {
+    if (findRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Connection not found.",
       });
     }
 
-    // Delete analytics history
-    await SocialAnalytics.deleteMany({
-      connectionId,
-    });
+    const conn = findRes.rows[0];
 
-    const updates = {};
+    // Delete analytics
+    await query(`DELETE FROM social_analytics WHERE connection_id = $1`, [conn.id]);
 
-    switch (connection.platform) {
+    // Clear platform stats in profiles
+    const platform = conn.platform.toLowerCase();
+    switch (platform) {
       case "instagram":
-        updates.instagramHandle = "";
-        updates.instagramFollowers = 0;
+        await query(`UPDATE profiles SET instagram_handle = '', instagram_followers = 0, updated_at = NOW() WHERE id = $1`, [conn.profile_id]);
         break;
-
       case "facebook":
-        updates.facebookHandle = "";
-        updates.facebookFollowers = 0;
+        await query(`UPDATE profiles SET facebook_handle = '', facebook_followers = 0, updated_at = NOW() WHERE id = $1`, [conn.profile_id]);
         break;
-
       case "linkedin":
-        updates.linkedinHandle = "";
-        updates.linkedinFollowers = 0;
+        await query(`UPDATE profiles SET linkedin_handle = '', linkedin_followers = 0, updated_at = NOW() WHERE id = $1`, [conn.profile_id]);
         break;
-
       case "youtube":
-        updates.youtubeHandle = "";
-        updates.youtubeFollowers = 0;
+        await query(`UPDATE profiles SET youtube_handle = '', youtube_followers = 0, updated_at = NOW() WHERE id = $1`, [conn.profile_id]);
         break;
-
       case "quora":
-        updates.quoraHandle = "";
-        updates.quoraFollowers = 0;
+        await query(`UPDATE profiles SET quora_handle = '', quora_followers = 0, updated_at = NOW() WHERE id = $1`, [conn.profile_id]);
         break;
-
       case "twitter":
-        updates.twitterHandle = "";
-        updates.twitterFollowers = 0;
+        await query(`UPDATE profiles SET twitter_handle = '', twitter_followers = 0, updated_at = NOW() WHERE id = $1`, [conn.profile_id]);
         break;
     }
 
-    await Profile.findByIdAndUpdate(
-      connection.profileId,
-      updates
-    );
-
-    await SocialConnection.findByIdAndDelete(
-      connectionId
-    );
+    // Delete connection
+    await query(`DELETE FROM social_connections WHERE id = $1`, [conn.id]);
 
     res.status(200).json({
       success: true,
-      message:
-        "Social platform disconnected successfully.",
+      message: "Social platform disconnected successfully.",
     });
   } catch (error) {
     console.error("Disconnect platform error:", error);
-
     res.status(500).json({
       success: false,
       message: "Failed to disconnect platform.",
@@ -467,13 +516,11 @@ export const disconnectPlatform = async (req, res) => {
 };
 
 // =====================================================
-// GET VERIFIED CONNECTIONS
-// Used by socialSyncJob
+// GET VERIFIED CONNECTIONS (Used by socialSyncJob)
 // =====================================================
 export const getVerifiedConnections = async () => {
-  return await SocialConnection.find({
-    verified: true,
-  }).lean();
+  const { rows } = await query(`SELECT * FROM social_connections WHERE verified = TRUE`);
+  return rows.map(formatSocialConnection);
 };
 
 // =====================================================
@@ -484,361 +531,178 @@ export const getOAuthClientIds = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        googleClientId:
-          process.env.GOOGLE_CLIENT_ID || "",
-
-        metaClientId:
-          process.env.META_CLIENT_ID || "",
-
-        linkedinClientId:
-          process.env.LINKEDIN_CLIENT_ID || "",
-
-        twitterClientId:
-          process.env.TWITTER_CLIENT_ID || "",
+        googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+        metaClientId: process.env.META_CLIENT_ID || "",
+        linkedinClientId: process.env.LINKEDIN_CLIENT_ID || "",
+        twitterClientId: process.env.TWITTER_CLIENT_ID || "",
       },
     });
   } catch (error) {
-    console.error(
-      "Get OAuth client IDs error:",
-      error
-    );
-
+    console.error("Get OAuth client IDs error:", error);
     res.status(500).json({
       success: false,
-      message:
-        "Failed to fetch OAuth configuration.",
+      message: "Failed to fetch OAuth configuration.",
     });
   }
 };
 
 // =====================================================
-// HELPER: UPDATE PROFILE SOCIAL STATS
-// =====================================================
-const updateProfilePlatformStats = async (
-  profileId,
-  platform,
-  handle,
-  followers
-) => {
-  const updates = {};
-
-  switch (platform) {
-    case "instagram":
-      updates.instagramHandle = handle;
-
-      if (followers !== undefined) {
-        updates.instagramFollowers = followers;
-      }
-      break;
-
-    case "facebook":
-      updates.facebookHandle = handle;
-
-      if (followers !== undefined) {
-        updates.facebookFollowers = followers;
-      }
-      break;
-
-    case "linkedin":
-      updates.linkedinHandle = handle;
-
-      if (followers !== undefined) {
-        updates.linkedinFollowers = followers;
-      }
-      break;
-
-    case "youtube":
-      updates.youtubeHandle = handle;
-
-      if (followers !== undefined) {
-        updates.youtubeFollowers = followers;
-      }
-      break;
-
-    case "quora":
-      updates.quoraHandle = handle;
-
-      if (followers !== undefined) {
-        updates.quoraFollowers = followers;
-      }
-      break;
-
-    case "twitter":
-      updates.twitterHandle = handle;
-
-      if (followers !== undefined) {
-        updates.twitterFollowers = followers;
-      }
-      break;
-  }
-
-  if (Object.keys(updates).length > 0) {
-    await Profile.findByIdAndUpdate(
-      profileId,
-      updates
-    );
-  }
-};
-
-
-// =====================================================
 // EXCHANGE OAUTH CODE
-// Replaces Convex exchangeOAuthCodeAction
 // =====================================================
-
 export const exchangeOAuthCode = async (req, res) => {
   try {
     const {
       code,
       platform,
       profileId,
-      ownerType,
+      ownerType = "creator",
       redirectUri,
       codeVerifier,
     } = req.body;
 
-    if (
-      !code ||
-      !platform ||
-      !profileId ||
-      !ownerType ||
-      !redirectUri
-    ) {
+    if (!code || !platform || !profileId || !redirectUri) {
       return res.status(400).json({
         success: false,
         message: "Required OAuth fields are missing.",
       });
     }
 
-    if (
-      !mongoose.Types.ObjectId.isValid(profileId)
-    ) {
+    const resolvedId = await resolveProfileId(profileId);
+    if (!resolvedId) {
       return res.status(400).json({
         success: false,
         message: "Invalid profile ID.",
       });
     }
 
-    if (
-      !["creator", "brand"].includes(ownerType)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid owner type.",
-      });
-    }
-
-    const normalizedPlatform =
-      platform.toLowerCase();
-
-    /*
-      IMPORTANT:
-
-      The actual token exchange is platform-specific.
-
-      Instagram / Facebook
-      LinkedIn
-      Twitter/X
-      YouTube
-
-      each uses a different OAuth endpoint.
-
-      For now we validate the request and keep the
-      platform-specific exchange inside this switch.
-    */
-
+    const normalizedPlatform = platform.toLowerCase();
     let oauthResult;
 
     switch (normalizedPlatform) {
       case "instagram":
-        oauthResult =
-          await exchangeInstagramCode({
-            code,
-            redirectUri,
-          });
+        oauthResult = await exchangeInstagramCode({ code, redirectUri });
         break;
-
       case "facebook":
-        oauthResult =
-          await exchangeFacebookCode({
-            code,
-            redirectUri,
-          });
+        oauthResult = await exchangeFacebookCode({ code, redirectUri });
         break;
-
       case "linkedin":
-        oauthResult =
-          await exchangeLinkedInCode({
-            code,
-            redirectUri,
-          });
+        oauthResult = await exchangeLinkedInCode({ code, redirectUri });
         break;
-
       case "twitter":
-        oauthResult =
-          await exchangeTwitterCode({
-            code,
-            redirectUri,
-            codeVerifier,
-          });
+        oauthResult = await exchangeTwitterCode({ code, redirectUri, codeVerifier });
         break;
-
       case "youtube":
-        oauthResult =
-          await exchangeGoogleCode({
-            code,
-            redirectUri,
-          });
+        oauthResult = await exchangeGoogleCode({ code, redirectUri });
         break;
-
       default:
         return res.status(400).json({
           success: false,
-          message:
-            `Unsupported social platform: ${platform}`,
+          message: `Unsupported social platform: ${platform}`,
         });
     }
 
-    /*
-      Expected oauthResult structure:
-
-      {
-        accountId,
-        handle,
-        accessToken,
-        refreshToken,
-        expiresAt,
-        followers,
-        views,
-        engagementRate
-      }
-    */
-
     if (!oauthResult) {
-      throw new Error(
-        "OAuth provider did not return account information."
+      throw new Error("OAuth provider did not return account information.");
+    }
+
+    const now = Date.now();
+    const cleanHandle = String(oauthResult.handle || "Unknown").trim().replace(/^@/, "");
+    const followers = oauthResult.followers !== undefined ? Number(oauthResult.followers) : 0;
+    const views = oauthResult.views !== undefined ? Number(oauthResult.views) : 0;
+    const engagementRate = oauthResult.engagementRate !== undefined ? Number(oauthResult.engagementRate) : 0;
+
+    const upsertRes = await query(
+      `
+      INSERT INTO social_connections (
+        profile_id, owner_type, platform, handle, account_id,
+        encrypted_access_token, encrypted_refresh_token, expires_at,
+        verified, sync_status, sync_mode, last_synced_at, failure_count,
+        account_health, followers, subscribers, views, engagement_rate
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8,
+        TRUE, 'success', 'live', $9, 0,
+        'healthy', $10, $11, $12, $13
+      )
+      ON CONFLICT (profile_id, platform) DO UPDATE SET
+        handle = EXCLUDED.handle,
+        account_id = EXCLUDED.account_id,
+        encrypted_access_token = EXCLUDED.encrypted_access_token,
+        encrypted_refresh_token = EXCLUDED.encrypted_refresh_token,
+        expires_at = EXCLUDED.expires_at,
+        verified = TRUE,
+        sync_status = 'success',
+        sync_mode = 'live',
+        last_synced_at = EXCLUDED.last_synced_at,
+        failure_count = 0,
+        account_health = 'healthy',
+        last_error = NULL,
+        followers = EXCLUDED.followers,
+        subscribers = EXCLUDED.subscribers,
+        views = EXCLUDED.views,
+        engagement_rate = EXCLUDED.engagement_rate,
+        updated_at = NOW()
+      RETURNING *;
+      `,
+      [
+        resolvedId,
+        ownerType,
+        normalizedPlatform,
+        cleanHandle,
+        oauthResult.accountId || `acc_${normalizedPlatform}_${now}`,
+        oauthResult.accessToken || null,
+        oauthResult.refreshToken || null,
+        oauthResult.expiresAt || null,
+        now,
+        followers,
+        oauthResult.subscribers !== undefined ? Number(oauthResult.subscribers) : followers,
+        views,
+        engagementRate,
+      ]
+    );
+
+    const connection = upsertRes.rows[0];
+
+    // Snapshot
+    if (oauthResult.followers !== undefined) {
+      await query(
+        `INSERT INTO social_analytics (connection_id, timestamp, followers, views, engagement_rate) VALUES ($1, $2, $3, $4, $5)`,
+        [connection.id, now, followers, views, engagementRate]
       );
     }
 
-    const connection =
-      await SocialConnection.findOneAndUpdate(
-        {
-          profileId,
-          platform: normalizedPlatform,
-        },
-        {
-          profileId,
-          ownerType,
-          platform: normalizedPlatform,
-
-          handle:
-            oauthResult.handle || "Unknown",
-
-          accountId:
-            oauthResult.accountId,
-
-          encryptedAccessToken:
-            oauthResult.accessToken,
-
-          encryptedRefreshToken:
-            oauthResult.refreshToken,
-
-          expiresAt:
-            oauthResult.expiresAt,
-
-          verified: true,
-
-          syncStatus: "success",
-          syncMode: "live",
-
-          lastSyncedAt: Date.now(),
-
-          failureCount: 0,
-          accountHealth: "healthy",
-
-          lastError: undefined,
-
-          followers:
-            oauthResult.followers,
-
-          subscribers:
-            oauthResult.subscribers,
-
-          views:
-            oauthResult.views,
-
-          engagementRate:
-            oauthResult.engagementRate,
-        },
-        {
-          new: true,
-          upsert: true,
-          setDefaultsOnInsert: true,
-        }
-      );
-
-    /*
-      Save analytics snapshot
-    */
-
-    if (
-      oauthResult.followers !== undefined
-    ) {
-      await SocialAnalytics.create({
-        connectionId: connection._id,
-        timestamp: Date.now(),
-        followers:
-          oauthResult.followers,
-        views:
-          oauthResult.views,
-        engagementRate:
-          oauthResult.engagementRate,
-      });
-    }
-
-    /*
-      Update profile social stats and live feeds
-    */
-
+    // Update profile
     await updateProfilePlatformStats(
-      profileId,
+      resolvedId,
       normalizedPlatform,
-      oauthResult.handle,
-      oauthResult.followers
+      cleanHandle,
+      followers
     );
 
     if (Array.isArray(oauthResult.customSocialFeeds) && oauthResult.customSocialFeeds.length > 0) {
-      await Profile.findByIdAndUpdate(profileId, {
-        $set: { customSocialFeeds: oauthResult.customSocialFeeds },
-      });
+      await query(
+        `UPDATE profiles SET custom_social_feeds = $1, updated_at = NOW() WHERE id = $2`,
+        [JSON.stringify(oauthResult.customSocialFeeds), resolvedId]
+      );
     }
 
     return res.status(200).json({
       success: true,
-      message:
-        "Social account connected successfully.",
-      data: connection,
+      message: "Social account connected successfully.",
+      data: formatSocialConnection(connection),
     });
   } catch (error) {
-    console.error(
-      "OAuth exchange error:",
-      error
-    );
-
+    console.error("OAuth exchange error:", error);
     return res.status(500).json({
       success: false,
-      message:
-        error?.message ||
-        "Failed to exchange OAuth credentials.",
+      message: error?.message || "Failed to exchange OAuth credentials.",
     });
   }
 };
 
 // =====================================================
 // DIRECT / VERIFIED SOCIAL CONNECT & LIVE RE-SYNC
-// Allows creators & brands to verify and sync live engagement stats
 // =====================================================
-
 export const verifyAndConnectPlatform = async (req, res) => {
   try {
     const {
@@ -849,7 +713,6 @@ export const verifyAndConnectPlatform = async (req, res) => {
       followers = 0,
       views = 0,
       engagementRate = 0,
-      simulatedMetrics = true,
     } = req.body;
 
     if (!profileId || !platform || !handle) {
@@ -859,7 +722,8 @@ export const verifyAndConnectPlatform = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(profileId)) {
+    const resolvedId = await resolveProfileId(profileId);
+    if (!resolvedId) {
       return res.status(400).json({
         success: false,
         message: "Invalid profile ID.",
@@ -868,66 +732,63 @@ export const verifyAndConnectPlatform = async (req, res) => {
 
     const cleanHandle = String(handle).trim().replace(/^@/, "");
     const normalizedPlatform = platform.toLowerCase();
-
-    // Use exact metrics provided
     const parsedFollowers = Number(followers) >= 0 ? Number(followers) : 0;
     const computedViews = Number(views) || Math.floor(parsedFollowers * 2.2);
     const computedEngagement = Number(engagementRate) || 3.25;
-
-    const existing = await SocialConnection.findOne({
-      profileId,
-      platform: normalizedPlatform,
-    });
-
-    let connection;
     const now = Date.now();
 
-    if (existing) {
-      existing.handle = cleanHandle;
-      existing.followers = parsedFollowers;
-      existing.views = computedViews;
-      existing.engagementRate = computedEngagement;
-      existing.verified = true;
-      existing.syncStatus = "success";
-      existing.syncMode = "live";
-      existing.lastSyncedAt = now;
-      existing.failureCount = 0;
-      existing.accountHealth = "healthy";
-      existing.lastError = undefined;
-
-      connection = await existing.save();
-    } else {
-      connection = await SocialConnection.create({
-        profileId,
+    const upsertRes = await query(
+      `
+      INSERT INTO social_connections (
+        profile_id, owner_type, platform, handle, account_id,
+        verified, sync_status, sync_mode, last_synced_at, failure_count,
+        account_health, followers, subscribers, views, engagement_rate
+      ) VALUES (
+        $1, $2, $3, $4, $5,
+        TRUE, 'success', 'live', $6, 0,
+        'healthy', $7, $8, $9, $10
+      )
+      ON CONFLICT (profile_id, platform) DO UPDATE SET
+        handle = EXCLUDED.handle,
+        verified = TRUE,
+        sync_status = 'success',
+        sync_mode = 'live',
+        last_synced_at = EXCLUDED.last_synced_at,
+        failure_count = 0,
+        account_health = 'healthy',
+        last_error = NULL,
+        followers = EXCLUDED.followers,
+        subscribers = EXCLUDED.subscribers,
+        views = EXCLUDED.views,
+        engagement_rate = EXCLUDED.engagement_rate,
+        updated_at = NOW()
+      RETURNING *;
+      `,
+      [
+        resolvedId,
         ownerType,
-        platform: normalizedPlatform,
-        handle: cleanHandle,
-        accountId: `acc_${normalizedPlatform}_${Date.now()}`,
-        verified: true,
-        syncStatus: "success",
-        syncMode: "live",
-        lastSyncedAt: now,
-        failureCount: 0,
-        accountHealth: "healthy",
-        followers: parsedFollowers,
-        subscribers: parsedFollowers,
-        views: computedViews,
-        engagementRate: computedEngagement,
-      });
-    }
+        normalizedPlatform,
+        cleanHandle,
+        `acc_${normalizedPlatform}_${now}`,
+        now,
+        parsedFollowers,
+        parsedFollowers,
+        computedViews,
+        computedEngagement,
+      ]
+    );
 
-    // Save analytics history snapshot for timeline graphs
-    await SocialAnalytics.create({
-      connectionId: connection._id,
-      timestamp: now,
-      followers: parsedFollowers,
-      views: computedViews,
-      engagementRate: computedEngagement,
-    });
+    const connection = upsertRes.rows[0];
 
-    // Update Profile collection top-level stats
+    // Snapshot
+    await query(
+      `INSERT INTO social_analytics (connection_id, timestamp, followers, views, engagement_rate) VALUES ($1, $2, $3, $4, $5)`,
+      [connection.id, now, parsedFollowers, computedViews, computedEngagement]
+    );
+
+    // Profile sync
     await updateProfilePlatformStats(
-      profileId,
+      resolvedId,
       normalizedPlatform,
       cleanHandle,
       parsedFollowers
@@ -936,7 +797,7 @@ export const verifyAndConnectPlatform = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `Successfully verified and connected ${platform.toUpperCase()} (@${cleanHandle}).`,
-      data: connection,
+      data: formatSocialConnection(connection),
     });
   } catch (error) {
     console.error("Verify and connect error:", error);
@@ -948,54 +809,60 @@ export const verifyAndConnectPlatform = async (req, res) => {
   }
 };
 
+// =====================================================
+// SYNC LIVE PLATFORM STATS
+// =====================================================
 export const syncLivePlatformStats = async (req, res) => {
   try {
     const { connectionId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
+    const findRes = await query(
+      `SELECT * FROM social_connections WHERE id::text = $1`,
+      [connectionId]
+    );
 
-    const connection = await SocialConnection.findById(connectionId);
-    if (!connection) {
+    if (findRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Social connection not found.",
       });
     }
 
+    const connection = findRes.rows[0];
     const now = Date.now();
-    // Simulate real-time metric delta (+0.5% to +4% organic growth per sync)
     const growthFactor = 1 + (Math.random() * 0.035 - 0.005);
-    const newFollowers = Math.round((connection.followers || 5000) * growthFactor);
-    const newViews = Math.round((connection.views || newFollowers * 2) * (1 + (Math.random() * 0.05)));
-    const newEngagement = Number(Math.min(9.9, Math.max(1.5, (connection.engagementRate || 3.2) + (Math.random() * 0.4 - 0.2))).toFixed(2));
+    const newFollowers = Math.round(Number(connection.followers || 5000) * growthFactor);
+    const newViews = Math.round(Number(connection.views || newFollowers * 2) * (1 + Math.random() * 0.05));
+    const newEngagement = Number(
+      Math.min(9.9, Math.max(1.5, Number(connection.engagement_rate || 3.2) + (Math.random() * 0.4 - 0.2))).toFixed(2)
+    );
 
-    connection.followers = newFollowers;
-    connection.subscribers = newFollowers;
-    connection.views = newViews;
-    connection.engagementRate = newEngagement;
-    connection.lastSyncedAt = now;
-    connection.syncStatus = "success";
-    connection.accountHealth = "healthy";
+    const updRes = await query(
+      `
+      UPDATE social_connections SET
+        followers = $1,
+        subscribers = $1,
+        views = $2,
+        engagement_rate = $3,
+        last_synced_at = $4,
+        sync_status = 'success',
+        account_health = 'healthy',
+        updated_at = NOW()
+      WHERE id = $5
+      RETURNING *;
+      `,
+      [newFollowers, newViews, newEngagement, now, connection.id]
+    );
 
-    await connection.save();
+    // Snapshot
+    await query(
+      `INSERT INTO social_analytics (connection_id, timestamp, followers, views, engagement_rate) VALUES ($1, $2, $3, $4, $5)`,
+      [connection.id, now, newFollowers, newViews, newEngagement]
+    );
 
-    // Record snapshot in analytics history
-    await SocialAnalytics.create({
-      connectionId: connection._id,
-      timestamp: now,
-      followers: newFollowers,
-      views: newViews,
-      engagementRate: newEngagement,
-    });
-
-    // Sync back to Profile
+    // Update profile
     await updateProfilePlatformStats(
-      connection.profileId,
+      connection.profile_id,
       connection.platform,
       connection.handle,
       newFollowers
@@ -1004,7 +871,7 @@ export const syncLivePlatformStats = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `Live social metrics synced for ${connection.platform.toUpperCase()} (@${connection.handle}).`,
-      data: connection,
+      data: formatSocialConnection(updRes.rows[0]),
     });
   } catch (error) {
     console.error("Sync live platform stats error:", error);
@@ -1049,7 +916,6 @@ export const extractSocialMetadata = async (req, res) => {
       detectedType = /shorts/i.test(cleanUrl) ? "short" : "video";
       badge = detectedType === "short" ? "Trending Short" : "Featured Video";
 
-      // Extract YouTube Video ID
       let videoId = null;
       const ytMatch = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
       if (ytMatch && ytMatch[1]) {
@@ -1057,7 +923,6 @@ export const extractSocialMetadata = async (req, res) => {
         thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
       }
 
-      // Try YouTube oEmbed for title
       try {
         const oembedRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`, {
           headers: { "User-Agent": "Mozilla/5.0" },
@@ -1075,13 +940,12 @@ export const extractSocialMetadata = async (req, res) => {
         caption = "New YouTube Video 🔥";
       }
 
-      // Generate realistic metrics based on platform norms
-      const vNum = Math.floor(Math.random() * 45) + 30; // 30K - 75K
-      const lNum = Math.floor(vNum * (0.08 + Math.random() * 0.04)); // ~8-12% likes
-      const cNum = Math.floor(lNum * 0.04 * 1000); // realistic comments
+      const vNum = Math.floor(Math.random() * 45) + 30;
+      const lNum = Math.floor(vNum * (0.08 + Math.random() * 0.04));
+      const cNum = Math.floor(lNum * 0.04 * 1000);
 
       views = `${vNum}K`;
-      likes = `${(lNum).toFixed(1)}K`;
+      likes = `${lNum.toFixed(1)}K`;
       comments = `${cNum}`;
 
     } else if (isInstagram) {
@@ -1089,7 +953,6 @@ export const extractSocialMetadata = async (req, res) => {
       detectedType = /\/reel\/|\/reels\//i.test(cleanUrl) ? "reel" : "post";
       badge = detectedType === "reel" ? "Viral Reel" : "Top Post";
 
-      // Helper to decode Unicode HTML entities like &#x908; or &#39;
       const decodeHtmlEntities = (str) => {
         if (!str) return "";
         return str
@@ -1103,14 +966,12 @@ export const extractSocialMetadata = async (req, res) => {
           .trim();
       };
 
-      // Extract shortcode (e.g. /reel/DA12345/ or /p/DA12345/)
       let shortcode = "";
       const scMatch = cleanUrl.match(/\/(?:reel|reels|p)\/([A-Za-z0-9_-]+)/i);
       if (scMatch && scMatch[1]) {
         shortcode = scMatch[1];
       }
 
-      // Method 1: Fetch Instagram webpage with Googlebot / Crawler header to extract exact embedded json data
       try {
         const response = await fetch(cleanUrl, {
           headers: {
@@ -1123,7 +984,6 @@ export const extractSocialMetadata = async (req, res) => {
         if (response.ok) {
           const html = await response.text();
 
-          // Search for JSON-LD structured data (often has interactionStatistic)
           const jsonLdMatches = html.match(/<script\s+type=["']application\/ld\+json["']>([^<]+)<\/script>/gi);
           if (jsonLdMatches) {
             for (const scriptTag of jsonLdMatches) {
@@ -1159,7 +1019,6 @@ export const extractSocialMetadata = async (req, res) => {
             }
           }
 
-          // Search og:description with regex (e.g., "1,234 likes, 56 comments - Username on Instagram: ...")
           const ogDescMatch = html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i) ||
                               html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
           if (ogDescMatch && ogDescMatch[1]) {
@@ -1184,14 +1043,12 @@ export const extractSocialMetadata = async (req, res) => {
             }
           }
 
-          // og:image
           const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
                                html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
           if (ogImageMatch && ogImageMatch[1] && !thumbnail) {
             thumbnail = ogImageMatch[1].replace(/&amp;/g, "&");
           }
 
-          // og:title
           const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i) ||
                                html.match(/<title>([^<]+)<\/title>/i);
           if (ogTitleMatch && ogTitleMatch[1] && (!caption || caption.startsWith("&#"))) {
@@ -1206,7 +1063,6 @@ export const extractSocialMetadata = async (req, res) => {
         console.warn("Instagram primary scrape error:", scrapErr.message);
       }
 
-      // Method 2: Official Instagram oEmbed fallback
       if (!thumbnail || !caption) {
         try {
           const oembedUrl = `https://api.instagram.com/oembed/?url=${encodeURIComponent(cleanUrl)}&omitscript=true`;
@@ -1221,22 +1077,16 @@ export const extractSocialMetadata = async (req, res) => {
         } catch (e) {}
       }
 
-      // Clean caption if still containing unescaped HTML entities
       if (caption) {
         caption = decodeHtmlEntities(caption);
       }
 
-      // Method 3: Direct shortcode media
       if (!thumbnail && shortcode) {
         thumbnail = `https://www.instagram.com/p/${shortcode}/media/?size=l`;
       }
 
       if (!caption || caption.length < 2 || caption.includes("&#")) {
-        if (shortcode) {
-          caption = `Live Instagram Reel #${shortcode.slice(0, 6)} ✨`;
-        } else {
-          caption = "Trending Instagram Reel 🎬✨";
-        }
+        caption = shortcode ? `Live Instagram Reel #${shortcode.slice(0, 6)} ✨` : "Trending Instagram Reel 🎬✨";
       }
 
       if (!likes) {
@@ -1300,7 +1150,6 @@ export const extractSocialMetadata = async (req, res) => {
       views = `${Math.round(baseLike * 4.2)}K`;
 
     } else {
-      // General fallback (TikTok / LinkedIn / other)
       detectedPlatform = "instagram";
       detectedType = "reel";
       badge = "Featured Post";
@@ -1350,23 +1199,30 @@ export const autoFetchAccountReels = async (req, res) => {
       });
     }
 
+    const resolvedId = await resolveProfileId(profileId);
+    if (!resolvedId) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid profile ID.",
+      });
+    }
+
     const cleanHandle = String(handle).trim().replace(/^@/, "");
     const normalizedPlatform = platform.toLowerCase();
 
-    // Check if we have an active OAuth token for this account
-    const connection = await SocialConnection.findOne({
-      profileId,
-      platform: normalizedPlatform,
-    });
+    const connRes = await query(
+      `SELECT * FROM social_connections WHERE profile_id = $1 AND platform = $2 LIMIT 1`,
+      [resolvedId, normalizedPlatform]
+    );
+    const connection = connRes.rows[0];
 
     let liveItems = [];
 
-    // 1. If we have a valid token, fetch from Meta Graph API
-    if (connection?.encryptedAccessToken && connection?.accountId) {
+    if (connection?.encrypted_access_token && connection?.account_id) {
       try {
         const mediaRes = await fetch(
-          `https://graph.facebook.com/v19.0/${connection.accountId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp&limit=6&access_token=${encodeURIComponent(
-            connection.encryptedAccessToken
+          `https://graph.facebook.com/v19.0/${connection.account_id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp&limit=18&access_token=${encodeURIComponent(
+            connection.encrypted_access_token
           )}`
         );
         const mediaData = await mediaRes.json();
@@ -1388,7 +1244,6 @@ export const autoFetchAccountReels = async (req, res) => {
       }
     }
 
-    // 2. Fallback / Curated creator reels with real handle links
     if (liveItems.length === 0) {
       const sampleReels = [
         {
@@ -1429,7 +1284,7 @@ export const autoFetchAccountReels = async (req, res) => {
         },
       ];
 
-      liveItems = sampleReels.map((r, idx) => ({
+      liveItems = sampleReels.map((r) => ({
         platform: "instagram",
         type: r.type,
         postUrl: `https://instagram.com/${cleanHandle}`,
@@ -1442,10 +1297,11 @@ export const autoFetchAccountReels = async (req, res) => {
       }));
     }
 
-    // Save directly to Profile customSocialFeeds
-    await Profile.findByIdAndUpdate(profileId, {
-      $set: { customSocialFeeds: liveItems },
-    });
+    // Save directly to profiles custom_social_feeds
+    await query(
+      `UPDATE profiles SET custom_social_feeds = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(liveItems), resolvedId]
+    );
 
     return res.status(200).json({
       success: true,

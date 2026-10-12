@@ -1,24 +1,18 @@
-import mongoose from "mongoose";
-import PricingTier from "../models/PricingTier.js";
-import Profile from "../models/Profile.js";
+import { query } from "../config/postgres.js";
+import { formatPricingTier } from "../utils/formatters.js";
+
+// Helper to check valid UUID format
+const isUuid = (str) =>
+  typeof str === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
 
 // ==========================================
 // GET PRICING BY PROFILE
 // ==========================================
-
 export const getByProfile = async (req, res) => {
   try {
     const { profileId } = req.params;
 
-    console.log(
-      "========================================="
-    );
-    console.log("GET PRICING profileId:", profileId);
-    console.log(
-      "========================================="
-    );
-
-    // Never query MongoDB with undefined
     if (!profileId || profileId === "undefined") {
       return res.status(400).json({
         success: false,
@@ -27,19 +21,14 @@ export const getByProfile = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(profileId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid profile ID.",
-        data: [],
-      });
-    }
+    const result = await query(
+      `SELECT * FROM pricing_tiers
+       WHERE profile_id::text = $1
+       ORDER BY sort_order ASC`,
+      [profileId.trim()]
+    );
 
-    const pricing = await PricingTier.find({
-      profileId: new mongoose.Types.ObjectId(profileId),
-    })
-      .sort({ sortOrder: 1 })
-      .lean();
+    const pricing = result.rows.map(formatPricingTier);
 
     return res.status(200).json({
       success: true,
@@ -47,7 +36,6 @@ export const getByProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Get pricing error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch pricing.",
@@ -59,27 +47,14 @@ export const getByProfile = async (req, res) => {
 // ==========================================
 // CREATE / UPDATE PRICING
 // ==========================================
-
 export const upsertMany = async (req, res) => {
   try {
     const { profileId, tiers } = req.body;
-
-    console.log("UPDATE PRICING:", {
-      profileId,
-      tiers,
-    });
 
     if (!profileId) {
       return res.status(400).json({
         success: false,
         message: "profileId is required.",
-      });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(profileId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid profileId.",
       });
     }
 
@@ -90,108 +65,89 @@ export const upsertMany = async (req, res) => {
       });
     }
 
-    const mongoProfileId =
-      new mongoose.Types.ObjectId(profileId);
-
-    const profile = await Profile.findById(
-      mongoProfileId
+    // Verify profile exists in Supabase
+    const profileRes = await query(
+      "SELECT id FROM profiles WHERE id::text = $1",
+      [profileId.trim()]
     );
 
-    if (!profile) {
+    if (profileRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
       });
     }
 
-    for (
-      let index = 0;
-      index < tiers.length;
-      index++
-    ) {
+    const targetProfileId = profileRes.rows[0].id;
+
+    // Filter incoming IDs that are valid UUIDs
+    const incomingIds = tiers
+      .map((t) => t?.id || t?._id)
+      .filter((id) => id && isUuid(id));
+
+    // Delete existing tiers for this profile that are NOT in the incoming array
+    if (incomingIds.length > 0) {
+      await query(
+        `DELETE FROM pricing_tiers
+         WHERE profile_id = $1 AND id NOT IN (${incomingIds.map((_, i) => `$${i + 2}`).join(", ")})`,
+        [targetProfileId, ...incomingIds]
+      );
+    } else {
+      await query("DELETE FROM pricing_tiers WHERE profile_id = $1", [targetProfileId]);
+    }
+
+    // Update existing or create new tiers
+    for (let index = 0; index < tiers.length; index++) {
       const tier = tiers[index];
-
-      const name = String(
-        tier?.name || `Tier ${index + 1}`
-      ).trim();
-
+      const tierId = tier?.id || tier?._id;
+      const name = String(tier?.name || `Tier ${index + 1}`).trim();
       const price = Number(tier?.price) || 0;
+      const sortOrder = tier?.sortOrder !== undefined ? Number(tier.sortOrder) : index;
 
-      const sortOrder =
-        tier?.sortOrder !== undefined
-          ? Number(tier.sortOrder)
-          : index;
-
-      // UPDATE EXISTING
-      if (
-        tier?.id &&
-        mongoose.Types.ObjectId.isValid(tier.id)
-      ) {
-        await PricingTier.findOneAndUpdate(
-          {
-            _id: tier.id,
-            profileId: mongoProfileId,
-          },
-          {
-            name,
-            price,
-            sortOrder,
-          },
-          {
-            new: true,
-            runValidators: true,
-          }
+      if (tierId && isUuid(tierId)) {
+        await query(
+          `UPDATE pricing_tiers
+           SET name = $1, price = $2, sort_order = $3, updated_at = NOW()
+           WHERE id = $4 AND profile_id = $5`,
+          [name, price, sortOrder, tierId, targetProfileId]
         );
-      }
-
-      // CREATE NEW
-      else {
-        await PricingTier.create({
-          profileId: mongoProfileId,
-          name,
-          price,
-          sortOrder,
-        });
+      } else {
+        await query(
+          `INSERT INTO pricing_tiers (profile_id, name, price, sort_order)
+           VALUES ($1, $2, $3, $4)`,
+          [targetProfileId, name, price, sortOrder]
+        );
       }
     }
 
-    // ==========================================
-    // RECALCULATE STARTING PRICE
-    // ==========================================
+    // Recalculate Starting Price
+    const allTiersRes = await query(
+      `SELECT * FROM pricing_tiers
+       WHERE profile_id = $1
+       ORDER BY sort_order ASC`,
+      [targetProfileId]
+    );
 
-    const allTiers = await PricingTier.find({
-      profileId: mongoProfileId,
-    })
-      .sort({ sortOrder: 1 })
-      .lean();
+    const validPrices = allTiersRes.rows
+      .map((t) => Number(t.price))
+      .filter((p) => p > 0);
 
-    const validPrices = allTiers
-      .map((tier) => Number(tier.price))
-      .filter((price) => price > 0);
+    const startingPrice = validPrices.length > 0 ? Math.min(...validPrices) : 0;
 
-    const startingPrice =
-      validPrices.length > 0
-        ? Math.min(...validPrices)
-        : 0;
-
-    await Profile.findByIdAndUpdate(
-      mongoProfileId,
-      {
-        startingPrice,
-      }
+    await query(
+      `UPDATE profiles
+       SET starting_price = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [startingPrice, targetProfileId]
     );
 
     return res.status(200).json({
       success: true,
       message: "Pricing tiers updated successfully.",
-      data: allTiers,
+      data: allTiersRes.rows.map(formatPricingTier),
     });
   } catch (error) {
-    console.error(
-      "Upsert pricing error:",
-      error
-    );
-
+    console.error("Upsert pricing error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to update pricing tiers.",
@@ -203,7 +159,6 @@ export const upsertMany = async (req, res) => {
 // ==========================================
 // DELETE PRICING TIER
 // ==========================================
-
 export const remove = async (req, res) => {
   try {
     const { id } = req.params;
@@ -215,50 +170,37 @@ export const remove = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid pricing tier ID.",
-      });
-    }
+    const tierRes = await query(
+      "SELECT id, profile_id FROM pricing_tiers WHERE id::text = $1",
+      [id.trim()]
+    );
 
-    const tier =
-      await PricingTier.findById(id);
-
-    if (!tier) {
+    if (tierRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Pricing tier not found.",
       });
     }
 
-    const profileId = tier.profileId;
+    const profileId = tierRes.rows[0].profile_id;
 
-    await PricingTier.findByIdAndDelete(id);
+    await query("DELETE FROM pricing_tiers WHERE id::text = $1", [id.trim()]);
 
-    // ==========================================
-    // RECALCULATE STARTING PRICE
-    // ==========================================
+    // Recalculate Starting Price
+    const remainingRes = await query(
+      "SELECT price FROM pricing_tiers WHERE profile_id = $1",
+      [profileId]
+    );
 
-    const remainingTiers =
-      await PricingTier.find({
-        profileId,
-      }).lean();
+    const validPrices = remainingRes.rows
+      .map((t) => Number(t.price))
+      .filter((p) => p > 0);
 
-    const validPrices = remainingTiers
-      .map((tier) => Number(tier.price))
-      .filter((price) => price > 0);
+    const startingPrice = validPrices.length > 0 ? Math.min(...validPrices) : 0;
 
-    const startingPrice =
-      validPrices.length > 0
-        ? Math.min(...validPrices)
-        : 0;
-
-    await Profile.findByIdAndUpdate(
-      profileId,
-      {
-        startingPrice,
-      }
+    await query(
+      "UPDATE profiles SET starting_price = $1, updated_at = NOW() WHERE id = $2",
+      [startingPrice, profileId]
     );
 
     return res.status(200).json({
@@ -266,11 +208,7 @@ export const remove = async (req, res) => {
       message: "Pricing tier removed successfully.",
     });
   } catch (error) {
-    console.error(
-      "Remove pricing error:",
-      error
-    );
-
+    console.error("Remove pricing error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to remove pricing tier.",

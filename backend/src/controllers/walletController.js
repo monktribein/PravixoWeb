@@ -1,11 +1,10 @@
-import mongoose from "mongoose";
-import Wallet from "../models/Wallet.js";
-import WalletTransaction from "../models/WalletTransaction.js";
-import Withdrawal from "../models/Withdrawal.js";
-import CreatorBankDetails from "../models/CreatorBankDetails.js";
-import Notification from "../models/Notification.js";
-import Profile from "../models/Profile.js";
-import { sendPushToUser, sendPushToUsers } from "../utils/webPush.js";
+import { query } from "../config/postgres.js";
+import {
+  formatWallet,
+  formatWalletTransaction,
+  formatWithdrawal,
+} from "../utils/formatters.js";
+import { sendPushToUsers } from "../utils/webPush.js";
 
 /**
  * Helper to credit a creator's wallet atomically and idempotently upon admin payout release.
@@ -29,107 +28,154 @@ export const creditCreatorWallet = async ({
 
   // Idempotency Check: if a transaction with this payoutId or referenceId already exists, do not double credit.
   if (payoutId) {
-    const existingTx = await WalletTransaction.findOne({ payoutId });
-    if (existingTx) {
+    const existingTxRes = await query(
+      "SELECT * FROM wallet_transactions WHERE payout_id::text = $1 LIMIT 1",
+      [String(payoutId)]
+    );
+    if (existingTxRes.rows.length > 0) {
       console.log(`[Wallet] Payout ${payoutId} already credited. Skipping duplicate credit.`);
-      const currentWallet = await Wallet.findOne({ creatorId });
-      return { wallet: currentWallet, transaction: existingTx, duplicate: true };
+      const currentWalletRes = await query(
+        "SELECT * FROM wallets WHERE creator_id::text = $1 LIMIT 1",
+        [String(creatorId)]
+      );
+      return {
+        wallet: formatWallet(currentWalletRes.rows[0]),
+        transaction: formatWalletTransaction(existingTxRes.rows[0]),
+        duplicate: true,
+      };
     }
   }
 
   if (referenceId) {
-    const existingTxByRef = await WalletTransaction.findOne({ referenceId });
-    if (existingTxByRef) {
+    const existingRefRes = await query(
+      "SELECT * FROM wallet_transactions WHERE reference_id = $1 LIMIT 1",
+      [referenceId]
+    );
+    if (existingRefRes.rows.length > 0) {
       console.log(`[Wallet] Reference ${referenceId} already credited. Skipping duplicate credit.`);
-      const currentWallet = await Wallet.findOne({ creatorId });
-      return { wallet: currentWallet, transaction: existingTxByRef, duplicate: true };
+      const currentWalletRes = await query(
+        "SELECT * FROM wallets WHERE creator_id::text = $1 LIMIT 1",
+        [String(creatorId)]
+      );
+      return {
+        wallet: formatWallet(currentWalletRes.rows[0]),
+        transaction: formatWalletTransaction(existingRefRes.rows[0]),
+        duplicate: true,
+      };
     }
   }
 
-  // Atomic find & update or create wallet (only increment balance if COMPLETED)
   const isCompleted = status === "COMPLETED";
-  const updateQuery = isCompleted
-    ? {
-        $inc: {
-          availableBalance: amount,
-          totalEarned: amount,
-        },
-        $setOnInsert: {
-          pendingWithdrawalBalance: 0,
-          totalWithdrawn: 0,
-          currency: "INR",
-        },
-      }
-    : {
-        $setOnInsert: {
-          availableBalance: 0,
-          totalEarned: 0,
-          pendingWithdrawalBalance: 0,
-          totalWithdrawn: 0,
-          currency: "INR",
-        },
-      };
+  const numAmount = Number(amount);
 
-  const updatedWallet = await Wallet.findOneAndUpdate(
-    { creatorId },
-    updateQuery,
-    {
-      new: true,
-      upsert: true,
-      setDefaultsOnInsert: true,
-    }
+  let updatedWalletRow;
+  if (isCompleted) {
+    const walletRes = await query(
+      `INSERT INTO wallets (
+        creator_id, available_balance, total_earned, pending_withdrawal_balance, total_withdrawn, currency
+      ) VALUES ($1, $2, $2, 0, 0, 'INR')
+      ON CONFLICT (creator_id)
+      DO UPDATE SET
+        available_balance = wallets.available_balance + EXCLUDED.available_balance,
+        total_earned = wallets.total_earned + EXCLUDED.total_earned,
+        updated_at = NOW()
+      RETURNING *`,
+      [creatorId, numAmount]
+    );
+    updatedWalletRow = walletRes.rows[0];
+  } else {
+    const walletRes = await query(
+      `INSERT INTO wallets (
+        creator_id, available_balance, total_earned, pending_withdrawal_balance, total_withdrawn, currency
+      ) VALUES ($1, 0, 0, 0, 0, 'INR')
+      ON CONFLICT (creator_id)
+      DO UPDATE SET updated_at = NOW()
+      RETURNING *`,
+      [creatorId]
+    );
+    updatedWalletRow = walletRes.rows[0];
+  }
+
+  const finalRef =
+    referenceId ||
+    `WTX-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+  const txRes = await query(
+    `INSERT INTO wallet_transactions (
+      creator_id, collaboration_id, campaign_id, payout_id, type, transaction_type,
+      related_transaction_id, related_referral_id, amount, currency, status,
+      description, reference_id, balance_after
+    ) VALUES ($1, $2, $3, $4, 'CREDIT', $5, $6, $7, $8, 'INR', $9, $10, $11, $12)
+    RETURNING *`,
+    [
+      creatorId,
+      collaborationId || null,
+      campaignId || null,
+      payoutId || null,
+      transaction_type,
+      related_transaction_id || null,
+      related_referral_id || null,
+      numAmount,
+      status,
+      description,
+      finalRef,
+      Number(updatedWalletRow.available_balance || 0),
+    ]
   );
 
-  // Record ledger transaction
-  const transaction = await WalletTransaction.create({
-    creatorId,
-    collaborationId,
-    campaignId,
-    payoutId,
-    type: "CREDIT",
-    transaction_type,
-    related_transaction_id,
-    related_referral_id,
-    amount,
-    currency: "INR",
-    status,
-    description,
-    referenceId: referenceId || `WTX-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-    balanceAfter: updatedWallet.availableBalance,
-  });
-
-  return { wallet: updatedWallet, transaction, duplicate: false };
+  return {
+    wallet: formatWallet(updatedWalletRow),
+    transaction: formatWalletTransaction(txRes.rows[0]),
+    duplicate: false,
+  };
 };
 
 /**
  * GET /api/wallet/my-wallet
- * Retrieve authenticated user's (creator or brand) wallet balance and summary.
+ * Retrieve authenticated user's wallet balance and summary.
  */
 export const getMyWallet = async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.profileId;
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
-    let wallet = await Wallet.findOne({ creatorId: userId });
-    if (!wallet) {
-      wallet = await Wallet.create({
-        creatorId: userId,
-        availableBalance: 0,
-        pendingWithdrawalBalance: 0,
-        totalEarned: 0,
-        totalWithdrawn: 0,
-        currency: "INR",
-      });
+    let walletRes = await query(
+      "SELECT * FROM wallets WHERE creator_id::text = $1 LIMIT 1",
+      [String(userId).trim()]
+    );
+
+    let wallet;
+    if (walletRes.rows.length === 0) {
+      const insertRes = await query(
+        `INSERT INTO wallets (
+          creator_id, available_balance, pending_withdrawal_balance, total_earned, total_withdrawn, currency
+        ) VALUES ($1, 0, 0, 0, 0, 'INR')
+        RETURNING *`,
+        [userId]
+      );
+      wallet = formatWallet(insertRes.rows[0]);
+    } else {
+      wallet = formatWallet(walletRes.rows[0]);
     }
 
-    // Get recent transactions
-    const recentTransactions = await WalletTransaction.find({ creatorId: userId })
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .populate("campaignId", "title")
-      .lean();
+    const txRes = await query(
+      `SELECT wt.*, c.title as campaign_title
+       FROM wallet_transactions wt
+       LEFT JOIN campaigns c ON c.id = wt.campaign_id
+       WHERE wt.creator_id::text = $1
+       ORDER BY wt.created_at DESC
+       LIMIT 10`,
+      [String(userId).trim()]
+    );
+
+    const recentTransactions = txRes.rows.map((row) => ({
+      ...formatWalletTransaction(row),
+      campaignId: row.campaign_id
+        ? { _id: row.campaign_id, title: row.campaign_title || "" }
+        : null,
+    }));
 
     return res.status(200).json({
       success: true,
@@ -154,7 +200,7 @@ export const getMyWallet = async (req, res) => {
  */
 export const createDepositOrder = async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.profileId;
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
@@ -170,7 +216,7 @@ export const createDepositOrder = async (req, res) => {
     }
 
     const { createOrder } = await import("../services/razorpayService.js");
-    const receiptId = `DEP-${Date.now()}-${userId.toString().slice(-4).toUpperCase()}`;
+    const receiptId = `DEP-${Date.now()}-${String(userId).slice(-4).toUpperCase()}`;
 
     const order = await createOrder({
       amount: numericAmount,
@@ -202,7 +248,7 @@ export const createDepositOrder = async (req, res) => {
  */
 export const verifyDepositPayment = async (req, res) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.profileId;
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
@@ -262,14 +308,17 @@ export const verifyDepositPayment = async (req, res) => {
     });
 
     // Notify User
-    await Notification.create({
-      recipientId: userId,
-      senderId: userId,
-      type: "wallet_deposit",
-      text: `Successfully added ₹${depositAmount.toLocaleString("en-IN")} to your Pravixo Wallet. (Ref: ${gatewayPaymentId})`,
-      targetUrl: req.user?.role === "brand" ? "/dashboard/brand?tab=wallet" : "/dashboard/creator?tab=wallet",
-      createdAt: Date.now(),
-    });
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at)
+       VALUES ($1, $2, 'wallet_deposit', $3, $4, $5)`,
+      [
+        userId,
+        userId,
+        `Successfully added ₹${depositAmount.toLocaleString("en-IN")} to your Pravixo Wallet. (Ref: ${gatewayPaymentId})`,
+        req.user?.role === "brand" ? "/dashboard/brand?tab=wallet" : "/dashboard/creator?tab=wallet",
+        Date.now(),
+      ]
+    ).catch((notifErr) => console.warn("Could not dispatch deposit notification:", notifErr));
 
     return res.status(200).json({
       success: true,
@@ -294,24 +343,48 @@ export const verifyDepositPayment = async (req, res) => {
  */
 export const getMyTransactions = async (req, res) => {
   try {
-    const creatorId = req.user?._id;
+    const creatorId = req.user?._id || req.user?.profileId;
     if (!creatorId) {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
     const { page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 20;
+    const offset = (pageNum - 1) * limitNum;
 
-    const [transactions, total] = await Promise.all([
-      WalletTransaction.find({ creatorId })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit, 10))
-        .populate("campaignId", "title")
-        .populate("collaborationId", "creatorAmount pravixoFee")
-        .lean(),
-      WalletTransaction.countDocuments({ creatorId }),
+    const [txRes, countRes] = await Promise.all([
+      query(
+        `SELECT wt.*, c.title as campaign_title, co.creator_amount, co.pravixo_fee
+         FROM wallet_transactions wt
+         LEFT JOIN campaigns c ON c.id = wt.campaign_id
+         LEFT JOIN connections co ON co.id = wt.collaboration_id
+         WHERE wt.creator_id::text = $1
+         ORDER BY wt.created_at DESC
+         OFFSET $2 LIMIT $3`,
+        [String(creatorId).trim(), offset, limitNum]
+      ),
+      query(
+        "SELECT count(*) FROM wallet_transactions WHERE creator_id::text = $1",
+        [String(creatorId).trim()]
+      ),
     ]);
+
+    const total = Number(countRes.rows[0]?.count || 0);
+
+    const transactions = txRes.rows.map((row) => ({
+      ...formatWalletTransaction(row),
+      campaignId: row.campaign_id
+        ? { _id: row.campaign_id, title: row.campaign_title || "" }
+        : null,
+      collaborationId: row.collaboration_id
+        ? {
+            _id: row.collaboration_id,
+            creatorAmount: Number(row.creator_amount || 0),
+            pravixoFee: Number(row.pravixo_fee || 0),
+          }
+        : null,
+    }));
 
     return res.status(200).json({
       success: true,
@@ -319,8 +392,8 @@ export const getMyTransactions = async (req, res) => {
         transactions,
         pagination: {
           total,
-          page: parseInt(page, 10),
-          pages: Math.ceil(total / parseInt(limit, 10)),
+          page: pageNum,
+          pages: Math.ceil(total / limitNum) || 1,
         },
       },
     });
@@ -340,7 +413,7 @@ export const getMyTransactions = async (req, res) => {
  */
 export const requestWithdrawal = async (req, res) => {
   try {
-    const creatorId = req.user?._id;
+    const creatorId = req.user?._id || req.user?.profileId;
     if (!creatorId) {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
@@ -359,7 +432,6 @@ export const requestWithdrawal = async (req, res) => {
       });
     }
 
-    // Minimum withdrawal threshold (e.g. ₹100 or ₹500)
     const MIN_WITHDRAWAL = 100;
     if (withdrawAmount < MIN_WITHDRAWAL) {
       return res.status(400).json({
@@ -368,107 +440,129 @@ export const requestWithdrawal = async (req, res) => {
       });
     }
 
-    // Check bank details
-    const bankDetails = await CreatorBankDetails.findOne({ creatorId });
-    if (!bankDetails || !bankDetails.accountNumber || !bankDetails.ifsc) {
+    // Check bank details in creator_bank_details table
+    const bankRes = await query(
+      "SELECT * FROM creator_bank_details WHERE creator_id::text = $1 LIMIT 1",
+      [String(creatorId).trim()]
+    );
+
+    if (bankRes.rows.length === 0 || !bankRes.rows[0].account_number || !bankRes.rows[0].ifsc) {
       return res.status(400).json({
         success: false,
         message: "Please save your bank account details in Payment Settings before requesting a withdrawal.",
       });
     }
 
-    // Mask account number for safe snapshot
-    const accNum = bankDetails.accountNumber || "";
+    const bankDetails = bankRes.rows[0];
+    const accNum = bankDetails.account_number || "";
     const maskedAcc = accNum.length > 4 ? `••••••••${accNum.slice(-4)}` : accNum;
 
     const bankSnapshot = {
-      accountHolderName: bankDetails.accountHolderName || bankDetails.fullName,
-      bankName: bankDetails.bankName,
+      accountHolderName: bankDetails.account_holder_name || bankDetails.full_name,
+      bankName: bankDetails.bank_name,
       accountNumberMasked: maskedAcc,
       ifsc: bankDetails.ifsc,
-      upiId: bankDetails.upiId || "",
+      upiId: bankDetails.upi_id || "",
     };
 
     // Atomically reserve funds from available balance
-    const updatedWallet = await Wallet.findOneAndUpdate(
-      {
-        creatorId,
-        availableBalance: { $gte: withdrawAmount },
-      },
-      {
-        $inc: {
-          availableBalance: -withdrawAmount,
-          pendingWithdrawalBalance: withdrawAmount,
-        },
-      },
-      { new: true }
+    const walletUpdateRes = await query(
+      `UPDATE wallets
+       SET available_balance = available_balance - $1,
+           pending_withdrawal_balance = pending_withdrawal_balance + $1,
+           updated_at = NOW()
+       WHERE creator_id::text = $2 AND available_balance >= $1
+       RETURNING *`,
+      [withdrawAmount, String(creatorId).trim()]
     );
 
-    if (!updatedWallet) {
-      const currentWallet = await Wallet.findOne({ creatorId });
-      const currentAvailable = currentWallet?.availableBalance || 0;
+    if (walletUpdateRes.rows.length === 0) {
+      const currWalletRes = await query(
+        "SELECT available_balance FROM wallets WHERE creator_id::text = $1",
+        [String(creatorId).trim()]
+      );
+      const currentAvailable = Number(currWalletRes.rows[0]?.available_balance || 0);
       return res.status(400).json({
         success: false,
         message: `Insufficient available balance. You requested ₹${withdrawAmount.toLocaleString("en-IN")}, but only ₹${currentAvailable.toLocaleString("en-IN")} is available.`,
       });
     }
 
+    const updatedWallet = formatWallet(walletUpdateRes.rows[0]);
     const referenceId = `WDR-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-    // Create Withdrawal Record
-    const withdrawal = await Withdrawal.create({
-      creatorId,
-      amount: withdrawAmount,
-      currency: "INR",
-      status: "PENDING",
-      withdrawalMethod,
-      bankDetailsSnapshot: bankSnapshot,
-      referenceId,
-      requestedAt: Date.now(),
-    });
+    // Create Withdrawal Record in Supabase
+    const wdrRes = await query(
+      `INSERT INTO withdrawals (
+        creator_id, amount, currency, status, withdrawal_method, bank_details_snapshot, reference_id, requested_at
+      ) VALUES ($1, $2, 'INR', 'PENDING', $3, $4, $5, $6)
+      RETURNING *`,
+      [
+        creatorId,
+        withdrawAmount,
+        withdrawalMethod,
+        JSON.stringify(bankSnapshot),
+        referenceId,
+        Date.now(),
+      ]
+    );
 
-    // Log Wallet Transaction
-    const transaction = await WalletTransaction.create({
-      creatorId,
-      withdrawalId: withdrawal._id,
-      type: "DEBIT",
-      amount: withdrawAmount,
-      currency: "INR",
-      status: "PENDING",
-      description: `Withdrawal request to ${bankDetails.bankName} (${maskedAcc})`,
-      referenceId,
-      balanceAfter: updatedWallet.availableBalance,
-    });
+    const withdrawal = formatWithdrawal(wdrRes.rows[0]);
 
-    // Fetch creator details
-    const creatorProfile = await Profile.findById(creatorId).select("fullName email handle").lean();
-    const creatorName = creatorProfile?.fullName || "Creator";
+    // Log Wallet Transaction in Supabase
+    const txRes = await query(
+      `INSERT INTO wallet_transactions (
+        creator_id, withdrawal_id, type, amount, currency, status, description, reference_id, balance_after
+      ) VALUES ($1, $2, 'DEBIT', $3, 'INR', 'PENDING', $4, $5, $6)
+      RETURNING *`,
+      [
+        creatorId,
+        withdrawal.id,
+        withdrawAmount,
+        `Withdrawal request to ${bankDetails.bank_name} (${maskedAcc})`,
+        referenceId,
+        updatedWallet.availableBalance,
+      ]
+    );
 
-    // 1. Notify Creator (confirmation)
-    await Notification.create({
-      recipientId: creatorId,
-      senderId: creatorId,
-      type: "withdrawal_requested",
-      text: `Your withdrawal request of ₹${withdrawAmount.toLocaleString("en-IN")} (Ref: ${referenceId}) has been submitted and is pending admin review.`,
-      targetUrl: "/dashboard/creator/wallet",
-      metadata: { withdrawalId: withdrawal._id, amount: withdrawAmount, referenceId },
-      createdAt: Date.now(),
-    });
+    const transaction = formatWalletTransaction(txRes.rows[0]);
+
+    // Fetch creator profile
+    const creatorProfRes = await query(
+      "SELECT full_name, email, handle FROM profiles WHERE id::text = $1 OR user_id = $1",
+      [String(creatorId).trim()]
+    );
+    const creatorName = creatorProfRes.rows[0]?.full_name || "Creator";
+
+    // 1. Notify Creator
+    query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, metadata, created_at)
+       VALUES ($1, $2, 'withdrawal_requested', $3, '/dashboard/creator/wallet', $4, $5)`,
+      [
+        creatorId,
+        creatorId,
+        `Your withdrawal request of ₹${withdrawAmount.toLocaleString("en-IN")} (Ref: ${referenceId}) has been submitted and is pending admin review.`,
+        JSON.stringify({ withdrawalId: withdrawal.id, amount: withdrawAmount, referenceId }),
+        Date.now(),
+      ]
+    ).catch((e) => console.warn("Creator withdrawal notif error:", e.message));
 
     // 2. Notify Admins
-    const admins = await Profile.find({ role: "admin" }).select("_id").lean();
-    if (admins && admins.length > 0) {
-      const adminIds = admins.map((a) => a._id);
+    const adminsRes = await query("SELECT id FROM profiles WHERE role = 'admin' AND is_deleted = false");
+    if (adminsRes.rows.length > 0) {
+      const adminIds = adminsRes.rows.map((a) => a.id);
       for (const adminId of adminIds) {
-        await Notification.create({
-          recipientId: adminId,
-          senderId: creatorId,
-          type: "withdrawal_requested",
-          text: `Creator ${creatorName} requested a withdrawal of ₹${withdrawAmount.toLocaleString("en-IN")} (Ref: ${referenceId}).`,
-          targetUrl: "/admin/payments",
-          metadata: { withdrawalId: withdrawal._id, amount: withdrawAmount, referenceId },
-          createdAt: Date.now(),
-        });
+        query(
+          `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, metadata, created_at)
+           VALUES ($1, $2, 'withdrawal_requested', $3, '/admin/payments', $4, $5)`,
+          [
+            adminId,
+            creatorId,
+            `Creator ${creatorName} requested a withdrawal of ₹${withdrawAmount.toLocaleString("en-IN")} (Ref: ${referenceId}).`,
+            JSON.stringify({ withdrawalId: withdrawal.id, amount: withdrawAmount, referenceId }),
+            Date.now(),
+          ]
+        ).catch((e) => console.warn("Admin withdrawal notif error:", e.message));
       }
 
       sendPushToUsers(adminIds, {
@@ -503,18 +597,19 @@ export const requestWithdrawal = async (req, res) => {
  */
 export const getMyWithdrawals = async (req, res) => {
   try {
-    const creatorId = req.user?._id;
+    const creatorId = req.user?._id || req.user?.profileId;
     if (!creatorId) {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
-    const withdrawals = await Withdrawal.find({ creatorId })
-      .sort({ requestedAt: -1, createdAt: -1 })
-      .lean();
+    const wdrRes = await query(
+      "SELECT * FROM withdrawals WHERE creator_id::text = $1 ORDER BY requested_at DESC, created_at DESC",
+      [String(creatorId).trim()]
+    );
 
     return res.status(200).json({
       success: true,
-      data: withdrawals,
+      data: wdrRes.rows.map(formatWithdrawal),
     });
   } catch (error) {
     console.error("getMyWithdrawals error:", error);

@@ -1,9 +1,4 @@
-import Referral from "../models/Referral.js";
-import ReferralReward from "../models/ReferralReward.js";
-import ReferralSetting from "../models/ReferralSetting.js";
-import ReferralRelationship from "../models/ReferralRelationship.js";
-import WalletTransaction from "../models/WalletTransaction.js";
-import Profile from "../models/Profile.js";
+import { query } from "../config/postgres.js";
 import {
   getActiveReferralSettings,
   processReferralQualification,
@@ -15,58 +10,119 @@ import {
  */
 export const adminListReferrals = async (req, res) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 15;
-    const skip = (page - 1) * limit;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 15));
+    const offset = (page - 1) * limit;
     const { status, search } = req.query;
 
-    const query = {};
+    const conditions = [];
+    const params = [];
+
     if (status && status !== "all") {
-      query.status = status;
+      params.push(status);
+      conditions.push(`r.status = $${params.length}`);
     }
 
-    if (search) {
-      const matchingProfiles = await Profile.find({
-        $or: [
-          { fullName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { handle: { $regex: search, $options: "i" } },
-        ],
-      }).select("_id");
-
-      const profileIds = matchingProfiles.map((p) => p._id);
-      query.$or = [
-        { referralCode: { $regex: search, $options: "i" } },
-        { referrerCreatorId: { $in: profileIds } },
-        { referredCreatorId: { $in: profileIds } },
-      ];
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      const sIdx = params.length;
+      conditions.push(`(
+        LOWER(r.referral_code) LIKE $${sIdx} OR
+        LOWER(ref.full_name) LIKE $${sIdx} OR
+        LOWER(ref.email) LIKE $${sIdx} OR
+        LOWER(ref.handle) LIKE $${sIdx} OR
+        LOWER(refe.full_name) LIKE $${sIdx} OR
+        LOWER(refe.email) LIKE $${sIdx} OR
+        LOWER(refe.handle) LIKE $${sIdx}
+      )`);
     }
 
-    const [referrals, total] = await Promise.all([
-      Referral.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate("referrerCreatorId", "fullName email handle avatarUrl")
-        .populate("referredCreatorId", "fullName email handle avatarUrl verificationStatus")
-        .lean(),
-      Referral.countDocuments(query),
-    ]);
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    // Attach rewards
-    const referralIds = referrals.map((r) => r._id);
-    const rewards = await ReferralReward.find({ referralId: { $in: referralIds } }).lean();
-    const rewardsMap = new Map(rewards.map((rw) => [rw.referralId.toString(), rw]));
+    const countRes = await query(
+      `
+      SELECT COUNT(*) as total
+      FROM referrals r
+      LEFT JOIN profiles ref ON ref.id = r.referrer_creator_id
+      LEFT JOIN profiles refe ON refe.id = r.referred_creator_id
+      ${whereClause}
+      `,
+      params
+    );
+    const total = parseInt(countRes.rows[0]?.total || "0", 10);
 
-    const data = referrals.map((r) => ({
-      ...r,
-      reward: rewardsMap.get(r._id.toString()) || null,
+    params.push(limit);
+    const limitIdx = params.length;
+    params.push(offset);
+    const offsetIdx = params.length;
+
+    const { rows } = await query(
+      `
+      SELECT
+        r.id,
+        r.referrer_creator_id,
+        r.referred_creator_id,
+        r.referral_code,
+        r.status,
+        r.qualifying_event,
+        r.qualified_at,
+        r.created_at,
+        r.updated_at,
+        json_build_object(
+          '_id', ref.id,
+          'id', ref.id,
+          'fullName', ref.full_name,
+          'email', ref.email,
+          'handle', ref.handle,
+          'avatarUrl', ref.avatar_url
+        ) AS "referrerCreatorId",
+        json_build_object(
+          '_id', refe.id,
+          'id', refe.id,
+          'fullName', refe.full_name,
+          'email', refe.email,
+          'handle', refe.handle,
+          'avatarUrl', refe.avatar_url,
+          'verificationStatus', refe.verification_status
+        ) AS "referredCreatorId",
+        CASE WHEN rw.id IS NOT NULL THEN
+          json_build_object(
+            '_id', rw.id,
+            'id', rw.id,
+            'rewardAmount', rw.amount,
+            'status', rw.status,
+            'creditedAt', rw.credited_at
+          )
+        ELSE NULL END AS reward
+      FROM referrals r
+      LEFT JOIN profiles ref ON ref.id = r.referrer_creator_id
+      LEFT JOIN profiles refe ON refe.id = r.referred_creator_id
+      LEFT JOIN referral_rewards rw ON rw.referral_id = r.id
+      ${whereClause}
+      ORDER BY r.created_at DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx};
+      `,
+      params
+    );
+
+    const formattedData = rows.map((r) => ({
+      _id: r.id,
+      id: r.id,
+      referralCode: r.referral_code,
+      status: r.status,
+      qualifyingEvent: r.qualifying_event,
+      qualifiedAt: r.qualified_at,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      referrerCreatorId: r.referrerCreatorId,
+      referredCreatorId: r.referredCreatorId,
+      reward: r.reward,
     }));
 
     return res.status(200).json({
       success: true,
       data: {
-        referrals: data,
+        referrals: formattedData,
         pagination: {
           total,
           page,
@@ -87,38 +143,40 @@ export const adminListReferrals = async (req, res) => {
 export const adminGetReferralStats = async (req, res) => {
   try {
     const [
-      totalReferrals,
-      registeredCount,
-      qualifiedCount,
-      rewardCreditedCount,
-      rejectedCount,
-      totalRewardsData,
-      totalReferrers,
-      totalRelationships,
-      activeRelationships,
-      totalCommissionsData,
+      totalRefRes,
+      registeredRes,
+      qualifiedRes,
+      creditedRes,
+      rejectedRes,
+      rewardsRes,
+      uniqueRefRes,
+      totalRelRes,
+      activeRelRes,
+      commRes,
     ] = await Promise.all([
-      Referral.countDocuments(),
-      Referral.countDocuments({ status: "registered" }),
-      Referral.countDocuments({ status: "qualified" }),
-      Referral.countDocuments({ status: "reward_credited" }),
-      Referral.countDocuments({ status: "rejected" }),
-      ReferralReward.aggregate([
-        { $match: { status: "credited" } },
-        { $group: { _id: null, totalAmount: { $sum: "$rewardAmount" } } },
-      ]),
-      Referral.distinct("referrerCreatorId"),
-      ReferralRelationship.countDocuments(),
-      ReferralRelationship.countDocuments({ status: "active" }),
-      WalletTransaction.aggregate([
-        { $match: { transaction_type: "referral_commission", status: "COMPLETED" } },
-        { $group: { _id: null, totalAmount: { $sum: "$amount" } } },
-      ]),
+      query(`SELECT COUNT(*) as c FROM referrals;`),
+      query(`SELECT COUNT(*) as c FROM referrals WHERE status = 'registered';`),
+      query(`SELECT COUNT(*) as c FROM referrals WHERE status = 'qualified';`),
+      query(`SELECT COUNT(*) as c FROM referrals WHERE status = 'reward_credited';`),
+      query(`SELECT COUNT(*) as c FROM referrals WHERE status = 'rejected';`),
+      query(`SELECT COALESCE(SUM(amount), 0) as total FROM referral_rewards WHERE status = 'credited';`),
+      query(`SELECT COUNT(DISTINCT referrer_creator_id) as c FROM referrals;`),
+      query(`SELECT COUNT(*) as c FROM referral_relationships;`),
+      query(`SELECT COUNT(*) as c FROM referral_relationships WHERE status = 'active';`),
+      query(`SELECT COALESCE(SUM(amount), 0) as total FROM wallet_transactions WHERE transaction_type = 'referral_commission' AND status = 'COMPLETED';`),
     ]);
 
-    const signupRewardsDisbursed = totalRewardsData[0]?.totalAmount || 0;
-    const recurringCommissionsDisbursed = totalCommissionsData[0]?.totalAmount || 0;
+    const totalReferrals = parseInt(totalRefRes.rows[0]?.c || "0", 10);
+    const registeredCount = parseInt(registeredRes.rows[0]?.c || "0", 10);
+    const qualifiedCount = parseInt(qualifiedRes.rows[0]?.c || "0", 10);
+    const rewardCreditedCount = parseInt(creditedRes.rows[0]?.c || "0", 10);
+    const rejectedCount = parseInt(rejectedRes.rows[0]?.c || "0", 10);
+    const signupRewardsDisbursed = Number(rewardsRes.rows[0]?.total || 0);
+    const recurringCommissionsDisbursed = Number(commRes.rows[0]?.total || 0);
     const totalRewardsDisbursed = Number((signupRewardsDisbursed + recurringCommissionsDisbursed).toFixed(2));
+    const totalRelationships = parseInt(totalRelRes.rows[0]?.c || "0", 10);
+    const activeRelationships = parseInt(activeRelRes.rows[0]?.c || "0", 10);
+    const totalUniqueReferrers = parseInt(uniqueRefRes.rows[0]?.c || "0", 10);
 
     return res.status(200).json({
       success: true,
@@ -130,10 +188,10 @@ export const adminGetReferralStats = async (req, res) => {
         rejectedCount,
         totalRewardsDisbursed,
         signupRewardsDisbursed,
-        recurringCommissionsDisbursed: Number(recurringCommissionsDisbursed.toFixed(2)),
+        recurringCommissionsDisbursed,
         totalRelationships,
         activeRelationships,
-        totalUniqueReferrers: totalReferrers.length,
+        totalUniqueReferrers,
       },
     });
   } catch (error) {
@@ -171,24 +229,68 @@ export const adminUpdateReferralSettings = async (req, res) => {
       terms,
     } = req.body;
 
-    let settings = await ReferralSetting.findOne();
-    if (!settings) {
-      settings = new ReferralSetting();
+    const findRes = await query(`SELECT id FROM referral_settings LIMIT 1;`);
+    let settingsRow;
+
+    if (findRes.rows.length === 0) {
+      const insRes = await query(
+        `
+        INSERT INTO referral_settings (
+          is_enabled, reward_amount, qualification_trigger, max_referrals_per_user,
+          campaign_expiry_date, terms
+        ) VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+        RETURNING *;
+        `,
+        [
+          isEnabled !== undefined ? Boolean(isEnabled) : true,
+          rewardAmount !== undefined ? Number(rewardAmount) : 500,
+          qualificationTrigger || "profile_verified",
+          maxReferralsPerUser !== undefined ? Number(maxReferralsPerUser) : 0,
+          campaignExpiryDate ? new Date(campaignExpiryDate) : null,
+          JSON.stringify(terms || []),
+        ]
+      );
+      settingsRow = insRes.rows[0];
+    } else {
+      const updRes = await query(
+        `
+        UPDATE referral_settings SET
+          is_enabled = COALESCE($1, is_enabled),
+          reward_amount = COALESCE($2, reward_amount),
+          qualification_trigger = COALESCE($3, qualification_trigger),
+          max_referrals_per_user = COALESCE($4, max_referrals_per_user),
+          campaign_expiry_date = COALESCE($5, campaign_expiry_date),
+          terms = COALESCE($6::jsonb, terms),
+          updated_at = NOW()
+        WHERE id = $7
+        RETURNING *;
+        `,
+        [
+          isEnabled !== undefined ? Boolean(isEnabled) : null,
+          rewardAmount !== undefined ? Number(rewardAmount) : null,
+          qualificationTrigger || null,
+          maxReferralsPerUser !== undefined ? Number(maxReferralsPerUser) : null,
+          campaignExpiryDate ? new Date(campaignExpiryDate) : null,
+          terms ? JSON.stringify(terms) : null,
+          findRes.rows[0].id,
+        ]
+      );
+      settingsRow = updRes.rows[0];
     }
-
-    if (typeof isEnabled === "boolean") settings.isEnabled = isEnabled;
-    if (typeof rewardAmount === "number" && rewardAmount >= 0) settings.rewardAmount = rewardAmount;
-    if (qualificationTrigger) settings.qualificationTrigger = qualificationTrigger;
-    if (typeof maxReferralsPerUser === "number") settings.maxReferralsPerUser = maxReferralsPerUser;
-    if (campaignExpiryDate !== undefined) settings.campaignExpiryDate = campaignExpiryDate ? new Date(campaignExpiryDate) : null;
-    if (Array.isArray(terms)) settings.terms = terms;
-
-    await settings.save();
 
     return res.status(200).json({
       success: true,
       message: "Referral settings updated successfully.",
-      data: settings,
+      data: {
+        id: settingsRow.id,
+        isEnabled: settingsRow.is_enabled,
+        rewardAmount: Number(settingsRow.reward_amount || 0),
+        currency: settingsRow.currency || "INR",
+        qualificationTrigger: settingsRow.qualification_trigger,
+        maxReferralsPerUser: Number(settingsRow.max_referrals_per_user || 0),
+        campaignExpiryDate: settingsRow.campaign_expiry_date,
+        terms: settingsRow.terms,
+      },
     });
   } catch (error) {
     console.error("adminUpdateReferralSettings error:", error);
@@ -203,13 +305,14 @@ export const adminUpdateReferralSettings = async (req, res) => {
 export const adminManuallyQualifyReferral = async (req, res) => {
   try {
     const { id } = req.params;
-    const referral = await Referral.findById(id);
-    if (!referral) {
+    const refRes = await query(`SELECT * FROM referrals WHERE id::text = $1;`, [id]);
+    if (refRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Referral not found." });
     }
 
+    const referral = refRes.rows[0];
     const result = await processReferralQualification({
-      referredCreatorId: referral.referredCreatorId,
+      referredCreatorId: referral.referred_creator_id,
       triggerType: "admin_manual",
       adminOverride: true,
       notes: "Manually qualified by Admin",
@@ -235,11 +338,12 @@ export const adminRejectReferral = async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
 
-    const referral = await Referral.findById(id);
-    if (!referral) {
+    const refRes = await query(`SELECT * FROM referrals WHERE id::text = $1;`, [id]);
+    if (refRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Referral not found." });
     }
 
+    const referral = refRes.rows[0];
     if (referral.status === "reward_credited") {
       return res.status(400).json({
         success: false,
@@ -247,14 +351,21 @@ export const adminRejectReferral = async (req, res) => {
       });
     }
 
-    referral.status = "rejected";
-    referral.rejectionReason = reason || "Rejected by administrator";
-    await referral.save();
+    const updRes = await query(
+      `
+      UPDATE referrals SET
+        status = 'rejected',
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING *;
+      `,
+      [referral.id]
+    );
 
     return res.status(200).json({
       success: true,
       message: "Referral rejected successfully.",
-      data: referral,
+      data: updRes.rows[0],
     });
   } catch (error) {
     console.error("adminRejectReferral error:", error);

@@ -1,14 +1,12 @@
-import mongoose from "mongoose";
+// =====================================================
+// DATABASE CONFIG — Supabase PostgreSQL Only
+// MongoDB has been fully removed from this project
+// =====================================================
 
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
+import { connectPostgres as _connectPostgres } from "./postgres.js";
+import { initPostgresTables } from "./initPostgres.js";
 
-    console.log("MongoDB Connected Successfully");
-  } catch (error) {
-    console.error("MongoDB Connection Failed:", error.message);
-    process.exit(1);
-  }
-};
+export const connectPostgres = _connectPostgres;
+export { initPostgresTables };
 
-export default connectDB;
+export default connectPostgres;

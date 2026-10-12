@@ -1,8 +1,11 @@
-import Message from "../models/Message.js";
-import Conversation from "../models/Conversation.js";
-import Profile from "../models/Profile.js";
-import Notification from "../models/Notification.js";
-import { sendPushToUser } from "../utils/webPush.js"; 
+import { query } from "../config/postgres.js";
+import { formatMessage } from "../utils/formatters.js";
+import { sendPushToUser } from "../utils/webPush.js";
+
+// Helper to check valid UUID
+const isUuid = (str) =>
+  typeof str === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
 
 // Send message (text or image/video media)
 export const sendMessage = async (req, res) => {
@@ -18,29 +21,33 @@ export const sendMessage = async (req, res) => {
       }
     }
 
-    let actualSenderId = req.user?._id || senderId;
+    let actualSenderId = req.user?._id || req.user?.profileId || senderId;
 
     if (!actualSenderId && conversationId) {
-      const conv = await Conversation.findById(conversationId);
-      if (conv) {
-        if (conv.adminId) {
-          actualSenderId = conv.adminId;
+      const convRes = await query("SELECT admin_id FROM conversations WHERE id::text = $1", [conversationId.trim()]);
+      if (convRes.rows.length > 0) {
+        if (convRes.rows[0].admin_id) {
+          actualSenderId = convRes.rows[0].admin_id;
         } else {
-          const adminProfile = await Profile.findOne({ role: "admin" });
-          if (adminProfile) actualSenderId = adminProfile._id;
+          const adminProfRes = await query("SELECT id FROM profiles WHERE role = 'admin' LIMIT 1");
+          if (adminProfRes.rows.length > 0) actualSenderId = adminProfRes.rows[0].id;
         }
       }
     }
 
     const hasFile = Boolean(req.file);
-    const isAudio = hasFile && (req.file.mimetype?.startsWith("audio/") || req.file.originalname?.endsWith(".webm") || req.file.originalname?.endsWith(".mp3") || req.file.originalname?.endsWith(".wav") || req.file.originalname?.endsWith(".ogg"));
-    
+    const isAudio =
+      hasFile &&
+      (req.file.mimetype?.startsWith("audio/") ||
+        req.file.originalname?.endsWith(".webm") ||
+        req.file.originalname?.endsWith(".mp3") ||
+        req.file.originalname?.endsWith(".wav") ||
+        req.file.originalname?.endsWith(".ogg"));
+
     let resolvedMessageType = requestedType || "text";
     if (hasFile) {
       if (isAudio || requestedType === "voice_note") {
         resolvedMessageType = "voice_note";
-      } else if (req.file.mimetype?.startsWith("video/")) {
-        resolvedMessageType = "media";
       } else {
         resolvedMessageType = "media";
       }
@@ -48,13 +55,14 @@ export const sendMessage = async (req, res) => {
       resolvedMessageType = "timestamp_feedback";
     }
 
-    const defaultFallbackText = isAudio || resolvedMessageType === "voice_note"
-      ? "🎤 Voice Note"
-      : req.file?.mimetype?.startsWith("video/")
-      ? "🎥 Video"
-      : hasFile
-      ? "📷 Photo"
-      : "💬 Message";
+    const defaultFallbackText =
+      isAudio || resolvedMessageType === "voice_note"
+        ? "🎤 Voice Note"
+        : req.file?.mimetype?.startsWith("video/")
+        ? "🎥 Video"
+        : hasFile
+        ? "📷 Photo"
+        : "💬 Message";
 
     const messageText = (text && text.trim()) || defaultFallbackText;
 
@@ -65,18 +73,17 @@ export const sendMessage = async (req, res) => {
       });
     }
 
-    // =========================================================================
-    // PROHIBITED CONTENT DETECTION (PHONE, EMAIL, EXTERNAL CONTACT SHARING)
-    // =========================================================================
+    // Prohibited content detection (Phone, Email, External contact sharing)
     if (text && typeof text === "string") {
       const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i;
       const phoneRegex = /(\+?\d{1,4}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}|\b\d{10}\b|\b\d{5}[-\s]?\d{5}\b/g;
       const disguisedPhoneRegex = /\b(\d\s*){10,}\b/;
-      const obfuscatedContactKeywords = /\b(whatsapp|wa\.me|call\s*me|phone\s*no|contact\s*no|mobile\s*no|gmail|telegram|t\.me|instagram\s*dm|direct\s*dm|pay\s*outside)\b/i;
 
-      // Extract cleaned digits to detect sneaky phone number patterns
       const digitsOnly = text.replace(/\D/g, "");
-      const hasSuspiciousPhoneNumber = (digitsOnly.length >= 10 && digitsOnly.length <= 13) || phoneRegex.test(text) || disguisedPhoneRegex.test(text);
+      const hasSuspiciousPhoneNumber =
+        (digitsOnly.length >= 10 && digitsOnly.length <= 13) ||
+        phoneRegex.test(text) ||
+        disguisedPhoneRegex.test(text);
       const hasEmail = emailRegex.test(text);
 
       if (hasEmail || hasSuspiciousPhoneNumber) {
@@ -110,75 +117,86 @@ export const sendMessage = async (req, res) => {
         }
       : parsedMetadata || null;
 
-    const message = await Message.create({
-      conversationId,
-      senderId: actualSenderId,
-      text: messageText,
-      read: false,
-      messageType: resolvedMessageType,
-      metadata: finalMetadata,
-    });
+    const insertRes = await query(
+      `INSERT INTO messages (
+        conversation_id, sender_id, text, read, message_type, metadata
+      ) VALUES ($1, $2, $3, false, $4, $5)
+      RETURNING *`,
+      [
+        conversationId.trim(),
+        actualSenderId,
+        messageText,
+        resolvedMessageType,
+        finalMetadata ? JSON.stringify(finalMetadata) : null,
+      ]
+    );
 
-    const conversation = await Conversation.findById(conversationId);
+    const message = formatMessage(insertRes.rows[0]);
 
-    if (conversation) {
-      let isUpdated = false;
-      if (conversation.status === "pending") {
-        conversation.status = "active";
-        isUpdated = true;
-      }
-      if (conversation.archived) {
-        conversation.archived = false;
-        isUpdated = true;
-      }
-      if (isUpdated) {
-        await conversation.save();
-      }
+    // Update conversation status and updated_at
+    const convRes = await query(
+      `UPDATE conversations
+       SET status = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
+           archived = false,
+           updated_at = NOW()
+       WHERE id::text = $1
+       RETURNING *`,
+      [conversationId.trim()]
+    );
 
-      // Determine recipient for notification
+    if (convRes.rows.length > 0) {
+      const conversation = convRes.rows[0];
       let recipientId = null;
-      const actualSenderStr = actualSenderId.toString();
+      const actualSenderStr = String(actualSenderId);
 
-      if (conversation.creatorId && conversation.creatorId.toString() !== actualSenderStr) {
-        recipientId = conversation.creatorId;
-      } else if (conversation.brandId && conversation.brandId.toString() !== actualSenderStr) {
-        recipientId = conversation.brandId;
-      } else if (conversation.adminId && conversation.adminId.toString() !== actualSenderStr) {
-        recipientId = conversation.adminId;
+      if (conversation.creator_id && String(conversation.creator_id) !== actualSenderStr) {
+        recipientId = conversation.creator_id;
+      } else if (conversation.brand_id && String(conversation.brand_id) !== actualSenderStr) {
+        recipientId = conversation.brand_id;
+      } else if (conversation.admin_id && String(conversation.admin_id) !== actualSenderStr) {
+        recipientId = conversation.admin_id;
       }
-    if (recipientId) {
-      const senderProfile = await Profile.findById(actualSenderId).select("fullName role").lean();
-      const senderName = senderProfile?.fullName || (senderProfile?.role === "admin" ? "Pravixo Admin" : "User");
-      const safeText = (text && typeof text === "string" ? text.trim() : "") || messageText || "Sent an attachment";
-      const preview = safeText.length > 60 ? `${safeText.slice(0, 60)}...` : safeText;
 
-      // 1. In-App Notification (bell dropdown ke liye)
-      await Notification.create({
-        recipientId,
-        senderId: actualSenderId,
-        type: "new_message",
-        text: `New message from ${senderName}: "${preview}"`,
-        targetUrl: `/messages?conversationId=${conversationId}`,
-        createdAt: Date.now(),
-      }).catch((notifErr) => console.warn("Could not dispatch message notification:", notifErr));
+      if (recipientId) {
+        const senderProfRes = await query(
+          "SELECT full_name, role FROM profiles WHERE id::text = $1",
+          [actualSenderStr]
+        );
+        const senderProfile = senderProfRes.rows[0];
+        const senderName =
+          senderProfile?.full_name || (senderProfile?.role === "admin" ? "Pravixo Admin" : "User");
+        const safeText = (text && typeof text === "string" ? text.trim() : "") || messageText || "Sent an attachment";
+        const preview = safeText.length > 60 ? `${safeText.slice(0, 60)}...` : safeText;
 
-  // 2. Web Push Notification (popup ke liye)
-  sendPushToUser(recipientId, {
-    title: `New message from ${senderName} 💬`,
-    body: preview,
-    url: `/messages?conversationId=${conversationId}`,
-  }).catch((err) => console.error("Chat push error:", err.message));
-}
+        // In-App Notification
+        query(
+          `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at)
+           VALUES ($1, $2, 'new_message', $3, $4, $5)`,
+          [
+            recipientId,
+            actualSenderId,
+            `New message from ${senderName}: "${preview}"`,
+            `/messages?conversationId=${conversationId}`,
+            Date.now(),
+          ]
+        ).catch((notifErr) => console.warn("Could not dispatch message notification:", notifErr));
+
+        // Web Push Notification
+        sendPushToUser(recipientId, {
+          title: `New message from ${senderName} 💬`,
+          body: preview,
+          url: `/messages?conversationId=${conversationId}`,
+        }).catch((err) => console.error("Chat push error:", err.message));
+      }
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: message,
     });
   } catch (error) {
     console.error("Send message error:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to send message.",
     });
@@ -190,20 +208,26 @@ export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
 
-    const messages = await Message.find({
-      conversationId,
-    })
-      .sort({ createdAt: 1 })
-      .lean();
+    if (!conversationId) {
+      return res.status(400).json({ success: false, message: "conversationId is required." });
+    }
 
-    res.status(200).json({
+    const result = await query(
+      `SELECT * FROM messages
+       WHERE conversation_id::text = $1
+       ORDER BY created_at ASC`,
+      [conversationId.trim()]
+    );
+
+    const messages = result.rows.map(formatMessage);
+
+    return res.status(200).json({
       success: true,
       data: messages,
     });
   } catch (error) {
     console.error("Get messages error:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch messages.",
     });
@@ -223,20 +247,19 @@ export const unsendMessage = async (req, res) => {
       });
     }
 
-    const message = await Message.findById(messageId);
-
-    if (!message) {
+    const msgRes = await query("SELECT * FROM messages WHERE id::text = $1", [messageId.trim()]);
+    if (msgRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Message not found.",
       });
     }
 
-    const isSender = message.senderId.toString() === profileId.toString();
+    const message = msgRes.rows[0];
+    const isSender = String(message.sender_id) === String(profileId);
     const userRole = req.user?.role || "user";
     const isAdmin = userRole === "admin";
 
-    // Hard delete from DB requested
     if (deleteFromDb) {
       if (!isSender && !isAdmin) {
         return res.status(403).json({
@@ -244,7 +267,9 @@ export const unsendMessage = async (req, res) => {
           message: "You can only permanently delete your own messages.",
         });
       }
-      await Message.findByIdAndDelete(messageId);
+
+      await query("DELETE FROM messages WHERE id::text = $1", [messageId.trim()]);
+
       return res.status(200).json({
         success: true,
         message: "Message permanently deleted from database.",
@@ -252,7 +277,7 @@ export const unsendMessage = async (req, res) => {
       });
     }
 
-    // Delete / Unsend modes
+    let setClause = "unsent = true, deleted_at = NOW(), updated_at = NOW()";
     if (mode === "for_everyone") {
       if (!isSender && !isAdmin) {
         return res.status(403).json({
@@ -260,29 +285,26 @@ export const unsendMessage = async (req, res) => {
           message: "You can only unsend your own messages for everyone.",
         });
       }
-      message.unsent = true;
-      message.deletedAt = new Date();
+      setClause = "unsent = true, deleted_at = NOW(), updated_at = NOW()";
     } else if (mode === "for_brand") {
-      message.deletedForBrand = true;
-      message.deletedAt = new Date();
+      setClause = "deleted_for_brand = true, deleted_at = NOW(), updated_at = NOW()";
     } else if (mode === "for_creator") {
-      message.deletedForCreator = true;
-      message.deletedAt = new Date();
-    } else {
-      message.unsent = true;
+      setClause = "deleted_for_creator = true, deleted_at = NOW(), updated_at = NOW()";
     }
 
-    await message.save();
+    const updateRes = await query(
+      `UPDATE messages SET ${setClause} WHERE id::text = $1 RETURNING *`,
+      [messageId.trim()]
+    );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Message updated successfully.",
-      data: message,
+      data: formatMessage(updateRes.rows[0]),
     });
   } catch (error) {
     console.error("Unsend message error:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to unsend message.",
     });

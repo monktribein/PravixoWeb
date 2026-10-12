@@ -1,87 +1,84 @@
-import mongoose from "mongoose";
-import Portfolio from "../models/Portfolio.js";
-import Profile from "../models/Profile.js";
+import { query } from "../config/postgres.js";
+import { formatPortfolio, formatProfile } from "../utils/formatters.js";
 import cloudinary from "../config/cloudinary.js";
 
-// =====================================================
-// GET PORTFOLIO BY PROFILE
-// Convex: getByProfile
-// =====================================================
+const getFileUrl = (file) => {
+  if (!file) return null;
+  if (file.path && (file.path.startsWith("http://") || file.path.startsWith("https://"))) {
+    return file.path;
+  }
+  return `/uploads/${file.filename}`;
+};
 
+// Helper: Find Profile
+const findProfile = async (idOrUserId) => {
+  if (!idOrUserId) return null;
+  const res = await query(
+    `SELECT * FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+    [String(idOrUserId)]
+  );
+  return res.rows[0] ? formatProfile(res.rows[0]) : null;
+};
+
+// 1. GET PORTFOLIO BY PROFILE
 export const getByProfile = async (req, res) => {
   try {
     const { profileId } = req.params;
+    const profile = await findProfile(profileId);
+    const targetUuid = profile?.id || profileId;
 
-    if (!mongoose.Types.ObjectId.isValid(profileId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid profile ID.",
+    const portRes = await query(
+      `SELECT * FROM portfolios WHERE profile_id::text = $1 ORDER BY sort_order ASC, created_at DESC`,
+      [targetUuid]
+    );
+
+    const images = portRes.rows.map(formatPortfolio);
+
+    // Collect all userIds/userNames from comments
+    const commentUserIds = new Set();
+    const commentUserNames = new Set();
+
+    images.forEach((img) => {
+      (img.comments || []).forEach((c) => {
+        if (c.userId) commentUserIds.add(String(c.userId).trim());
+        if (c.userName) commentUserNames.add(String(c.userName).trim());
+      });
+    });
+
+    let profileMap = new Map();
+    if (commentUserIds.size > 0 || commentUserNames.size > 0) {
+      const idArray = Array.from(commentUserIds);
+      const nameArray = Array.from(commentUserNames);
+
+      const usersRes = await query(
+        `SELECT id, user_id, full_name, handle, avatar_url, gender, role 
+         FROM profiles 
+         WHERE id::text = ANY($1::text[]) 
+            OR user_id = ANY($1::text[]) 
+            OR full_name = ANY($2::text[]) 
+            OR handle = ANY($2::text[])`,
+        [idArray, nameArray]
+      );
+
+      usersRes.rows.forEach((p) => {
+        const prof = formatProfile(p);
+        profileMap.set(String(prof.id), prof);
+        if (prof.userId) profileMap.set(String(prof.userId), prof);
+        if (prof.fullName) profileMap.set(prof.fullName.trim().toLowerCase(), prof);
+        if (prof.handle) profileMap.set(prof.handle.trim().toLowerCase().replace(/^@/, ""), prof);
       });
     }
 
-    const images = await Portfolio.find({
-      profileId,
-    })
-      .sort({ sortOrder: 1 })
-      .lean();
-
-    // Collect all unique userIds and userNames from comments to enrich current avatar
-    const commentUserIds = [];
-    const commentUserNames = [];
-    images.forEach((img) => {
-      (img.comments || []).forEach((c) => {
-        if (c.userId) {
-          if (mongoose.Types.ObjectId.isValid(c.userId)) {
-            commentUserIds.push(new mongoose.Types.ObjectId(c.userId));
-          }
-          commentUserNames.push(String(c.userId).trim());
-        }
-        if (c.userName) {
-          commentUserNames.push(c.userName.trim());
-        }
-      });
-    });
-
-    const userProfiles = await Profile.find({
-      $or: [
-        { _id: { $in: commentUserIds } },
-        { userId: { $in: commentUserNames } },
-        { fullName: { $in: commentUserNames.map((n) => new RegExp(`^${n}$`, "i")) } },
-        { handle: { $in: commentUserNames.map((n) => new RegExp(`^${n.replace(/^@/, "")}$`, "i")) } },
-      ],
-    })
-      .select("_id userId fullName handle avatarUrl avatar gender role")
-      .lean();
-
-    const profileById = new Map();
-    const profileByName = new Map();
-    userProfiles.forEach((p) => {
-      profileById.set(p._id.toString(), p);
-      if (p.userId) {
-        profileById.set(p.userId.toString(), p);
-      }
-      if (p.fullName) {
-        profileByName.set(p.fullName.trim().toLowerCase(), p);
-      }
-      if (p.handle) {
-        profileByName.set(p.handle.trim().toLowerCase().replace(/^@/, ""), p);
-      }
-    });
-
     const results = images.map((image) => {
       const enrichedComments = (image.comments || []).map((comm) => {
-        const uId = comm.userId ? comm.userId.toString() : "";
-        const uName = comm.userName ? comm.userName.trim().toLowerCase() : "";
+        const uId = comm.userId ? String(comm.userId).trim() : "";
+        const uName = comm.userName ? String(comm.userName).trim().toLowerCase() : "";
         const pMatch =
-          (uId && profileById.get(uId)) ||
-          (uName && profileByName.get(uName)) ||
-          (uName && profileByName.get(uName.replace(/^@/, "")));
+          (uId && profileMap.get(uId)) ||
+          (uName && profileMap.get(uName)) ||
+          (uName && profileMap.get(uName.replace(/^@/, "")));
 
-        const avatar =
-          pMatch?.avatarUrl ||
-          pMatch?.avatar ||
-          comm.userAvatar ||
-          "";
+        const avatar = pMatch?.avatarUrl || comm.userAvatar || "";
 
         return {
           ...comm,
@@ -104,7 +101,6 @@ export const getByProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Get portfolio error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch portfolio.",
@@ -112,13 +108,7 @@ export const getByProfile = async (req, res) => {
   }
 };
 
-// =====================================================
-// ADD PORTFOLIO IMAGE
-// Convex: addImage
-//
-// Cloudinary upload is handled through multer.
-// =====================================================
-
+// 2. ADD PORTFOLIO IMAGE
 export const addImage = async (req, res) => {
   try {
     const {
@@ -140,10 +130,11 @@ export const addImage = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(profileId)) {
-      return res.status(400).json({
+    const profile = await findProfile(profileId);
+    if (!profile) {
+      return res.status(404).json({
         success: false,
-        message: "Invalid profile ID.",
+        message: "Profile not found.",
       });
     }
 
@@ -154,46 +145,53 @@ export const addImage = async (req, res) => {
       });
     }
 
-    const getFileUrl = (file) => {
-      if (!file) return null;
-      if (file.path && (file.path.startsWith("http://") || file.path.startsWith("https://"))) {
-        return file.path;
-      }
-      return `/uploads/${file.filename}`;
-    };
-
-    // Determine media type from mime or file extension
     const mime = req.file.mimetype || "";
-    const isVideo = mime.startsWith("video/") || /\.(mp4|mov|avi|webm|mkv)$/i.test(req.file.originalname || "");
+    const isVideo =
+      mime.startsWith("video/") || /\.(mp4|mov|avi|webm|mkv)$/i.test(req.file.originalname || "");
     const finalMediaType = mediaType || (isVideo ? "video" : "image");
     const finalType = type || (finalMediaType === "video" ? "reel" : "post");
 
-    const portfolioImage = await Portfolio.create({
-      profileId,
-      imageUrl: getFileUrl(req.file),
-      cloudinaryPublicId: req.file.filename || "",
-      mediaType: finalMediaType,
-      type: finalType,
-      caption: caption || "",
-      brandTag: brandTag || "",
-      likesCount: Number(likesCount) || 0,
-      viewsCount: Number(viewsCount) || (finalType === "reel" ? Math.floor(Math.random() * 2000) + 500 : 0),
-      commentsCount: 0,
-      sharesCount: 0,
-      aspectRatio: aspectRatio || (finalType === "reel" || finalType === "story" ? "9:16" : "1:1"),
-      sortOrder: Number(sortOrder) || 0,
-    });
+    const imageUrl = getFileUrl(req.file);
+    const finalSortOrder = Number(sortOrder) || 0;
+    const finalLikes = Number(likesCount) || 0;
+    const finalViews =
+      Number(viewsCount) || (finalType === "reel" ? Math.floor(Math.random() * 2000) + 500 : 0);
+    const finalAspect =
+      aspectRatio || (finalType === "reel" || finalType === "story" ? "9:16" : "1:1");
+
+    const insRes = await query(
+      `INSERT INTO portfolios (
+        profile_id, image_url, cloudinary_public_id, media_type, type,
+        caption, brand_tag, likes_count, views_count, comments_count, shares_count,
+        aspect_ratio, sort_order, liked_by_users, comments, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0, $10, $11, '[]'::jsonb, '[]'::jsonb, NOW(), NOW())
+      RETURNING *`,
+      [
+        profile.id,
+        imageUrl,
+        req.file.filename || "",
+        finalMediaType,
+        finalType,
+        caption || "",
+        brandTag || "",
+        finalLikes,
+        finalViews,
+        finalAspect,
+        finalSortOrder,
+      ]
+    );
+
+    const portfolioImage = formatPortfolio(insRes.rows[0]);
 
     return res.status(201).json({
       success: true,
       data: {
-        ...portfolioImage.toObject(),
+        ...portfolioImage,
         url: portfolioImage.imageUrl,
       },
     });
   } catch (error) {
     console.error("Add portfolio image error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to add portfolio image.",
@@ -201,54 +199,53 @@ export const addImage = async (req, res) => {
   }
 };
 
-// =====================================================
-// TOGGLE LIKE ON PORTFOLIO ITEM
-// =====================================================
+// 3. TOGGLE LIKE ON PORTFOLIO ITEM
 export const toggleLike = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id || req.user?._id;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid portfolio ID.",
-      });
-    }
-
-    const item = await Portfolio.findById(id);
-    if (!item) {
+    const itemRes = await query(`SELECT * FROM portfolios WHERE id::text = $1 LIMIT 1`, [id]);
+    if (itemRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Portfolio item not found.",
       });
     }
 
+    const item = formatPortfolio(itemRes.rows[0]);
+    let likedUsers = item.likedByUsers || [];
+    let likesCount = item.likesCount || 0;
     let isLiked = false;
-    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
-      const userObjectId = new mongoose.Types.ObjectId(userId);
-      const userIdx = item.likedByUsers.findIndex((u) => u.toString() === userId.toString());
+
+    if (userId) {
+      const userStr = String(userId);
+      const userIdx = likedUsers.findIndex((u) => String(u) === userStr);
       if (userIdx > -1) {
-        item.likedByUsers.splice(userIdx, 1);
-        item.likesCount = Math.max(0, (item.likesCount || 1) - 1);
+        likedUsers.splice(userIdx, 1);
+        likesCount = Math.max(0, likesCount - 1);
         isLiked = false;
       } else {
-        item.likedByUsers.push(userObjectId);
-        item.likesCount = (item.likesCount || 0) + 1;
+        likedUsers.push(userStr);
+        likesCount = likesCount + 1;
         isLiked = true;
       }
     } else {
-      // Guest like increment
-      item.likesCount = (item.likesCount || 0) + 1;
+      likesCount = likesCount + 1;
       isLiked = true;
     }
 
-    await item.save();
+    await query(
+      `UPDATE portfolios 
+       SET liked_by_users = $1::jsonb, likes_count = $2, updated_at = NOW() 
+       WHERE id = $3`,
+      [JSON.stringify(likedUsers), likesCount, item.id]
+    );
 
     return res.status(200).json({
       success: true,
       data: {
-        likesCount: item.likesCount,
+        likesCount,
         isLiked,
       },
     });
@@ -261,9 +258,7 @@ export const toggleLike = async (req, res) => {
   }
 };
 
-// =====================================================
-// ADD COMMENT ON PORTFOLIO ITEM
-// =====================================================
+// 4. ADD COMMENT ON PORTFOLIO ITEM
 export const addComment = async (req, res) => {
   try {
     const { id } = req.params;
@@ -277,55 +272,35 @@ export const addComment = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid portfolio ID.",
-      });
-    }
-
-    const item = await Portfolio.findById(id);
-    if (!item) {
+    const itemRes = await query(`SELECT * FROM portfolios WHERE id::text = $1 LIMIT 1`, [id]);
+    if (itemRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Portfolio item not found.",
       });
     }
+    const item = formatPortfolio(itemRes.rows[0]);
 
-    // Try finding latest profile data for accurate avatar
     let freshAvatar = userAvatar || "";
     let finalUserName = userName || req.user?.fullName || req.user?.name || "Pravixo User";
     let finalGender = userGender || "";
     let finalRole = userRole || req.user?.role || "creator";
     let finalUserId = userId;
 
-    const lookupQuery = [];
-    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
-      lookupQuery.push({ _id: userId });
-    }
-    if (req.user?._id) {
-      lookupQuery.push({ _id: req.user._id });
-    }
-    if (finalUserName) {
-      lookupQuery.push({ fullName: new RegExp(`^${finalUserName.trim()}$`, "i") });
-      lookupQuery.push({ handle: new RegExp(`^${finalUserName.trim().replace(/^@/, "")}$`, "i") });
-    }
-
-    if (lookupQuery.length > 0) {
-      const p = await Profile.findOne({ $or: lookupQuery })
-        .select("_id avatarUrl avatar fullName gender role")
-        .lean();
+    if (userId) {
+      const p = await findProfile(userId);
       if (p) {
-        freshAvatar = p.avatarUrl || p.avatar || freshAvatar;
+        freshAvatar = p.avatarUrl || freshAvatar;
         finalUserName = p.fullName || finalUserName;
         finalGender = p.gender || finalGender;
         finalRole = p.role || finalRole;
-        finalUserId = p._id;
+        finalUserId = p.id;
       }
     }
 
     const newComment = {
-      userId: finalUserId && mongoose.Types.ObjectId.isValid(finalUserId) ? finalUserId : undefined,
+      _id: `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      userId: finalUserId || undefined,
       userName: finalUserName,
       userAvatar: freshAvatar,
       userGender: finalGender,
@@ -334,14 +309,21 @@ export const addComment = async (req, res) => {
       createdAt: new Date(),
     };
 
-    item.comments.push(newComment);
-    item.commentsCount = item.comments.length;
-    await item.save();
+    const comments = item.comments || [];
+    comments.push(newComment);
+    const commentsCount = comments.length;
+
+    await query(
+      `UPDATE portfolios 
+       SET comments = $1::jsonb, comments_count = $2, updated_at = NOW() 
+       WHERE id = $3`,
+      [JSON.stringify(comments), commentsCount, item.id]
+    );
 
     return res.status(201).json({
       success: true,
-      data: item.comments,
-      commentsCount: item.commentsCount,
+      data: comments,
+      commentsCount,
     });
   } catch (error) {
     console.error("Add comment error:", error);
@@ -352,48 +334,38 @@ export const addComment = async (req, res) => {
   }
 };
 
-// =====================================================
-// DELETE COMMENT ON PORTFOLIO ITEM
-// =====================================================
+// 5. DELETE COMMENT ON PORTFOLIO ITEM
 export const deleteComment = async (req, res) => {
   try {
     const { id, commentId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid portfolio ID.",
-      });
-    }
-
-    const item = await Portfolio.findById(id);
-    if (!item) {
+    const itemRes = await query(`SELECT * FROM portfolios WHERE id::text = $1 LIMIT 1`, [id]);
+    if (itemRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Portfolio item not found.",
       });
     }
+    const item = formatPortfolio(itemRes.rows[0]);
 
-    // Filter out comment by _id or index
-    if (mongoose.Types.ObjectId.isValid(commentId)) {
-      item.comments = item.comments.filter(
-        (c) => c._id && c._id.toString() !== commentId.toString()
-      );
-    } else {
-      const idx = parseInt(commentId, 10);
-      if (!isNaN(idx) && idx >= 0 && idx < item.comments.length) {
-        item.comments.splice(idx, 1);
-      }
-    }
+    let comments = (item.comments || []).filter(
+      (c) => String(c._id) !== String(commentId) && String(c.id) !== String(commentId)
+    );
 
-    item.commentsCount = item.comments.length;
-    await item.save();
+    const commentsCount = comments.length;
+
+    await query(
+      `UPDATE portfolios 
+       SET comments = $1::jsonb, comments_count = $2, updated_at = NOW() 
+       WHERE id = $3`,
+      [JSON.stringify(comments), commentsCount, item.id]
+    );
 
     return res.status(200).json({
       success: true,
       message: "Comment deleted successfully.",
-      data: item.comments,
-      commentsCount: item.commentsCount,
+      data: comments,
+      commentsCount,
     });
   } catch (error) {
     console.error("Delete comment error:", error);
@@ -404,39 +376,37 @@ export const deleteComment = async (req, res) => {
   }
 };
 
-// =====================================================
-// UPDATE PORTFOLIO ITEM
-// =====================================================
+// 6. UPDATE PORTFOLIO ITEM
 export const updateItem = async (req, res) => {
   try {
     const { id } = req.params;
     const { caption, brandTag, type, aspectRatio } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid portfolio ID.",
-      });
-    }
-
-    const item = await Portfolio.findById(id);
-    if (!item) {
+    const itemRes = await query(`SELECT * FROM portfolios WHERE id::text = $1 LIMIT 1`, [id]);
+    if (itemRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Portfolio item not found.",
       });
     }
+    const item = formatPortfolio(itemRes.rows[0]);
 
-    if (caption !== undefined) item.caption = caption;
-    if (brandTag !== undefined) item.brandTag = brandTag;
-    if (type !== undefined) item.type = type;
-    if (aspectRatio !== undefined) item.aspectRatio = aspectRatio;
+    const newCaption = caption !== undefined ? caption : item.caption;
+    const newBrandTag = brandTag !== undefined ? brandTag : item.brandTag;
+    const newType = type !== undefined ? type : item.type;
+    const newAspect = aspectRatio !== undefined ? aspectRatio : item.aspectRatio;
 
-    await item.save();
+    const updRes = await query(
+      `UPDATE portfolios 
+       SET caption = $1, brand_tag = $2, type = $3, aspect_ratio = $4, updated_at = NOW() 
+       WHERE id = $5 
+       RETURNING *`,
+      [newCaption, newBrandTag, newType, newAspect, item.id]
+    );
 
     return res.status(200).json({
       success: true,
-      data: item,
+      data: formatPortfolio(updRes.rows[0]),
     });
   } catch (error) {
     console.error("Update portfolio item error:", error);
@@ -447,58 +417,38 @@ export const updateItem = async (req, res) => {
   }
 };
 
-// =====================================================
-// REMOVE PORTFOLIO IMAGE
-// Convex: removeImage
-// =====================================================
-
+// 7. REMOVE PORTFOLIO IMAGE
 export const removeImage = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid portfolio image ID.",
-      });
-    }
-
-    const image = await Portfolio.findById(id);
-
-    if (!image) {
+    const itemRes = await query(`SELECT * FROM portfolios WHERE id::text = $1 LIMIT 1`, [id]);
+    if (itemRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Portfolio image not found.",
       });
     }
+    const image = formatPortfolio(itemRes.rows[0]);
 
-    // Delete from Cloudinary if set
     if (image.cloudinaryPublicId) {
       try {
-        await cloudinary.uploader.destroy(
-          image.cloudinaryPublicId,
-          {
-            resource_type: image.mediaType === "video" ? "video" : "image",
-          }
-        );
+        await cloudinary.uploader.destroy(image.cloudinaryPublicId, {
+          resource_type: image.mediaType === "video" ? "video" : "image",
+        });
       } catch (err) {
         console.warn("Cloudinary delete ignored:", err.message);
       }
     }
 
-    // Delete from MongoDB
-    await Portfolio.findByIdAndDelete(id);
+    await query(`DELETE FROM portfolios WHERE id = $1`, [image.id]);
 
     return res.status(200).json({
       success: true,
       message: "Portfolio item removed successfully.",
     });
   } catch (error) {
-    console.error(
-      "Remove portfolio image error:",
-      error
-    );
-
+    console.error("Remove portfolio image error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to remove portfolio image.",

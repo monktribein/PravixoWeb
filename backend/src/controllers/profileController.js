@@ -1,39 +1,59 @@
-import mongoose from "mongoose";
 import crypto from "crypto";
+import { query } from "../config/postgres.js";
+import {
+  formatProfile,
+  formatPricingTier,
+  formatReview,
+  formatSocialConnection,
+  formatCampaign,
+} from "../utils/formatters.js";
 
-import Profile from "../models/Profile.js";
-import Review from "../models/Review.js";
-import Otp from "../models/Otp.js";
-import PricingTier from "../models/PricingTier.js";
-import SocialConnection from "../models/SocialConnection.js";
+// Helper to check valid UUID
+const isUuid = (str) =>
+  typeof str === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+
+// Helper to extract file url
+const getFileUrl = (file) => {
+  if (!file) return null;
+  if (file.path && (file.path.startsWith("http://") || file.path.startsWith("https://"))) {
+    return file.path;
+  }
+  return `/uploads/${file.filename}`;
+};
 
 // =====================================================
 // LIST PROFILES
-// Convex: profiles.list
 // =====================================================
-
 export const listProfiles = async (req, res) => {
   try {
     const { search, category, role } = req.query;
 
-    const filter = {};
+    const conditions = [
+      "is_deleted = false",
+      "is_suspended = false",
+      "email NOT ILIKE '%@pravixo.test'",
+      "email NOT ILIKE '%@test.com'",
+    ];
+    const params = [];
 
     if (role) {
-      filter.role = role;
+      params.push(role);
+      conditions.push(`role = $${params.length}`);
     }
 
     if (category && category !== "All") {
-      filter.category = { $regex: category.trim(), $options: "i" };
+      params.push(`%${category.trim()}%`);
+      conditions.push(`category ILIKE $${params.length}`);
     }
 
-    // Always exclude soft-deleted and suspended profiles
-    filter.isDeleted = { $ne: true };
-    filter.isSuspended = { $ne: true };
-    filter.email = { $not: /@pravixo\.test|@test\.com/i };
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const sql = `SELECT * FROM profiles ${whereClause} ORDER BY created_at DESC`;
 
-    let profiles = await Profile.find(filter).sort({ createdAt: -1 }).lean();
+    const result = await query(sql, params);
+    let profiles = result.rows.map(formatProfile);
 
-    // Filter out dummy/test profile names
+    // Filter out test / dummy profiles
     profiles = profiles.filter(
       (p) =>
         !/task20|impostor|suspended|test brand|dummy|alice referrer|bob creator|charlie creator/i.test(
@@ -41,12 +61,14 @@ export const listProfiles = async (req, res) => {
         )
     );
 
-    // Search fullName, handle, category, and barter deals
+    // Search filter
     if (search) {
       const s = search.toLowerCase().trim();
-
       profiles = profiles.filter((profile) => {
-        const matchesBarter = s === "barter" || s === "barter deals" || s === "barter deal" ? Boolean(profile.isBarterAllowed) : false;
+        const matchesBarter =
+          s === "barter" || s === "barter deals" || s === "barter deal"
+            ? Boolean(profile.isBarterAllowed)
+            : false;
         return (
           matchesBarter ||
           profile.fullName?.toLowerCase().includes(s) ||
@@ -57,36 +79,42 @@ export const listProfiles = async (req, res) => {
       });
     }
 
+    // Attach reviews and ratings
     const results = await Promise.all(
       profiles.map(async (profile) => {
-        const reviews = await Review.find({
-          creatorId: profile._id,
-          visible: true,
-        }).lean();
+        try {
+          const reviewsRes = await query(
+            "SELECT rating FROM reviews WHERE target_id = $1 AND visible = true",
+            [profile.id]
+          );
 
-        if (reviews.length === 0) {
+          const reviews = reviewsRes.rows;
+          if (reviews.length === 0) {
+            return {
+              ...profile,
+              rating: 5.0,
+              reviewsCount: 0,
+            };
+          }
+
+          const totalRating = reviews.reduce(
+            (sum, r) => sum + Number(r.rating || 0),
+            0
+          );
+          const rating = Math.round((totalRating / reviews.length) * 10) / 10;
+
+          return {
+            ...profile,
+            rating,
+            reviewsCount: reviews.length,
+          };
+        } catch {
           return {
             ...profile,
             rating: 5.0,
             reviewsCount: 0,
           };
         }
-
-        const totalRating = reviews.reduce(
-          (sum, review) => sum + Number(review.rating || 0),
-          0
-        );
-
-        const rating =
-          Math.round(
-            (totalRating / reviews.length) * 10
-          ) / 10;
-
-        return {
-          ...profile,
-          rating,
-          reviewsCount: reviews.length,
-        };
       })
     );
 
@@ -96,7 +124,6 @@ export const listProfiles = async (req, res) => {
     });
   } catch (error) {
     console.error("List profiles error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch profiles.",
@@ -106,9 +133,7 @@ export const listProfiles = async (req, res) => {
 
 // =====================================================
 // GET PROFILE BY USER ID
-// Convex: profiles.getByUserId
 // =====================================================
-
 export const getByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -120,30 +145,35 @@ export const getByUserId = async (req, res) => {
       });
     }
 
-    const profile = await Profile.findOne({
-      userId,
-    }).lean();
+    const result = await query(
+      "SELECT * FROM profiles WHERE user_id = $1 LIMIT 1",
+      [userId.trim()]
+    );
 
-    if (!profile) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
       });
     }
 
+    const profile = formatProfile(result.rows[0]);
+
     let brandCampaigns = [];
     let hiredCount = 0;
-    if (profile.role === "brand") {
-      const Campaign = mongoose.model("Campaign");
-      const Connection = mongoose.model("Connection");
-      brandCampaigns = await Campaign.find({
-        brandId: profile._id,
-      }).sort({ createdAt: -1 }).lean();
 
-      hiredCount = await Connection.countDocuments({
-        brandId: profile._id,
-        status: { $in: ["accepted", "completed"] },
-      });
+    if (profile.role === "brand") {
+      const campRes = await query(
+        "SELECT * FROM campaigns WHERE brand_id = $1 ORDER BY created_at DESC",
+        [profile.id]
+      );
+      brandCampaigns = campRes.rows.map(formatCampaign);
+
+      const countRes = await query(
+        "SELECT count(*) FROM connections WHERE brand_id = $1 AND status IN ('accepted', 'completed')",
+        [profile.id]
+      );
+      hiredCount = Number(countRes.rows[0]?.count || 0);
     }
 
     return res.status(200).json({
@@ -157,7 +187,6 @@ export const getByUserId = async (req, res) => {
     });
   } catch (error) {
     console.error("Get profile by user ID error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch profile.",
@@ -167,61 +196,71 @@ export const getByUserId = async (req, res) => {
 
 // =====================================================
 // GET PROFILE BY ID
-// Convex: profiles.getById
 // =====================================================
-
 export const getById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Invalid profile ID.",
+        message: "Profile ID is required.",
       });
     }
 
-    const profile = await Profile.findById(id).lean();
+    const cleanId = id.trim();
+    let result;
+    if (isUuid(cleanId)) {
+      result = await query("SELECT * FROM profiles WHERE id = $1 LIMIT 1", [cleanId]);
+    } else {
+      result = await query("SELECT * FROM profiles WHERE user_id = $1 LIMIT 1", [cleanId]);
+    }
 
-    if (!profile) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
       });
     }
 
-    // If profile is a brand, attach live campaigns and counts
+    const profile = formatProfile(result.rows[0]);
+
     let brandCampaigns = [];
     let hiredCount = 0;
-    if (profile.role === "brand") {
-      const Campaign = mongoose.model("Campaign");
-      const Connection = mongoose.model("Connection");
-      brandCampaigns = await Campaign.find({
-        brandId: profile._id,
-      }).sort({ createdAt: -1 }).lean();
 
-      hiredCount = await Connection.countDocuments({
-        brandId: profile._id,
-        status: { $in: ["accepted", "completed"] },
-      });
+    if (profile.role === "brand") {
+      const campRes = await query(
+        "SELECT * FROM campaigns WHERE brand_id = $1 ORDER BY created_at DESC",
+        [profile.id]
+      );
+      brandCampaigns = campRes.rows.map(formatCampaign);
+
+      const countRes = await query(
+        "SELECT count(*) FROM connections WHERE brand_id = $1 AND status IN ('accepted', 'completed')",
+        [profile.id]
+      );
+      hiredCount = Number(countRes.rows[0]?.count || 0);
     }
 
-    const reviews = await Review.find({
-      creatorId: profile._id,
-      visible: true,
-    }).lean();
+    // Fetch reviews
+    const reviewsRes = await query(
+      "SELECT * FROM reviews WHERE target_id = $1 AND visible = true",
+      [profile.id]
+    );
+    const reviews = reviewsRes.rows.map(formatReview);
+
+    // Fetch pricing tiers
+    const tiersRes = await query(
+      "SELECT * FROM pricing_tiers WHERE profile_id = $1 ORDER BY sort_order ASC",
+      [profile.id]
+    );
+    const pricingTiers = tiersRes.rows.map(formatPricingTier);
 
     const rating =
       reviews.length === 0
         ? 5.0
         : Math.round(
-            (
-              reviews.reduce(
-                (sum, review) =>
-                  sum + Number(review.rating || 0),
-                0
-              ) / reviews.length
-            ) * 10
+            (reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length) * 10
           ) / 10;
 
     return res.status(200).json({
@@ -233,11 +272,11 @@ export const getById = async (req, res) => {
         hiredCount,
         rating,
         reviewsCount: reviews.length,
+        pricingTiers,
       },
     });
   } catch (error) {
     console.error("Get profile error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch profile.",
@@ -246,10 +285,8 @@ export const getById = async (req, res) => {
 };
 
 // =====================================================
-// GET PROFILE BY HANDLE (FOR MEDIA KIT / PUBLIC PORTFOLIO)
-// GET /api/profiles/handle/:handle
+// GET PROFILE BY HANDLE
 // =====================================================
-
 export const getByHandle = async (req, res) => {
   try {
     let { handle } = req.params;
@@ -260,40 +297,44 @@ export const getByHandle = async (req, res) => {
       });
     }
 
-    handle = handle.trim().replace(/^@/, "");
+    const cleanHandle = handle.trim().replace(/^@/, "");
 
-    // Search by handle (case insensitive) or if not found and is valid ObjectId, search by ID
-    let profile = await Profile.findOne({
-      handle: { $regex: new RegExp(`^@?${handle}$`, "i") },
-    }).lean();
+    let result = await query(
+      "SELECT * FROM profiles WHERE handle ILIKE $1 OR handle ILIKE $2 LIMIT 1",
+      [cleanHandle, `@${cleanHandle}`]
+    );
 
-    if (!profile && mongoose.Types.ObjectId.isValid(handle)) {
-      profile = await Profile.findById(handle).lean();
+    if (result.rows.length === 0 && isUuid(cleanHandle)) {
+      result = await query("SELECT * FROM profiles WHERE id = $1 LIMIT 1", [cleanHandle]);
     }
 
-    if (!profile) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `Creator profile with handle @${handle} was not found.`,
+        message: `Creator profile with handle @${cleanHandle} was not found.`,
       });
     }
 
+    const profile = formatProfile(result.rows[0]);
+
     // Attach reviews & ratings
-    const reviews = await Review.find({
-      creatorId: profile._id,
-      visible: true,
-    }).lean();
+    const reviewsRes = await query(
+      "SELECT * FROM reviews WHERE target_id = $1 AND visible = true",
+      [profile.id]
+    );
+    const reviews = reviewsRes.rows.map(formatReview);
+
+    const tiersRes = await query(
+      "SELECT * FROM pricing_tiers WHERE profile_id = $1 ORDER BY sort_order ASC",
+      [profile.id]
+    );
+    const pricingTiers = tiersRes.rows.map(formatPricingTier);
 
     const rating =
       reviews.length === 0
         ? 5.0
         : Math.round(
-            (
-              reviews.reduce(
-                (sum, review) => sum + Number(review.rating || 0),
-                0
-              ) / reviews.length
-            ) * 10
+            (reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length) * 10
           ) / 10;
 
     return res.status(200).json({
@@ -303,6 +344,7 @@ export const getByHandle = async (req, res) => {
         rating,
         reviewsCount: reviews.length,
         reviews,
+        pricingTiers,
       },
     });
   } catch (error) {
@@ -317,21 +359,11 @@ export const getByHandle = async (req, res) => {
 
 // =====================================================
 // CREATE PROFILE
-// Convex: profiles.create
 // =====================================================
-
 export const createProfile = async (req, res) => {
   try {
-    const {
-      userId,
-      fullName,
-      role,
-      isLogin,
-      email,
-      otpCode,
-    } = req.body;
+    const { userId, fullName, role, isLogin, email, otpCode } = req.body;
 
-    // Basic validation
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -349,279 +381,202 @@ export const createProfile = async (req, res) => {
     if (!role || !["creator", "brand"].includes(role)) {
       return res.status(400).json({
         success: false,
-        message:
-          "Role must be either creator or brand.",
+        message: "Role must be either creator or brand.",
       });
     }
 
-    // -------------------------------------------------
-    // CHECK EXISTING PROFILE
-    // -------------------------------------------------
-
-    const existing = await Profile.findOne({
-      userId,
-    });
-
-    // -------------------------------------------------
-    // LOGIN FLOW
-    // Convex:
-    // if (args.isLogin)
-    // -------------------------------------------------
+    const existingRes = await query(
+      "SELECT * FROM profiles WHERE user_id = $1 LIMIT 1",
+      [userId.trim()]
+    );
+    const existing = existingRes.rows[0];
 
     if (isLogin) {
       if (!existing) {
         return res.status(404).json({
           success: false,
-          message:
-            "This email is not registered. Please create an account first.",
+          message: "This email is not registered. Please create an account first.",
         });
       }
 
       if (existing.role !== role) {
         return res.status(400).json({
           success: false,
-          message:
-            `This account is registered as a ${existing.role}. ` +
-            `Please log in as a ${existing.role}.`,
+          message: `This account is registered as a ${existing.role}. Please log in as a ${existing.role}.`,
         });
       }
 
       return res.status(200).json({
         success: true,
-        data: existing,
+        data: formatProfile(existing),
       });
     }
-
-    // -------------------------------------------------
-    // SIGNUP - PROFILE ALREADY EXISTS
-    // -------------------------------------------------
 
     if (existing) {
       return res.status(200).json({
         success: true,
-        data: existing,
+        data: formatProfile(existing),
       });
     }
-
-    // -------------------------------------------------
-    // SIGNUP REQUIRES EMAIL + OTP
-    // -------------------------------------------------
 
     if (!email || !otpCode) {
       return res.status(400).json({
         success: false,
-        message:
-          "Email and verification code are required for registration.",
+        message: "Email and verification code are required for registration.",
       });
     }
 
-    const normalizedEmail =
-      email.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
 
-    // -------------------------------------------------
-    // FIND OTP
-    // -------------------------------------------------
+    const otpRes = await query(
+      "SELECT * FROM otps WHERE email = $1 ORDER BY created_at DESC LIMIT 1",
+      [normalizedEmail]
+    );
 
-    const otpRecord = await Otp.findOne({
-      email: normalizedEmail,
-    });
-
-    if (!otpRecord) {
+    if (otpRes.rows.length === 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "No verification code request was found for this email.",
+        message: "No verification code request was found for this email.",
       });
     }
 
-    // -------------------------------------------------
-    // CHECK OTP EXPIRY
-    // -------------------------------------------------
+    const otpRecord = otpRes.rows[0];
 
-    if (
-      Date.now() >
-      new Date(otpRecord.expiresAt).getTime()
-    ) {
-      await Otp.deleteOne({
-        _id: otpRecord._id,
-      });
-
+    if (Date.now() > new Date(otpRecord.expires_at).getTime()) {
+      await query("DELETE FROM otps WHERE id = $1", [otpRecord.id]);
       return res.status(400).json({
         success: false,
-        message:
-          "Verification code has expired. Please request a new one.",
+        message: "Verification code has expired. Please request a new one.",
       });
     }
 
-    // -------------------------------------------------
-    // HASH ENTERED OTP
-    // -------------------------------------------------
+    const inputHash = crypto.createHash("sha256").update(String(otpCode)).digest("hex");
 
-    const inputHash = crypto
-      .createHash("sha256")
-      .update(String(otpCode))
-      .digest("hex");
-
-    // -------------------------------------------------
-    // VERIFY OTP
-    // -------------------------------------------------
-
-    if (inputHash !== otpRecord.codeHash) {
+    if (inputHash !== otpRecord.code_hash) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid verification code. Please try again.",
+        message: "Invalid verification code. Please try again.",
       });
     }
 
-    // -------------------------------------------------
-    // DELETE OTP AFTER SUCCESSFUL VERIFICATION
-    // Prevent OTP reuse
-    // -------------------------------------------------
+    await query("DELETE FROM otps WHERE id = $1", [otpRecord.id]);
 
-    await Otp.deleteOne({
-      _id: otpRecord._id,
-    });
-
-    // -------------------------------------------------
-    // CREATE PROFILE
-    // -------------------------------------------------
-
-    const profile = await Profile.create({
-      userId,
-      fullName,
-      role,
-      email: normalizedEmail,
-      profileViews: 0,
-      clicks: 0,
-      bookings: 0,
-    });
+    const insertRes = await query(
+      `INSERT INTO profiles (
+        user_id, full_name, role, email, profile_views, clicks, bookings
+      ) VALUES ($1, $2, $3, $4, 0, 0, 0)
+      RETURNING *`,
+      [userId.trim(), fullName.trim(), role, normalizedEmail]
+    );
 
     return res.status(201).json({
       success: true,
-      data: profile,
+      data: formatProfile(insertRes.rows[0]),
     });
   } catch (error) {
     console.error("Create profile error:", error);
-
-    // Duplicate userId
-    if (error.code === 11000) {
+    if (error.code === "23505") {
       return res.status(409).json({
         success: false,
-        message:
-          "A profile already exists for this user.",
+        message: "A profile already exists for this user.",
       });
     }
-
     return res.status(500).json({
       success: false,
-      message:
-        error.message || "Failed to create profile.",
+      message: error.message || "Failed to create profile.",
     });
   }
 };
 
 // =====================================================
 // UPDATE PROFILE
-// Convex: profiles.update
 // =====================================================
-
 export const updateProfile = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Invalid profile ID.",
+        message: "Profile ID is required.",
       });
     }
 
-    // Fields allowed by Convex profiles.update
-    const allowedFields = [
-      "fullName",
-      "handle",
-      "gender",
-      "phone",
-      "category",
-      "location",
-      "bio",
-      "startingPrice",
-      "avatarUrl",
-      "coverUrl",
+    // Mapping from frontend camelCase to PostgreSQL snake_case
+    const fieldMapping = {
+      fullName: "full_name",
+      handle: "handle",
+      gender: "gender",
+      phone: "phone",
+      category: "category",
+      location: "location",
+      bio: "bio",
+      startingPrice: "starting_price",
+      avatarUrl: "avatar_url",
+      coverUrl: "cover_url",
+      profileViews: "profile_views",
+      clicks: "clicks",
+      bookings: "bookings",
+      instagramHandle: "instagram_handle",
+      instagramFollowers: "instagram_followers",
+      facebookHandle: "facebook_handle",
+      facebookFollowers: "facebook_followers",
+      linkedinHandle: "linkedin_handle",
+      linkedinFollowers: "linkedin_followers",
+      youtubeHandle: "youtube_handle",
+      youtubeFollowers: "youtube_followers",
+      quoraHandle: "quora_handle",
+      quoraFollowers: "quora_followers",
+      twitterHandle: "twitter_handle",
+      twitterFollowers: "twitter_followers",
+      prefNiches: "pref_niches",
+      prefBudget: "pref_budget",
+      prefReach: "pref_reach",
+      prefRegions: "pref_regions",
+      mediaKitBio: "media_kit_bio",
+      mediaKitTagline: "media_kit_tagline",
+      audienceHighlights: "audience_highlights",
+      pastBrandsWorkedWith: "past_brands_worked_with",
+      customSocialFeeds: "custom_social_feeds",
+      website: "website",
+      companySize: "company_size",
+      isBarterAllowed: "is_barter_allowed",
+    };
 
-      // Stats
-      "profileViews",
-      "clicks",
-      "bookings",
+    const setClauses = [];
+    const values = [];
 
-      // Instagram
-      "instagramHandle",
-      "instagramFollowers",
-
-      // Facebook
-      "facebookHandle",
-      "facebookFollowers",
-
-      // LinkedIn
-      "linkedinHandle",
-      "linkedinFollowers",
-
-      // YouTube
-      "youtubeHandle",
-      "youtubeFollowers",
-
-      // Quora
-      "quoraHandle",
-      "quoraFollowers",
-
-      // Twitter
-      "twitterHandle",
-      "twitterFollowers",
-
-      // Brand preferences
-      "prefNiches",
-      "prefBudget",
-      "prefReach",
-      "prefRegions",
-
-      "mediaKitBio",
-      "mediaKitTagline",
-      "audienceHighlights",
-      "pastBrandsWorkedWith",
-      "customSocialFeeds",
-
-      "website",
-      "companySize",
-      "isBarterAllowed",
-    ];
-
-    const updates = {};
-
-    for (const field of allowedFields) {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
+    for (const [camelKey, snakeCol] of Object.entries(fieldMapping)) {
+      if (req.body[camelKey] !== undefined) {
+        let val = req.body[camelKey];
+        // JSON format for jsonb columns
+        if (
+          ["audienceHighlights", "pastBrandsWorkedWith", "customSocialFeeds"].includes(camelKey) &&
+          typeof val === "object"
+        ) {
+          val = JSON.stringify(val);
+        }
+        values.push(val);
+        setClauses.push(`${snakeCol} = $${values.length}`);
       }
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (setClauses.length === 0) {
       return res.status(400).json({
         success: false,
         message: "No fields provided for update.",
       });
     }
 
-    const profile =
-      await Profile.findByIdAndUpdate(
-        id,
-        updates,
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
+    setClauses.push("updated_at = NOW()");
+    values.push(id.trim());
 
-    if (!profile) {
+    const wherePredicate = isUuid(id.trim()) ? `id = $${values.length}` : `user_id = $${values.length}`;
+    const sql = `UPDATE profiles SET ${setClauses.join(", ")} WHERE ${wherePredicate} RETURNING *`;
+
+    const updateRes = await query(sql, values);
+
+    if (updateRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
@@ -630,31 +585,28 @@ export const updateProfile = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: profile,
+      data: formatProfile(updateRes.rows[0]),
     });
   } catch (error) {
     console.error("Update profile error:", error);
-
     return res.status(500).json({
       success: false,
-      message:
-        error.message || "Failed to update profile.",
+      message: error.message || "Failed to update profile.",
     });
   }
 };
 
 // =====================================================
 // UPLOAD AVATAR IMAGE
-// POST /api/profiles/:id/avatar
 // =====================================================
 export const uploadAvatar = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Invalid profile ID.",
+        message: "Profile ID is required.",
       });
     }
 
@@ -665,28 +617,22 @@ export const uploadAvatar = async (req, res) => {
       });
     }
 
-    const getFileUrl = (file) => {
-      if (!file) return null;
-      if (file.path && (file.path.startsWith("http://") || file.path.startsWith("https://"))) {
-        return file.path;
-      }
-      return `/uploads/${file.filename}`;
-    };
-
     const avatarUrl = getFileUrl(req.file);
+    const wherePredicate = isUuid(id.trim()) ? "id = $2" : "user_id = $2";
 
-    const profile = await Profile.findByIdAndUpdate(
-      id,
-      { avatarUrl },
-      { new: true }
+    const updateRes = await query(
+      `UPDATE profiles SET avatar_url = $1, updated_at = NOW() WHERE ${wherePredicate} RETURNING *`,
+      [avatarUrl, id.trim()]
     );
 
-    if (!profile) {
+    if (updateRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
       });
     }
+
+    const profile = formatProfile(updateRes.rows[0]);
 
     return res.status(200).json({
       success: true,
@@ -706,16 +652,15 @@ export const uploadAvatar = async (req, res) => {
 
 // =====================================================
 // UPLOAD COVER IMAGE
-// POST /api/profiles/:id/cover
 // =====================================================
 export const uploadCover = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Invalid profile ID.",
+        message: "Profile ID is required.",
       });
     }
 
@@ -726,28 +671,22 @@ export const uploadCover = async (req, res) => {
       });
     }
 
-    const getFileUrl = (file) => {
-      if (!file) return null;
-      if (file.path && (file.path.startsWith("http://") || file.path.startsWith("https://"))) {
-        return file.path;
-      }
-      return `/uploads/${file.filename}`;
-    };
-
     const coverUrl = getFileUrl(req.file);
+    const wherePredicate = isUuid(id.trim()) ? "id = $2" : "user_id = $2";
 
-    const profile = await Profile.findByIdAndUpdate(
-      id,
-      { coverUrl },
-      { new: true }
+    const updateRes = await query(
+      `UPDATE profiles SET cover_url = $1, updated_at = NOW() WHERE ${wherePredicate} RETURNING *`,
+      [coverUrl, id.trim()]
     );
 
-    if (!profile) {
+    if (updateRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
       });
     }
+
+    const profile = formatProfile(updateRes.rows[0]);
 
     return res.status(200).json({
       success: true,
@@ -767,26 +706,26 @@ export const uploadCover = async (req, res) => {
 
 // =====================================================
 // DELETE / RESET AVATAR
-// DELETE /api/profiles/:id/avatar
 // =====================================================
 export const deleteAvatar = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Invalid profile ID.",
+        message: "Profile ID is required.",
       });
     }
 
-    const profile = await Profile.findByIdAndUpdate(
-      id,
-      { avatarUrl: "" },
-      { new: true }
+    const wherePredicate = isUuid(id.trim()) ? "id = $1" : "user_id = $1";
+
+    const updateRes = await query(
+      `UPDATE profiles SET avatar_url = '', updated_at = NOW() WHERE ${wherePredicate} RETURNING *`,
+      [id.trim()]
     );
 
-    if (!profile) {
+    if (updateRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
@@ -796,7 +735,7 @@ export const deleteAvatar = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Avatar removed successfully.",
-      data: profile,
+      data: formatProfile(updateRes.rows[0]),
     });
   } catch (error) {
     console.error("Delete avatar error:", error);
@@ -810,26 +749,26 @@ export const deleteAvatar = async (req, res) => {
 
 // =====================================================
 // DELETE / RESET COVER BANNER
-// DELETE /api/profiles/:id/cover
 // =====================================================
 export const deleteCover = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Invalid profile ID.",
+        message: "Profile ID is required.",
       });
     }
 
-    const profile = await Profile.findByIdAndUpdate(
-      id,
-      { coverUrl: "" },
-      { new: true }
+    const wherePredicate = isUuid(id.trim()) ? "id = $1" : "user_id = $1";
+
+    const updateRes = await query(
+      `UPDATE profiles SET cover_url = '', updated_at = NOW() WHERE ${wherePredicate} RETURNING *`,
+      [id.trim()]
     );
 
-    if (!profile) {
+    if (updateRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
@@ -839,7 +778,7 @@ export const deleteCover = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Cover banner removed successfully.",
-      data: profile,
+      data: formatProfile(updateRes.rows[0]),
     });
   } catch (error) {
     console.error("Delete cover error:", error);
@@ -853,75 +792,78 @@ export const deleteCover = async (req, res) => {
 
 // =====================================================
 // UPLOAD KYC DOCUMENTS
-// POST /api/profiles/:id/kyc-documents
 // =====================================================
 export const uploadKycDocuments = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Invalid profile ID.",
+        message: "Profile ID is required.",
       });
     }
 
-    const getFileUrl = (file) => {
-      if (!file) return null;
-      if (file.path && (file.path.startsWith("http://") || file.path.startsWith("https://"))) {
-        return file.path;
-      }
-      return `/uploads/${file.filename}`;
-    };
+    const wherePredicate = isUuid(id.trim()) ? "id = $1" : "user_id = $1";
+    const checkRes = await query(`SELECT id FROM profiles WHERE ${wherePredicate}`, [id.trim()]);
 
-    const profile = await Profile.findById(id);
-    if (!profile) {
+    if (checkRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
       });
     }
 
-    const updates = {};
+    const targetId = checkRes.rows[0].id;
+    const setClauses = [];
+    const values = [];
 
     if (req.files) {
       if (req.files.aadhar && req.files.aadhar[0]) {
-        updates.aadharUrl = getFileUrl(req.files.aadhar[0]);
-        updates.aadharStorageId = req.files.aadhar[0].filename;
+        values.push(getFileUrl(req.files.aadhar[0]));
+        setClauses.push(`aadhar_url = $${values.length}`);
+        values.push(req.files.aadhar[0].filename);
+        setClauses.push(`aadhar_storage_id = $${values.length}`);
       }
       if (req.files.pan && req.files.pan[0]) {
-        updates.panUrl = getFileUrl(req.files.pan[0]);
-        updates.panStorageId = req.files.pan[0].filename;
+        values.push(getFileUrl(req.files.pan[0]));
+        setClauses.push(`pan_url = $${values.length}`);
+        values.push(req.files.pan[0].filename);
+        setClauses.push(`pan_storage_id = $${values.length}`);
       }
       if (req.files.gstCertificate && req.files.gstCertificate[0]) {
-        updates.gstCertificateUrl = getFileUrl(req.files.gstCertificate[0]);
-        updates.gstCertificateStorageId = req.files.gstCertificate[0].filename;
+        values.push(getFileUrl(req.files.gstCertificate[0]));
+        setClauses.push(`gst_certificate_url = $${values.length}`);
+        values.push(req.files.gstCertificate[0].filename);
+        setClauses.push(`gst_certificate_storage_id = $${values.length}`);
       }
     }
 
     if (req.body.gstNumber) {
-      updates.gstNumber = req.body.gstNumber;
+      values.push(req.body.gstNumber);
+      setClauses.push(`gst_number = $${values.length}`);
     }
 
-    const updatedProfile = await Profile.findByIdAndUpdate(
-      id,
-      updates,
-      { new: true }
-    );
-
-    if (!updatedProfile) {
-      return res.status(404).json({
+    if (setClauses.length === 0) {
+      return res.status(400).json({
         success: false,
-        message: "Profile not found.",
+        message: "No documents provided.",
       });
     }
+
+    setClauses.push("updated_at = NOW()");
+    values.push(targetId);
+
+    const updateRes = await query(
+      `UPDATE profiles SET ${setClauses.join(", ")} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
 
     return res.status(200).json({
       success: true,
       message: "KYC documents uploaded successfully for verification.",
-      data: updatedProfile,
+      data: formatProfile(updateRes.rows[0]),
     });
-
   } catch (error) {
     console.error("Upload KYC documents error:", error);
     return res.status(500).json({
@@ -934,7 +876,6 @@ export const uploadKycDocuments = async (req, res) => {
 
 // =====================================================
 // UNSUBSCRIBE EMAIL NOTIFICATIONS
-// POST or GET /api/profiles/unsubscribe
 // =====================================================
 export const unsubscribeEmailNotifications = async (req, res) => {
   try {
@@ -948,24 +889,24 @@ export const unsubscribeEmailNotifications = async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const query = { email: normalizedEmail };
+    let sql = "UPDATE profiles SET email_notifications_enabled = false, updated_at = NOW() WHERE email = $1 RETURNING *";
+    let params = [normalizedEmail];
 
     if (token) {
-      query.$or = [{ unsubscribeToken: token }, { _id: mongoose.Types.ObjectId.isValid(token) ? token : null }];
+      sql = "UPDATE profiles SET email_notifications_enabled = false, updated_at = NOW() WHERE email = $1 AND (unsubscribe_token = $2 OR id::text = $2) RETURNING *";
+      params = [normalizedEmail, token.trim()];
     }
 
-    const profile = await Profile.findOneAndUpdate(
-      query,
-      { $set: { emailNotificationsEnabled: false } },
-      { new: true }
-    );
+    const updateRes = await query(sql, params);
 
-    if (!profile) {
+    if (updateRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found or invalid token.",
       });
     }
+
+    const profile = updateRes.rows[0];
 
     return res.status(200).json({
       success: true,
@@ -984,7 +925,6 @@ export const unsubscribeEmailNotifications = async (req, res) => {
 
 // =====================================================
 // TOGGLE EMAIL NOTIFICATIONS PREFERENCE (Authenticated)
-// PATCH /api/profiles/email-notifications
 // =====================================================
 export const toggleEmailNotifications = async (req, res) => {
   try {
@@ -998,13 +938,12 @@ export const toggleEmailNotifications = async (req, res) => {
       });
     }
 
-    const profile = await Profile.findByIdAndUpdate(
-      profileId,
-      { $set: { emailNotificationsEnabled: Boolean(enabled) } },
-      { new: true }
+    const updateRes = await query(
+      "UPDATE profiles SET email_notifications_enabled = $1, updated_at = NOW() WHERE id::text = $2 RETURNING *",
+      [Boolean(enabled), profileId.trim()]
     );
 
-    if (!profile) {
+    if (updateRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
@@ -1014,7 +953,7 @@ export const toggleEmailNotifications = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `Campaign email notifications have been ${enabled ? "enabled" : "disabled"}.`,
-      data: { emailNotificationsEnabled: profile.emailNotificationsEnabled },
+      data: { emailNotificationsEnabled: updateRes.rows[0].email_notifications_enabled },
     });
   } catch (error) {
     console.error("Toggle email notifications error:", error);
@@ -1028,7 +967,6 @@ export const toggleEmailNotifications = async (req, res) => {
 
 // =====================================================
 // EXPORT CREATOR MEDIA KIT AS DIRECT DOWNLOADABLE PDF
-// GET /api/profiles/handle/:handle/pdf
 // =====================================================
 export const exportMediaKitPdf = async (req, res) => {
   try {
@@ -1038,36 +976,40 @@ export const exportMediaKitPdf = async (req, res) => {
     }
 
     const cleanHandle = handle.trim().replace(/^@/, "");
-    let profile = await Profile.findOne({
-      handle: { $regex: new RegExp(`^@?${cleanHandle}$`, "i") },
-    }).lean();
 
-    if (!profile && mongoose.Types.ObjectId.isValid(cleanHandle)) {
-      profile = await Profile.findById(cleanHandle).lean();
+    let result = await query(
+      "SELECT * FROM profiles WHERE handle ILIKE $1 OR handle ILIKE $2 LIMIT 1",
+      [cleanHandle, `@${cleanHandle}`]
+    );
+
+    if (result.rows.length === 0 && isUuid(cleanHandle)) {
+      result = await query("SELECT * FROM profiles WHERE id = $1 LIMIT 1", [cleanHandle]);
     }
 
-    if (!profile) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Creator not found." });
     }
 
-    // Fetch pricing tiers & social connections for complete data
+    const profile = formatProfile(result.rows[0]);
+
+    // Fetch pricing tiers & social connections
     let pricingTiers = [];
     let socialConnections = [];
-    if (profile._id) {
-      try {
-        const [pricingDocs, socialDocs] = await Promise.all([
-          PricingTier.find({ profileId: profile._id }).sort({ sortOrder: 1, price: 1 }).lean(),
-          SocialConnection.find({ profileId: profile._id }).lean(),
-        ]);
-        pricingTiers = pricingDocs || [];
-        socialConnections = socialDocs || [];
-      } catch (e) {
-        console.warn("Could not fetch extra profile data for PDF:", e);
-      }
+    try {
+      const [tiersRes, socialRes] = await Promise.all([
+        query(
+          "SELECT * FROM pricing_tiers WHERE profile_id = $1 ORDER BY sort_order ASC, price ASC",
+          [profile.id]
+        ),
+        query("SELECT * FROM social_connections WHERE profile_id = $1", [profile.id]),
+      ]);
+      pricingTiers = tiersRes.rows.map(formatPricingTier);
+      socialConnections = socialRes.rows.map(formatSocialConnection);
+    } catch (e) {
+      console.warn("Could not fetch extra profile data for PDF:", e.message);
     }
 
     const PDFDocument = (await import("pdfkit")).default;
-    // A4 dimensions: 595.28 x 841.89 points
     const doc = new PDFDocument({
       size: "A4",
       margins: { top: 32, bottom: 32, left: 36, right: 36 },
@@ -1087,35 +1029,33 @@ export const exportMediaKitPdf = async (req, res) => {
     const pageH = doc.page.height;
     const mLeft = 36;
     const mRight = 36;
-    const contentW = pageW - mLeft - mRight; // 523.28
+    const contentW = pageW - mLeft - mRight;
 
     // 1. FULL BACKGROUND
     doc.rect(0, 0, pageW, pageH).fill("#090d16");
-
-    // Subtle ambient gradient / highlight bar at top
     doc.rect(0, 0, pageW, 5).fill("#ff5e62");
 
-    // 2. HEADER CONTAINER (Hero banner card)
+    // 2. HEADER CONTAINER
     const headerH = 92;
     doc.roundedRect(mLeft, 24, contentW, headerH, 10).fillAndStroke("#0f172a", "#1e293b");
 
-    // Header Accent Line & Badge
+    // Header Badge
     doc.roundedRect(mLeft + 14, 34, 120, 18, 9).fill("#1e293b");
     doc.fillColor("#ff5e62").fontSize(8).font("Helvetica-Bold").text("⚡ PRAVIXO VERIFIED", mLeft + 22, 39, { characterSpacing: 1 });
 
-    // Live URL pill on right
+    // Live URL pill
     doc.fillColor("#64748b").fontSize(8).font("Helvetica").text(`pravixo.com/c/${cleanHandle}`, mLeft + contentW - 180, 39, { width: 165, align: "right" });
 
     // Creator Name
-    const creatorName = profile.fullName || profile.displayName || cleanHandle;
+    const creatorName = profile.fullName || cleanHandle;
     doc.fillColor("#ffffff").fontSize(18).font("Helvetica-Bold").text(creatorName, mLeft + 14, 58);
 
-    // Tagline / Category & Handle
+    // Tagline / Category
     const categoryText = profile.category || "Digital Creator";
     const locText = profile.location ? ` • ${profile.location}` : "";
     doc.fillColor("#94a3b8").fontSize(9.5).font("Helvetica").text(`@${cleanHandle} • ${categoryText}${locText}`, mLeft + 14, 82);
 
-    // Starting price pill on right
+    // Starting price pill
     if (profile.startingPrice && profile.startingPrice > 0) {
       const priceBoxW = 110;
       const priceBoxX = mLeft + contentW - priceBoxW - 14;
@@ -1124,7 +1064,7 @@ export const exportMediaKitPdf = async (req, res) => {
       doc.fillColor("#38bdf8").fontSize(12).font("Helvetica-Bold").text(`INR ${profile.startingPrice.toLocaleString("en-IN")}`, priceBoxX + 10, 81);
     }
 
-    // 3. KEY METRICS 4-COLUMN STATS GRID
+    // 3. STATS GRID
     let curY = 126;
     const statH = 58;
     const numCols = 4;
@@ -1166,18 +1106,20 @@ export const exportMediaKitPdf = async (req, res) => {
 
     curY += statH + 12;
 
-    // 4. TWO-COLUMN MAIN CONTENT (Left: 56%, Right: 44%)
+    // 4. TWO-COLUMN LAYOUT
     const colGap = 12;
     const leftW = Math.floor(contentW * 0.56);
     const rightW = contentW - leftW - colGap;
     const rightX = mLeft + leftW + colGap;
 
-    // --- LEFT COLUMN ---
+    // LEFT COLUMN
     let leftY = curY;
-
-    // BIO CARD
     const bioH = 135;
-    const bioText = profile.mediaKitBio || profile.bio || `${creatorName} is a verified ${categoryText} creator creating engaging, high-retention content and high ROI campaigns for modern consumer brands.`;
+    const bioText =
+      profile.mediaKitBio ||
+      profile.bio ||
+      `${creatorName} is a verified ${categoryText} creator creating engaging, high-retention content and high ROI campaigns for modern consumer brands.`;
+
     doc.roundedRect(mLeft, leftY, leftW, bioH, 8).fillAndStroke("#0f172a", "#1e293b");
     doc.fillColor("#38bdf8").fontSize(9).font("Helvetica-Bold").text("ABOUT THE CREATOR", mLeft + 12, leftY + 11);
     doc.fillColor("#cbd5e1").fontSize(8).font("Helvetica").text(bioText, mLeft + 12, leftY + 27, {
@@ -1187,7 +1129,6 @@ export const exportMediaKitPdf = async (req, res) => {
       lineGap: 2.5,
     });
 
-    // Categories Pill Tags
     const tags = (profile.category ? profile.category.split(",") : ["Creator", "Collaborations"]).slice(0, 4);
     let tagX = mLeft + 12;
     tags.forEach((tag) => {
@@ -1200,7 +1141,6 @@ export const exportMediaKitPdf = async (req, res) => {
 
     leftY += bioH + 10;
 
-    // AUDIENCE DEMOGRAPHICS CARD
     const demoH = 145;
     const topAge = profile.audienceHighlights?.topAgeGroup || "18–24 (48%)";
     const topGender = profile.audienceHighlights?.topGender || "62% Female / 38% Male";
@@ -1210,25 +1150,20 @@ export const exportMediaKitPdf = async (req, res) => {
     doc.fillColor("#a855f7").fontSize(9).font("Helvetica-Bold").text("AUDIENCE DEMOGRAPHICS & REACH", mLeft + 12, leftY + 11);
 
     const demoBoxW = (leftW - 24 - 6) / 2;
-
-    // Age Split Box
     doc.roundedRect(mLeft + 12, leftY + 28, demoBoxW, 44, 6).fillAndStroke("#090d16", "#1e293b");
     doc.fillColor("#64748b").fontSize(7).font("Helvetica").text("PRIMARY AGE GROUP", mLeft + 18, leftY + 35);
     doc.fillColor("#ffffff").fontSize(10).font("Helvetica-Bold").text(topAge, mLeft + 18, leftY + 49);
 
-    // Gender Split Box
     doc.roundedRect(mLeft + 12 + demoBoxW + 6, leftY + 28, demoBoxW, 44, 6).fillAndStroke("#090d16", "#1e293b");
     doc.fillColor("#64748b").fontSize(7).font("Helvetica").text("GENDER SPLIT", mLeft + 18 + demoBoxW + 6, leftY + 35);
     doc.fillColor("#ffffff").fontSize(10).font("Helvetica-Bold").text(topGender, mLeft + 18 + demoBoxW + 6, leftY + 49);
 
-    // Top Locations Full Box
     doc.roundedRect(mLeft + 12, leftY + 80, leftW - 24, 48, 6).fillAndStroke("#090d16", "#1e293b");
     doc.fillColor("#64748b").fontSize(7).font("Helvetica").text("TOP AUDIENCE CITIES", mLeft + 18, leftY + 87);
     doc.fillColor("#38bdf8").fontSize(9.5).font("Helvetica-Bold").text(topCities, mLeft + 18, leftY + 102, { width: leftW - 36, ellipsis: true });
 
     leftY += demoH + 10;
 
-    // COLLABORATION TYPES & PERKS CARD
     const delH = 100;
     doc.roundedRect(mLeft, leftY, leftW, delH, 8).fillAndStroke("#0f172a", "#1e293b");
     doc.fillColor("#10b981").fontSize(9).font("Helvetica-Bold").text("CAMPAIGN CAPABILITIES & DELIVERABLES", mLeft + 12, leftY + 11);
@@ -1246,10 +1181,8 @@ export const exportMediaKitPdf = async (req, res) => {
       delY += 16;
     });
 
-    // --- RIGHT COLUMN ---
+    // RIGHT COLUMN
     let rightY = curY;
-
-    // VERIFIED SOCIAL CHANNELS CARD
     const socCardH = 185;
     doc.roundedRect(rightX, rightY, rightW, socCardH, 8).fillAndStroke("#0f172a", "#1e293b");
     doc.fillColor("#38bdf8").fontSize(9).font("Helvetica-Bold").text("VERIFIED CHANNELS", rightX + 12, rightY + 11);
@@ -1308,7 +1241,6 @@ export const exportMediaKitPdf = async (req, res) => {
 
     rightY += socCardH + 10;
 
-    // PACKAGES & RATE CARD
     const rateCardH = 205;
     doc.roundedRect(rightX, rightY, rightW, rateCardH, 8).fillAndStroke("#0f172a", "#1e293b");
     doc.fillColor("#f59e0b").fontSize(9).font("Helvetica-Bold").text("COMMERCIAL RATE CARD", rightX + 12, rightY + 11);
@@ -1328,7 +1260,6 @@ export const exportMediaKitPdf = async (req, res) => {
       rateY += 54;
     });
 
-    // 5. FOOTER VERIFICATION STRIP (Pinned at bottom of Page 1)
     const footerY = 800;
     doc.roundedRect(mLeft, footerY, contentW, 24, 6).fillAndStroke("#0f172a", "#1e293b");
     doc.fillColor("#94a3b8").fontSize(7).font("Helvetica").text(

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import nodemailer from "nodemailer";
-import Profile from "../models/Profile.js";
+import { query } from "../config/postgres.js";
 
 // =====================================
 // BASE EMAIL SENDER (Nodemailer / Vercel Proxy)
@@ -180,19 +180,29 @@ export const notifyCreatorsAboutNewCampaign = async ({ campaign, brand, frontend
     const frontendUrl = (frontendOrigin || process.env.FRONTEND_URL || "https://pravixo-web.vercel.app").replace(/\/$/, "");
 
     // Find all creators who have email notifications enabled and are not suspended
-    const creators = await Profile.find({
-      role: "creator",
-      isSuspended: { $ne: true },
-      isDeleted: { $ne: true },
-      emailNotificationsEnabled: { $ne: false },
-      email: { $exists: true, $ne: "" },
-    }).select("fullName email unsubscribeToken _id");
+    const creatorsRes = await query(`
+      SELECT id, full_name, email, unsubscribe_token
+      FROM profiles
+      WHERE role = 'creator'
+        AND is_suspended = false
+        AND is_deleted = false
+        AND email_notifications_enabled != false
+        AND email IS NOT NULL
+        AND email != ''
+    `);
+
+    const creators = creatorsRes.rows.map((row) => ({
+      _id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      unsubscribeToken: row.unsubscribe_token,
+    }));
 
     console.log(`[EmailService] Found ${creators.length} creators eligible for email notification on campaign: "${campaign.title}".`);
 
     if (!creators || creators.length === 0) return;
 
-    const campaignUrl = `${frontendUrl}/dashboard/influencer?tab=campaigns&campaignId=${campaign._id}`;
+    const campaignUrl = `${frontendUrl}/dashboard/influencer?tab=campaigns&campaignId=${campaign.id || campaign._id}`;
 
     // Dispatch emails asynchronously in parallel with concurrency throttling
     const batchSize = 10;
