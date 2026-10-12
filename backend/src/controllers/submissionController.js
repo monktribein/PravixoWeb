@@ -1,12 +1,11 @@
-import mongoose from "mongoose";
-import Connection from "../models/Connection.js";
-import Campaign from "../models/Campaign.js";
-import Profile from "../models/Profile.js";
-import Submission from "../models/Submission.js";
-import Notification from "../models/Notification.js";
-import Conversation from "../models/Conversation.js";
-import Message from "../models/Message.js";
-import { sendPushToUser, sendPushToUsers } from "../utils/webPush.js";
+import { query } from "../config/postgres.js";
+import {
+  formatSubmission,
+  formatConnection,
+  formatCampaign,
+  formatProfile,
+} from "../utils/formatters.js";
+import { sendPushToUser } from "../utils/webPush.js";
 
 const getFileUrl = (file) => {
   if (!file) return null;
@@ -16,18 +15,35 @@ const getFileUrl = (file) => {
   return `/uploads/${file.filename}`;
 };
 
+// Helper: Find Connection
+const findConnection = async (id) => {
+  if (!id) return null;
+  const res = await query(`SELECT * FROM connections WHERE id::text = $1 LIMIT 1`, [String(id)]);
+  return res.rows[0] ? formatConnection(res.rows[0]) : null;
+};
+
+// Helper: Find Submission
+const findSubmission = async (id) => {
+  if (!id) return null;
+  const res = await query(`SELECT * FROM submissions WHERE id::text = $1 LIMIT 1`, [String(id)]);
+  return res.rows[0] ? formatSubmission(res.rows[0]) : null;
+};
+
+// Helper: Find Profile
+const findProfile = async (idOrUserId) => {
+  if (!idOrUserId) return null;
+  const res = await query(
+    `SELECT * FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+    [String(idOrUserId)]
+  );
+  return res.rows[0] ? formatProfile(res.rows[0]) : null;
+};
+
 // 1. Submit Deliverable Content (Creator only)
 export const submitDeliverableContent = async (req, res) => {
   try {
     const { connectionId } = req.params;
     const { deliverableType, caption } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
 
     if (!deliverableType || !["REEL", "POST", "STORY", "VIDEO"].includes(deliverableType)) {
       return res.status(400).json({
@@ -43,7 +59,7 @@ export const submitDeliverableContent = async (req, res) => {
       });
     }
 
-    const connection = await Connection.findById(connectionId);
+    const connection = await findConnection(connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -51,7 +67,7 @@ export const submitDeliverableContent = async (req, res) => {
       });
     }
 
-    // Security Check: User must be authenticated creator of this collaboration
+    // Security Check: Caller must be creator of collaboration or admin
     if (req.user) {
       if (req.user.role !== "creator" && req.user.role !== "admin") {
         return res.status(403).json({
@@ -60,7 +76,8 @@ export const submitDeliverableContent = async (req, res) => {
         });
       }
 
-      if (String(connection.creatorId) !== String(req.user._id) && req.user.role !== "admin") {
+      const userProfileId = String(req.user.id || req.user._id);
+      if (String(connection.creatorId) !== userProfileId && req.user.role !== "admin") {
         return res.status(403).json({
           success: false,
           message: "Unauthorized: You do not own this collaboration.",
@@ -72,27 +89,65 @@ export const submitDeliverableContent = async (req, res) => {
     if (connection.paymentStatus !== "PAID") {
       return res.status(400).json({
         success: false,
-        message: "Cannot submit deliverables: Collaboration payment is not yet completed (must be PAID).",
+        message:
+          "Cannot submit deliverables: Collaboration payment is not yet completed (must be PAID).",
       });
     }
 
-    // Ensure deliverables tracking exists on connection
-    if (!connection.deliverablesTracking || connection.deliverablesTracking.length === 0) {
-      if (connection.campaignId) {
-        const camp = await Campaign.findById(connection.campaignId).lean();
-        if (camp && camp.deliverables) {
-          const delivs = [];
-          const nowTime = Date.now();
-          if (camp.deliverables.reels > 0) delivs.push({ type: "REEL", requiredQuantity: camp.deliverables.reels, completedQuantity: 0, status: "PENDING", createdAt: nowTime, updatedAt: nowTime });
-          if (camp.deliverables.posts > 0) delivs.push({ type: "POST", requiredQuantity: camp.deliverables.posts, completedQuantity: 0, status: "PENDING", createdAt: nowTime, updatedAt: nowTime });
-          if (camp.deliverables.stories > 0) delivs.push({ type: "STORY", requiredQuantity: camp.deliverables.stories, completedQuantity: 0, status: "PENDING", createdAt: nowTime, updatedAt: nowTime });
-          if (camp.deliverables.videos > 0) delivs.push({ type: "VIDEO", requiredQuantity: camp.deliverables.videos, completedQuantity: 0, status: "PENDING", createdAt: nowTime, updatedAt: nowTime });
-          connection.deliverablesTracking = delivs;
-        }
+    let deliverablesTracking = connection.deliverablesTracking || [];
+    if (deliverablesTracking.length === 0 && connection.campaignId) {
+      const campRes = await query(`SELECT deliverables FROM campaigns WHERE id = $1 LIMIT 1`, [
+        connection.campaignId,
+      ]);
+      if (campRes.rows.length > 0) {
+        const cData = campRes.rows[0];
+        const delivObj =
+          typeof cData.deliverables === "string"
+            ? JSON.parse(cData.deliverables)
+            : cData.deliverables || {};
+        const delivs = [];
+        const nowTime = Date.now();
+        if (delivObj.reels > 0)
+          delivs.push({
+            type: "REEL",
+            requiredQuantity: delivObj.reels,
+            completedQuantity: 0,
+            status: "PENDING",
+            createdAt: nowTime,
+            updatedAt: nowTime,
+          });
+        if (delivObj.posts > 0)
+          delivs.push({
+            type: "POST",
+            requiredQuantity: delivObj.posts,
+            completedQuantity: 0,
+            status: "PENDING",
+            createdAt: nowTime,
+            updatedAt: nowTime,
+          });
+        if (delivObj.stories > 0)
+          delivs.push({
+            type: "STORY",
+            requiredQuantity: delivObj.stories,
+            completedQuantity: 0,
+            status: "PENDING",
+            createdAt: nowTime,
+            updatedAt: nowTime,
+          });
+        if (delivObj.videos > 0)
+          delivs.push({
+            type: "VIDEO",
+            requiredQuantity: delivObj.videos,
+            completedQuantity: 0,
+            status: "PENDING",
+            createdAt: nowTime,
+            updatedAt: nowTime,
+          });
+        deliverablesTracking = delivs;
       }
     }
 
-    const deliverableItem = connection.deliverablesTracking.find((d) => d.type === deliverableType);
+    const deliverableItem = deliverablesTracking.find((d) => d.type === deliverableType);
     if (!deliverableItem) {
       return res.status(400).json({
         success: false,
@@ -100,12 +155,13 @@ export const submitDeliverableContent = async (req, res) => {
       });
     }
 
-    // Quantity enforcement: Count current submissions for this deliverable type
-    const existingSubmissionsCount = await Submission.countDocuments({
-      connectionId: connection._id,
-      deliverableType,
-      status: { $ne: "REJECTED" },
-    });
+    // Count existing non-rejected submissions
+    const countRes = await query(
+      `SELECT COUNT(*)::int as count FROM submissions 
+       WHERE connection_id = $1 AND deliverable_type = $2 AND status != 'REJECTED'`,
+      [connection.id, deliverableType]
+    );
+    const existingSubmissionsCount = countRes.rows[0]?.count || 0;
 
     if (existingSubmissionsCount >= deliverableItem.requiredQuantity) {
       return res.status(400).json({
@@ -117,100 +173,115 @@ export const submitDeliverableContent = async (req, res) => {
     const contentUrl = getFileUrl(req.file);
     const now = Date.now();
 
-    // Create Submission document
-    const submission = await Submission.create({
-      connectionId: connection._id,
-      campaignId: connection.campaignId,
-      brandId: connection.brandId,
-      creatorId: connection.creatorId,
-      deliverableId: deliverableItem._id || null,
-      deliverableType,
-      contentUrl,
-      cloudinaryPublicId: req.file.filename || null,
-      caption: caption || "",
-      status: "SUBMITTED",
-      submittedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
+    const insertSub = await query(
+      `INSERT INTO submissions (
+        connection_id, campaign_id, brand_id, creator_id, deliverable_type,
+        content_url, cloudinary_public_id, caption, status, submitted_at, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'SUBMITTED', $9, NOW(), NOW())
+      RETURNING *`,
+      [
+        connection.id,
+        connection.campaignId || null,
+        connection.brandId,
+        connection.creatorId,
+        deliverableType,
+        contentUrl,
+        req.file.filename || null,
+        caption || "",
+        now,
+      ]
+    );
+    const submission = formatSubmission(insertSub.rows[0]);
 
-    // Calculate approved count so completedQuantity only reflects approved work
-    const approvedCountForType = await Submission.countDocuments({
-      connectionId: connection._id,
-      deliverableType,
-      status: "APPROVED",
-    });
+    // Calculate approved count
+    const appRes = await query(
+      `SELECT COUNT(*)::int as count FROM submissions 
+       WHERE connection_id = $1 AND deliverable_type = $2 AND status = 'APPROVED'`,
+      [connection.id, deliverableType]
+    );
+    const approvedCountForType = appRes.rows[0]?.count || 0;
 
-    // Update deliverable tracking item status and completed quantity
     deliverableItem.status = "SUBMITTED";
     deliverableItem.completedQuantity = approvedCountForType;
     deliverableItem.updatedAt = now;
-    connection.updatedAt = now;
-    await connection.save();
+
+    await query(
+      `UPDATE connections 
+       SET deliverables_tracking = $1::jsonb, updated_at = NOW() 
+       WHERE id = $2`,
+      [JSON.stringify(deliverablesTracking), connection.id]
+    );
 
     // Notify Brand
-    const creatorProfile = await Profile.findById(connection.creatorId).select("fullName").lean();
+    const creatorProfile = await findProfile(connection.creatorId);
     const creatorName = creatorProfile?.fullName || "Creator";
     let campaignTitle = "campaign";
     if (connection.campaignId) {
-      const camp = await Campaign.findById(connection.campaignId).select("title").lean();
-      if (camp) campaignTitle = camp.title;
+      const camp = await query(`SELECT title FROM campaigns WHERE id = $1 LIMIT 1`, [
+        connection.campaignId,
+      ]);
+      if (camp.rows[0]?.title) campaignTitle = camp.rows[0].title;
     }
 
-    await Notification.create({
-      recipientId: connection.brandId,
-      senderId: connection.creatorId,
-      type: "deliverable_submitted",
-      text: `${creatorName} submitted a ${deliverableType} for "${campaignTitle}".`,
-      targetUrl: "/collaborations",
-      createdAt: now,
-    });
+    const notifText = `${creatorName} submitted a ${deliverableType} for "${campaignTitle}".`;
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+       VALUES ($1, $2, 'deliverable_submitted', $3, '/collaborations', $4, NOW())`,
+      [connection.brandId, connection.creatorId, notifText, now]
+    );
 
     sendPushToUser(connection.brandId, {
       title: "Deliverable Submitted! 🎬",
-      body: `${creatorName} submitted a ${deliverableType} for "${campaignTitle}".`,
+      body: notifText,
       url: "/collaborations",
-    }).catch((err) => console.error("Deliverable submission push error:", err.message));
+    }).catch((err) => console.error("Deliverable push error:", err.message));
 
     // Notify Admin
-    const admins = await Profile.find({ role: "admin" }).select("_id").lean();
-    for (const admin of admins) {
-      await Notification.create({
-        recipientId: admin._id,
-        senderId: connection.creatorId,
-        type: "deliverable_submitted",
-        text: `Creator ${creatorName} submitted campaign work (${deliverableType}) for "${campaignTitle}".`,
-        targetUrl: "/admin/tasks",
-        createdAt: now,
-      });
+    const admins = await query(`SELECT id FROM profiles WHERE role = 'admin'`);
+    for (const admin of admins.rows) {
+      await query(
+        `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+         VALUES ($1, $2, 'deliverable_submitted', $3, '/admin/tasks', $4, NOW())`,
+        [
+          admin.id,
+          connection.creatorId,
+          `Creator ${creatorName} submitted campaign work (${deliverableType}) for "${campaignTitle}".`,
+          now,
+        ]
+      );
     }
 
-    // Integrate submission card into conversation chat
+    // Post to chat
     try {
-      const convFilter = {
-        creatorId: connection.creatorId,
-        brandId: connection.brandId,
-      };
-      if (connection.campaignId) convFilter.campaignId = connection.campaignId;
-      const conversation = await Conversation.findOne(convFilter);
-      if (conversation) {
-        await Message.create({
-          conversationId: conversation._id,
-          senderId: connection.creatorId,
-          text: `[Deliverable Submission] ${creatorName} submitted ${deliverableType} #${existingSubmissionsCount + 1}`,
-          messageType: "deliverable_submission",
-          metadata: {
-            submissionId: submission._id,
-            deliverableType,
-            contentUrl,
-            caption: caption || "",
-            status: "SUBMITTED",
-            submittedAt: now,
-            sequenceNumber: existingSubmissionsCount + 1,
-            requiredQuantity: deliverableItem.requiredQuantity,
-          },
-          read: false,
-        });
+      const convRes = await query(
+        `SELECT id FROM conversations 
+         WHERE creator_id = $1 AND brand_id = $2 
+           AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+         LIMIT 1`,
+        [connection.creatorId, connection.brandId, connection.campaignId || null]
+      );
+      if (convRes.rows.length > 0) {
+        await query(
+          `INSERT INTO messages (conversation_id, sender_id, text, message_type, metadata, read)
+           VALUES ($1, $2, $3, 'deliverable_submission', $4::jsonb, false)`,
+          [
+            convRes.rows[0].id,
+            connection.creatorId,
+            `[Deliverable Submission] ${creatorName} submitted ${deliverableType} #${
+              existingSubmissionsCount + 1
+            }`,
+            JSON.stringify({
+              submissionId: submission.id,
+              deliverableType,
+              contentUrl,
+              caption: caption || "",
+              status: "SUBMITTED",
+              submittedAt: now,
+              sequenceNumber: existingSubmissionsCount + 1,
+              requiredQuantity: deliverableItem.requiredQuantity,
+            }),
+          ]
+        );
       }
     } catch (chatErr) {
       console.warn("Could not post submission message to chat:", chatErr);
@@ -221,7 +292,7 @@ export const submitDeliverableContent = async (req, res) => {
       message: "Deliverable submitted successfully.",
       data: {
         submission,
-        deliverablesTracking: connection.deliverablesTracking,
+        deliverablesTracking,
       },
     });
   } catch (error) {
@@ -234,19 +305,12 @@ export const submitDeliverableContent = async (req, res) => {
   }
 };
 
-// 2. Get Submissions for a Collaboration (Brand or Creator or Admin)
+// 2. Get Submissions for a Collaboration
 export const getCollaborationSubmissions = async (req, res) => {
   try {
     const { connectionId } = req.params;
+    const connection = await findConnection(connectionId);
 
-    if (!mongoose.Types.ObjectId.isValid(connectionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid connection ID.",
-      });
-    }
-
-    const connection = await Connection.findById(connectionId).lean();
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -254,10 +318,10 @@ export const getCollaborationSubmissions = async (req, res) => {
       });
     }
 
-    // Security Check: Caller must be participant (creator or brand) or admin
     if (req.user && req.user.role !== "admin") {
-      const isBrand = String(connection.brandId) === String(req.user._id);
-      const isCreator = String(connection.creatorId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isBrand = String(connection.brandId) === userProfileId;
+      const isCreator = String(connection.creatorId) === userProfileId;
       if (!isBrand && !isCreator) {
         return res.status(403).json({
           success: false,
@@ -266,23 +330,25 @@ export const getCollaborationSubmissions = async (req, res) => {
       }
     }
 
-    const submissions = await Submission.find({ connectionId })
-      .sort({ createdAt: -1 })
-      .lean();
+    const subRes = await query(
+      `SELECT * FROM submissions WHERE connection_id::text = $1 ORDER BY created_at DESC`,
+      [connection.id]
+    );
+    const submissions = subRes.rows.map(formatSubmission);
 
-    const creatorProfile = await Profile.findById(connection.creatorId)
-      .select("fullName avatarUrl handle email")
-      .lean();
-    const campaign = connection.campaignId
-      ? await Campaign.findById(connection.campaignId)
-          .select("title description deliverables totalBudget category")
-          .lean()
-      : null;
+    const creatorProfile = await findProfile(connection.creatorId);
+    let campaign = null;
+    if (connection.campaignId) {
+      const campRes = await query(`SELECT * FROM campaigns WHERE id = $1 LIMIT 1`, [
+        connection.campaignId,
+      ]);
+      campaign = campRes.rows[0] ? formatCampaign(campRes.rows[0]) : null;
+    }
 
     res.status(200).json({
       success: true,
       data: {
-        connectionId: connection._id,
+        connectionId: connection.id,
         paymentStatus: connection.paymentStatus,
         collaboration: {
           ...connection,
@@ -312,15 +378,8 @@ export const getCollaborationSubmissions = async (req, res) => {
 export const approveDeliverableSubmission = async (req, res) => {
   try {
     const { submissionId } = req.params;
+    const submission = await findSubmission(submissionId);
 
-    if (!mongoose.Types.ObjectId.isValid(submissionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid submission ID.",
-      });
-    }
-
-    const submission = await Submission.findById(submissionId);
     if (!submission) {
       return res.status(404).json({
         success: false,
@@ -328,7 +387,7 @@ export const approveDeliverableSubmission = async (req, res) => {
       });
     }
 
-    const connection = await Connection.findById(submission.connectionId);
+    const connection = await findConnection(submission.connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -336,7 +395,6 @@ export const approveDeliverableSubmission = async (req, res) => {
       });
     }
 
-    // Security Check: Caller must be the Brand owning this campaign/collaboration
     if (req.user && req.user.role !== "admin") {
       if (req.user.role !== "brand") {
         return res.status(403).json({
@@ -345,7 +403,8 @@ export const approveDeliverableSubmission = async (req, res) => {
         });
       }
 
-      if (String(connection.brandId) !== String(req.user._id)) {
+      const userProfileId = String(req.user.id || req.user._id);
+      if (String(connection.brandId) !== userProfileId) {
         return res.status(403).json({
           success: false,
           message: "Unauthorized: You do not own this campaign/collaboration.",
@@ -353,7 +412,6 @@ export const approveDeliverableSubmission = async (req, res) => {
       }
     }
 
-    // State transition protection: only SUBMITTED or RESUBMITTED can be APPROVED
     if (submission.status !== "SUBMITTED" && submission.status !== "RESUBMITTED") {
       return res.status(400).json({
         success: false,
@@ -362,88 +420,96 @@ export const approveDeliverableSubmission = async (req, res) => {
     }
 
     const now = Date.now();
-    submission.status = "APPROVED";
-    submission.approvedAt = now;
-    submission.updatedAt = now;
-    await submission.save();
-
-    // Recalculate and update deliverablesTracking on connection
-    // Completed/approved count for this deliverable type
-    const approvedCountForType = await Submission.countDocuments({
-      connectionId: connection._id,
-      deliverableType: submission.deliverableType,
-      status: "APPROVED",
-    });
-
-    const deliverableItem = connection.deliverablesTracking.find(
-      (d) => d.type === submission.deliverableType
+    await query(
+      `UPDATE submissions SET status = 'APPROVED', approved_at = $1, updated_at = NOW() WHERE id = $2`,
+      [now, submission.id]
     );
+
+    // Recalculate deliverables tracking
+    const appRes = await query(
+      `SELECT COUNT(*)::int as count FROM submissions 
+       WHERE connection_id = $1 AND deliverable_type = $2 AND status = 'APPROVED'`,
+      [connection.id, submission.deliverableType]
+    );
+    const approvedCountForType = appRes.rows[0]?.count || 0;
+
+    let deliverablesTracking = connection.deliverablesTracking || [];
+    const deliverableItem = deliverablesTracking.find((d) => d.type === submission.deliverableType);
 
     if (deliverableItem) {
       deliverableItem.completedQuantity = approvedCountForType;
-      if (approvedCountForType >= deliverableItem.requiredQuantity) {
-        deliverableItem.status = "COMPLETED";
-      } else {
-        deliverableItem.status = "IN_PROGRESS";
-      }
+      deliverableItem.status =
+        approvedCountForType >= deliverableItem.requiredQuantity ? "COMPLETED" : "IN_PROGRESS";
       deliverableItem.updatedAt = now;
     }
 
-    // Check if ALL campaign deliverables are now approved
     const allApproved =
-      connection.deliverablesTracking &&
-      connection.deliverablesTracking.length > 0 &&
-      connection.deliverablesTracking.every(
+      deliverablesTracking.length > 0 &&
+      deliverablesTracking.every(
         (deliv) => (deliv.completedQuantity || 0) >= (deliv.requiredQuantity || 1)
       );
 
     const wasAlreadyCompleted = connection.allDeliverablesCompleted;
-    if (allApproved) {
-      connection.allDeliverablesCompleted = true;
-      if (!connection.workCompletedAt) {
-        connection.workCompletedAt = now;
-      }
+    let workCompletedAt = connection.workCompletedAt || null;
+    let approvalCompletedAt = connection.approvalCompletedAt || null;
+    let paymentReleaseEligibleAt = connection.paymentReleaseEligibleAt || null;
+    let paymentReleaseStatus = connection.paymentReleaseStatus || "NOT_APPLICABLE";
 
-      // Task 10: 72-Hour Review Period Timer initialization
-      if (!connection.approvalCompletedAt) {
-        connection.approvalCompletedAt = now;
-        connection.paymentReleaseEligibleAt = now + 72 * 60 * 60 * 1000;
-        connection.paymentReleaseStatus = "WAITING_72_HOURS";
-        connection.adminNotifiedOfEligibility = false;
+    if (allApproved) {
+      if (!workCompletedAt) workCompletedAt = now;
+      if (!approvalCompletedAt) {
+        approvalCompletedAt = now;
+        paymentReleaseEligibleAt = now + 72 * 60 * 60 * 1000;
+        paymentReleaseStatus = "WAITING_72_HOURS";
       }
     } else {
-      connection.allDeliverablesCompleted = false;
-      connection.workCompletedAt = null;
-      connection.approvalCompletedAt = null;
-      connection.paymentReleaseEligibleAt = null;
-      connection.paymentReleaseStatus = "NOT_APPLICABLE";
-      connection.adminNotifiedOfEligibility = false;
+      workCompletedAt = null;
+      approvalCompletedAt = null;
+      paymentReleaseEligibleAt = null;
+      paymentReleaseStatus = "NOT_APPLICABLE";
     }
 
-    connection.updatedAt = now;
-    await connection.save();
+    await query(
+      `UPDATE connections 
+       SET deliverables_tracking = $1::jsonb,
+           all_deliverables_completed = $2,
+           work_completed_at = $3,
+           approval_completed_at = $4,
+           payment_release_eligible_at = $5,
+           payment_release_status = $6,
+           updated_at = NOW()
+       WHERE id = $7`,
+      [
+        JSON.stringify(deliverablesTracking),
+        allApproved,
+        workCompletedAt,
+        approvalCompletedAt,
+        paymentReleaseEligibleAt,
+        paymentReleaseStatus,
+        connection.id,
+      ]
+    );
 
-    // Fetch Profile and Campaign details for rich notification data
-    const brandProfile = await Profile.findById(connection.brandId).select("fullName avatarUrl").lean();
-    const creatorProfile = await Profile.findById(connection.creatorId).select("fullName avatarUrl").lean();
+    const brandProfile = await findProfile(connection.brandId);
+    const creatorProfile = await findProfile(connection.creatorId);
     const brandName = brandProfile?.fullName || "Brand";
     const creatorName = creatorProfile?.fullName || "Creator";
     let campaignTitle = "campaign";
     if (connection.campaignId) {
-      const camp = await Campaign.findById(connection.campaignId).select("title").lean();
-      if (camp) campaignTitle = camp.title;
+      const camp = await query(`SELECT title FROM campaigns WHERE id = $1 LIMIT 1`, [
+        connection.campaignId,
+      ]);
+      if (camp.rows[0]?.title) campaignTitle = camp.rows[0].title;
     }
 
-    // 1. Send Deliverable Approval Notification to Creator
-    const approvalText = `${brandName} approved your submitted ${submission.deliverableType} (v${submission.version || 1}) for "${campaignTitle}".`;
-    await Notification.create({
-      recipientId: connection.creatorId,
-      senderId: connection.brandId,
-      type: "deliverable_approved",
-      text: approvalText,
-      targetUrl: "/collaborations",
-      createdAt: now,
-    });
+    const approvalText = `${brandName} approved your submitted ${submission.deliverableType} (v${
+      submission.version || 1
+    }) for "${campaignTitle}".`;
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+       VALUES ($1, $2, 'deliverable_approved', $3, '/collaborations', $4, NOW())`,
+      [connection.creatorId, connection.brandId, approvalText, now]
+    );
 
     sendPushToUser(connection.creatorId, {
       title: "Deliverable Approved! ✅",
@@ -451,108 +517,97 @@ export const approveDeliverableSubmission = async (req, res) => {
       url: "/collaborations",
     }).catch((err) => console.error("Deliverable approval push error:", err.message));
 
-    // 2. Send Deliverable Approval Notification to Admins
-    const admins = await Profile.find({ role: "admin" }).select("_id").lean();
-    for (const admin of admins) {
-      await Notification.create({
-        recipientId: admin._id,
-        senderId: connection.brandId,
-        type: "deliverable_approved",
-        text: `${brandName} approved ${submission.deliverableType} (v${submission.version || 1}) by ${creatorName} for "${campaignTitle}".`,
-        targetUrl: "/admin/tasks",
-        createdAt: now,
-      });
+    // Notify Admins
+    const admins = await query(`SELECT id FROM profiles WHERE role = 'admin'`);
+    for (const admin of admins.rows) {
+      await query(
+        `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+         VALUES ($1, $2, 'deliverable_approved', $3, '/admin/tasks', $4, NOW())`,
+        [
+          admin.id,
+          connection.brandId,
+          `${brandName} approved ${submission.deliverableType} (v${
+            submission.version || 1
+          }) by ${creatorName} for "${campaignTitle}".`,
+          now,
+        ]
+      );
     }
 
-    // 3. If ALL deliverables are completed, send All Deliverables Approved Notification & Chat message
     if (allApproved && !wasAlreadyCompleted) {
-      // Notify Creator that entire campaign work is completed and 72-hour review period has begun
       const creatorAllDoneText = `🎉 Congratulations! All required campaign deliverables for "${campaignTitle}" have been approved by ${brandName}. 72-hour review period has started.`;
-      await Notification.create({
-        recipientId: connection.creatorId,
-        senderId: connection.brandId,
-        type: "all_deliverables_approved",
-        text: creatorAllDoneText,
-        targetUrl: "/collaborations",
-        createdAt: now,
-      });
-
+      await query(
+        `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+         VALUES ($1, $2, 'all_deliverables_approved', $3, '/collaborations', $4, NOW())`,
+        [connection.creatorId, connection.brandId, creatorAllDoneText, now]
+      );
       sendPushToUser(connection.creatorId, {
         title: "All Deliverables Approved! 🎉",
         body: creatorAllDoneText,
         url: "/collaborations",
       }).catch((err) => console.error("All deliverables push error:", err.message));
 
-      // Notify Brand that work is fully completed
       const brandAllDoneText = `All deliverables for "${campaignTitle}" with ${creatorName} are now fully approved. 72-hour review period is now active.`;
-      await Notification.create({
-        recipientId: connection.brandId,
-        senderId: connection.creatorId,
-        type: "all_deliverables_approved",
-        text: brandAllDoneText,
-        targetUrl: "/collaborations",
-        createdAt: now,
-      });
-
+      await query(
+        `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+         VALUES ($1, $2, 'all_deliverables_approved', $3, '/collaborations', $4, NOW())`,
+        [connection.brandId, connection.creatorId, brandAllDoneText, now]
+      );
       sendPushToUser(connection.brandId, {
         title: "Campaign Work Complete! 🌟",
         body: brandAllDoneText,
         url: "/collaborations",
       }).catch((err) => console.error("Brand all deliverables push error:", err.message));
-
-      // Notify Admins that collaboration work is completed
-      for (const admin of admins) {
-        await Notification.create({
-          recipientId: admin._id,
-          senderId: connection.brandId,
-          type: "all_deliverables_approved",
-          text: `All campaign deliverables for "${campaignTitle}" between ${brandName} and ${creatorName} are now 100% approved. 72-hour review period started.`,
-          createdAt: now,
-        });
-      }
     }
 
-    // Post review status message in conversation chat
+    // Post to chat
     try {
-      const convFilter = {
-        creatorId: connection.creatorId,
-        brandId: connection.brandId,
-      };
-      if (connection.campaignId) convFilter.campaignId = connection.campaignId;
-      const conversation = await Conversation.findOne(convFilter);
-      if (conversation) {
-        await Message.create({
-          conversationId: conversation._id,
-          senderId: connection.brandId,
-          text: `[Deliverable Approved] ${brandName} approved ${submission.deliverableType} submission (v${submission.version || 1}) (${approvedCountForType}/${deliverableItem?.requiredQuantity || 1} approved).`,
-          messageType: "deliverable_submission",
-          metadata: {
-            submissionId: submission._id,
-            deliverableType: submission.deliverableType,
-            contentUrl: submission.contentUrl,
-            status: "APPROVED",
-            version: submission.version || 1,
-            reviewedAt: now,
-            approvedCount: approvedCountForType,
-            requiredQuantity: deliverableItem?.requiredQuantity || 1,
-          },
-          read: false,
-        });
+      const convRes = await query(
+        `SELECT id FROM conversations 
+         WHERE creator_id = $1 AND brand_id = $2 
+           AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+         LIMIT 1`,
+        [connection.creatorId, connection.brandId, connection.campaignId || null]
+      );
+      if (convRes.rows.length > 0) {
+        await query(
+          `INSERT INTO messages (conversation_id, sender_id, text, message_type, metadata, read)
+           VALUES ($1, $2, $3, 'deliverable_submission', $4::jsonb, false)`,
+          [
+            convRes.rows[0].id,
+            connection.brandId,
+            `[Deliverable Approved] ${brandName} approved ${submission.deliverableType} submission (v${
+              submission.version || 1
+            }) (${approvedCountForType}/${deliverableItem?.requiredQuantity || 1} approved).`,
+            JSON.stringify({
+              submissionId: submission.id,
+              deliverableType: submission.deliverableType,
+              contentUrl: submission.contentUrl,
+              status: "APPROVED",
+              version: submission.version || 1,
+              reviewedAt: now,
+              approvedCount: approvedCountForType,
+              requiredQuantity: deliverableItem?.requiredQuantity || 1,
+            }),
+          ]
+        );
 
         if (allApproved && !wasAlreadyCompleted) {
-          await Message.create({
-            conversationId: conversation._id,
-            senderId: connection.brandId,
-            text: `[Campaign Work Completed] 🎉 All campaign deliverables for "${campaignTitle}" have been approved by ${brandName}! The 72-hour review period has commenced.`,
-            messageType: "system",
-            metadata: {
-              connectionId: connection._id,
-              allDeliverablesCompleted: true,
-              completedAt: now,
-              paymentReleaseEligibleAt: connection.paymentReleaseEligibleAt,
-            },
-            read: false,
-          });
+          await query(
+            `INSERT INTO messages (conversation_id, sender_id, text, message_type, metadata, read)
+             VALUES ($1, $2, $3, 'system', $4::jsonb, false)`,
+            [
+              convRes.rows[0].id,
+              connection.brandId,
+              `[Campaign Work Completed] 🎉 All campaign deliverables for "${campaignTitle}" have been approved by ${brandName}! The 72-hour review period has commenced.`,
+              JSON.stringify({
+                connectionId: connection.id,
+                allDeliverablesCompleted: true,
+                completedAt: now,
+                paymentReleaseEligibleAt,
+              }),
+            ]
+          );
         }
       }
     } catch (chatErr) {
@@ -565,13 +620,13 @@ export const approveDeliverableSubmission = async (req, res) => {
         ? "Deliverable approved and all required deliverables for this collaboration are now completed! 72-hour review period started."
         : "Deliverable submission approved successfully.",
       data: {
-        submission,
-        deliverablesTracking: connection.deliverablesTracking,
-        allDeliverablesCompleted: connection.allDeliverablesCompleted,
-        workCompletedAt: connection.workCompletedAt,
-        approvalCompletedAt: connection.approvalCompletedAt,
-        paymentReleaseEligibleAt: connection.paymentReleaseEligibleAt,
-        paymentReleaseStatus: connection.paymentReleaseStatus,
+        submission: { ...submission, status: "APPROVED", approvedAt: now },
+        deliverablesTracking,
+        allDeliverablesCompleted: allApproved,
+        workCompletedAt,
+        approvalCompletedAt,
+        paymentReleaseEligibleAt,
+        paymentReleaseStatus,
         paymentStatus: connection.paymentStatus,
       },
     });
@@ -591,13 +646,6 @@ export const rejectDeliverableSubmission = async (req, res) => {
     const { submissionId } = req.params;
     const reasonText = (req.body.reason || req.body.rejectionReason || "").trim();
 
-    if (!mongoose.Types.ObjectId.isValid(submissionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid submission ID.",
-      });
-    }
-
     if (!reasonText) {
       return res.status(400).json({
         success: false,
@@ -605,7 +653,7 @@ export const rejectDeliverableSubmission = async (req, res) => {
       });
     }
 
-    const submission = await Submission.findById(submissionId);
+    const submission = await findSubmission(submissionId);
     if (!submission) {
       return res.status(404).json({
         success: false,
@@ -613,7 +661,7 @@ export const rejectDeliverableSubmission = async (req, res) => {
       });
     }
 
-    const connection = await Connection.findById(submission.connectionId);
+    const connection = await findConnection(submission.connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -621,7 +669,6 @@ export const rejectDeliverableSubmission = async (req, res) => {
       });
     }
 
-    // Security Check: Caller must be the Brand owning this campaign/collaboration
     if (req.user && req.user.role !== "admin") {
       if (req.user.role !== "brand") {
         return res.status(403).json({
@@ -630,7 +677,8 @@ export const rejectDeliverableSubmission = async (req, res) => {
         });
       }
 
-      if (String(connection.brandId) !== String(req.user._id)) {
+      const userProfileId = String(req.user.id || req.user._id);
+      if (String(connection.brandId) !== userProfileId) {
         return res.status(403).json({
           success: false,
           message: "Unauthorized: You do not own this campaign/collaboration.",
@@ -638,7 +686,6 @@ export const rejectDeliverableSubmission = async (req, res) => {
       }
     }
 
-    // State transition protection: only SUBMITTED or RESUBMITTED can be REJECTED
     if (submission.status !== "SUBMITTED" && submission.status !== "RESUBMITTED") {
       return res.status(400).json({
         success: false,
@@ -647,22 +694,22 @@ export const rejectDeliverableSubmission = async (req, res) => {
     }
 
     const now = Date.now();
-    submission.status = "REJECTED";
-    submission.rejectionReason = reasonText;
-    submission.rejectedAt = now;
-    submission.updatedAt = now;
-    await submission.save();
-
-    // Recalculate deliverablesTracking on connection
-    const approvedCountForType = await Submission.countDocuments({
-      connectionId: connection._id,
-      deliverableType: submission.deliverableType,
-      status: "APPROVED",
-    });
-
-    const deliverableItem = connection.deliverablesTracking.find(
-      (d) => d.type === submission.deliverableType
+    await query(
+      `UPDATE submissions 
+       SET status = 'REJECTED', rejection_reason = $1, rejected_at = $2, updated_at = NOW() 
+       WHERE id = $3`,
+      [reasonText, now, submission.id]
     );
+
+    const appRes = await query(
+      `SELECT COUNT(*)::int as count FROM submissions 
+       WHERE connection_id = $1 AND deliverable_type = $2 AND status = 'APPROVED'`,
+      [connection.id, submission.deliverableType]
+    );
+    const approvedCountForType = appRes.rows[0]?.count || 0;
+
+    let deliverablesTracking = connection.deliverablesTracking || [];
+    const deliverableItem = deliverablesTracking.find((d) => d.type === submission.deliverableType);
 
     if (deliverableItem) {
       deliverableItem.completedQuantity = approvedCountForType;
@@ -670,27 +717,29 @@ export const rejectDeliverableSubmission = async (req, res) => {
       deliverableItem.updatedAt = now;
     }
 
-    connection.updatedAt = now;
-    await connection.save();
+    await query(
+      `UPDATE connections SET deliverables_tracking = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(deliverablesTracking), connection.id]
+    );
 
-    // Send Notification to Creator
-    const brandProfile = await Profile.findById(connection.brandId).select("fullName").lean();
+    const brandProfile = await findProfile(connection.brandId);
     const brandName = brandProfile?.fullName || "Brand";
     let campaignTitle = "campaign";
     if (connection.campaignId) {
-      const camp = await Campaign.findById(connection.campaignId).select("title").lean();
-      if (camp) campaignTitle = camp.title;
+      const camp = await query(`SELECT title FROM campaigns WHERE id = $1 LIMIT 1`, [
+        connection.campaignId,
+      ]);
+      if (camp.rows[0]?.title) campaignTitle = camp.rows[0].title;
     }
 
-    const rejectText = `${brandName} requested changes on your ${submission.deliverableType} (v${submission.version || 1}) for "${campaignTitle}". Reason: ${reasonText}`;
-    await Notification.create({
-      recipientId: connection.creatorId,
-      senderId: connection.brandId,
-      type: "deliverable_rejected",
-      text: rejectText,
-      targetUrl: "/collaborations",
-      createdAt: now,
-    });
+    const rejectText = `${brandName} requested changes on your ${submission.deliverableType} (v${
+      submission.version || 1
+    }) for "${campaignTitle}". Reason: ${reasonText}`;
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+       VALUES ($1, $2, 'deliverable_rejected', $3, '/collaborations', $4, NOW())`,
+      [connection.creatorId, connection.brandId, rejectText, now]
+    );
 
     sendPushToUser(connection.creatorId, {
       title: "Deliverable Feedback / Changes Requested ⚠️",
@@ -698,31 +747,36 @@ export const rejectDeliverableSubmission = async (req, res) => {
       url: "/collaborations",
     }).catch((err) => console.error("Deliverable rejection push error:", err.message));
 
-    // Post review status message in conversation chat
+    // Post to chat
     try {
-      const convFilter = {
-        creatorId: connection.creatorId,
-        brandId: connection.brandId,
-      };
-      if (connection.campaignId) convFilter.campaignId = connection.campaignId;
-      const conversation = await Conversation.findOne(convFilter);
-      if (conversation) {
-        await Message.create({
-          conversationId: conversation._id,
-          senderId: connection.brandId,
-          text: `[Deliverable Rejected] ${brandName} requested rework on ${submission.deliverableType} (v${submission.version || 1}). Feedback: "${reasonText}".`,
-          messageType: "deliverable_submission",
-          metadata: {
-            submissionId: submission._id,
-            deliverableType: submission.deliverableType,
-            contentUrl: submission.contentUrl,
-            status: "REJECTED",
-            version: submission.version || 1,
-            rejectionReason: reasonText,
-            reviewedAt: now,
-          },
-          read: false,
-        });
+      const convRes = await query(
+        `SELECT id FROM conversations 
+         WHERE creator_id = $1 AND brand_id = $2 
+           AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+         LIMIT 1`,
+        [connection.creatorId, connection.brandId, connection.campaignId || null]
+      );
+      if (convRes.rows.length > 0) {
+        await query(
+          `INSERT INTO messages (conversation_id, sender_id, text, message_type, metadata, read)
+           VALUES ($1, $2, $3, 'deliverable_submission', $4::jsonb, false)`,
+          [
+            convRes.rows[0].id,
+            connection.brandId,
+            `[Deliverable Rejected] ${brandName} requested rework on ${submission.deliverableType} (v${
+              submission.version || 1
+            }). Feedback: "${reasonText}".`,
+            JSON.stringify({
+              submissionId: submission.id,
+              deliverableType: submission.deliverableType,
+              contentUrl: submission.contentUrl,
+              status: "REJECTED",
+              version: submission.version || 1,
+              rejectionReason: reasonText,
+              reviewedAt: now,
+            }),
+          ]
+        );
       }
     } catch (chatErr) {
       console.warn("Could not post rejection message to chat:", chatErr);
@@ -732,8 +786,13 @@ export const rejectDeliverableSubmission = async (req, res) => {
       success: true,
       message: "Deliverable submission rejected.",
       data: {
-        submission,
-        deliverablesTracking: connection.deliverablesTracking,
+        submission: {
+          ...submission,
+          status: "REJECTED",
+          rejectionReason: reasonText,
+          rejectedAt: now,
+        },
+        deliverablesTracking,
       },
     });
   } catch (error) {
@@ -746,18 +805,11 @@ export const rejectDeliverableSubmission = async (req, res) => {
   }
 };
 
-// 5. Creator Rework & Resubmission (Creator only) - Task 8
+// 5. Creator Rework & Resubmission (Creator only)
 export const resubmitDeliverableContent = async (req, res) => {
   try {
     const { submissionId } = req.params;
     const { caption } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(submissionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid submission ID.",
-      });
-    }
 
     if (!req.file) {
       return res.status(400).json({
@@ -766,7 +818,7 @@ export const resubmitDeliverableContent = async (req, res) => {
       });
     }
 
-    const previousSubmission = await Submission.findById(submissionId);
+    const previousSubmission = await findSubmission(submissionId);
     if (!previousSubmission) {
       return res.status(404).json({
         success: false,
@@ -774,7 +826,7 @@ export const resubmitDeliverableContent = async (req, res) => {
       });
     }
 
-    const connection = await Connection.findById(previousSubmission.connectionId);
+    const connection = await findConnection(previousSubmission.connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -782,7 +834,6 @@ export const resubmitDeliverableContent = async (req, res) => {
       });
     }
 
-    // Security Check: User must be authenticated creator of this collaboration
     if (req.user) {
       if (req.user.role !== "creator" && req.user.role !== "admin") {
         return res.status(403).json({
@@ -791,7 +842,8 @@ export const resubmitDeliverableContent = async (req, res) => {
         });
       }
 
-      if (String(connection.creatorId) !== String(req.user._id) && req.user.role !== "admin") {
+      const userProfileId = String(req.user.id || req.user._id);
+      if (String(connection.creatorId) !== userProfileId && req.user.role !== "admin") {
         return res.status(403).json({
           success: false,
           message: "Unauthorized: You do not own this collaboration/submission.",
@@ -799,7 +851,6 @@ export const resubmitDeliverableContent = async (req, res) => {
       }
     }
 
-    // Rework Eligibility Check: Only REJECTED submissions can enter rework
     if (previousSubmission.status !== "REJECTED") {
       return res.status(400).json({
         success: false,
@@ -807,20 +858,20 @@ export const resubmitDeliverableContent = async (req, res) => {
       });
     }
 
-    // Prevent duplicate simultaneous resubmissions: Check if a child resubmission is already pending review
-    const pendingResubmission = await Submission.findOne({
-      parentSubmissionId: previousSubmission._id,
-      status: { $in: ["SUBMITTED", "RESUBMITTED"] },
-    });
+    const pendingRes = await query(
+      `SELECT id FROM submissions 
+       WHERE parent_submission_id = $1 AND status IN ('SUBMITTED', 'RESUBMITTED') 
+       LIMIT 1`,
+      [previousSubmission.id]
+    );
 
-    if (pendingResubmission) {
+    if (pendingRes.rows.length > 0) {
       return res.status(400).json({
         success: false,
         message: "A resubmission for this deliverable is already awaiting Brand review.",
       });
     }
 
-    // Payment requirement check: Must be PAID
     if (connection.paymentStatus !== "PAID") {
       return res.status(400).json({
         success: false,
@@ -833,36 +884,40 @@ export const resubmitDeliverableContent = async (req, res) => {
     const contentUrl = getFileUrl(req.file);
     const now = Date.now();
 
-    // Create new Submission version document
-    const newSubmission = await Submission.create({
-      connectionId: connection._id,
-      campaignId: connection.campaignId,
-      brandId: connection.brandId,
-      creatorId: connection.creatorId,
-      deliverableId: previousSubmission.deliverableId,
-      deliverableType: previousSubmission.deliverableType,
-      contentUrl,
-      cloudinaryPublicId: req.file.filename || null,
-      caption: caption !== undefined ? caption : previousSubmission.caption,
-      status: "RESUBMITTED",
-      version: newVersionNumber,
-      parentSubmissionId: previousSubmission._id,
-      reworkCount,
-      rejectionReason: "", // Clear reason for new submission
-      resubmittedAt: now,
-      submittedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
+    const insertSub = await query(
+      `INSERT INTO submissions (
+        connection_id, campaign_id, brand_id, creator_id, deliverable_id, deliverable_type,
+        content_url, cloudinary_public_id, caption, status, version, parent_submission_id,
+        rework_count, rejection_reason, resubmitted_at, submitted_at, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'RESUBMITTED', $10, $11, $12, '', $13, $13, NOW(), NOW())
+      RETURNING *`,
+      [
+        connection.id,
+        connection.campaignId || null,
+        connection.brandId,
+        connection.creatorId,
+        previousSubmission.deliverableId || null,
+        previousSubmission.deliverableType,
+        contentUrl,
+        req.file.filename || null,
+        caption !== undefined ? caption : previousSubmission.caption,
+        newVersionNumber,
+        previousSubmission.id,
+        reworkCount,
+        now,
+      ]
+    );
+    const newSubmission = formatSubmission(insertSub.rows[0]);
 
-    // Update deliverable item tracking status to RESUBMITTED without changing completedQuantity
-    const approvedCountForType = await Submission.countDocuments({
-      connectionId: connection._id,
-      deliverableType: previousSubmission.deliverableType,
-      status: "APPROVED",
-    });
+    const appRes = await query(
+      `SELECT COUNT(*)::int as count FROM submissions 
+       WHERE connection_id = $1 AND deliverable_type = $2 AND status = 'APPROVED'`,
+      [connection.id, previousSubmission.deliverableType]
+    );
+    const approvedCountForType = appRes.rows[0]?.count || 0;
 
-    const deliverableItem = connection.deliverablesTracking.find(
+    let deliverablesTracking = connection.deliverablesTracking || [];
+    const deliverableItem = deliverablesTracking.find(
       (d) => d.type === previousSubmission.deliverableType
     );
 
@@ -872,66 +927,68 @@ export const resubmitDeliverableContent = async (req, res) => {
       deliverableItem.updatedAt = now;
     }
 
-    connection.updatedAt = now;
-    await connection.save();
+    await query(
+      `UPDATE connections SET deliverables_tracking = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(deliverablesTracking), connection.id]
+    );
 
-    // Send Notification to Brand
-    const creatorProfile = await Profile.findById(connection.creatorId).select("fullName").lean();
+    const creatorProfile = await findProfile(connection.creatorId);
     const creatorName = creatorProfile?.fullName || "Creator";
     let campaignTitle = "campaign";
     if (connection.campaignId) {
-      const camp = await Campaign.findById(connection.campaignId).select("title").lean();
-      if (camp) campaignTitle = camp.title;
+      const camp = await query(`SELECT title FROM campaigns WHERE id = $1 LIMIT 1`, [
+        connection.campaignId,
+      ]);
+      if (camp.rows[0]?.title) campaignTitle = camp.rows[0].title;
     }
 
-    await Notification.create({
-      recipientId: connection.brandId,
-      senderId: connection.creatorId,
-      type: "deliverable_resubmitted",
-      text: `${creatorName} resubmitted ${previousSubmission.deliverableType} (v${newVersionNumber}) after rework for "${campaignTitle}".`,
-      targetUrl: "/collaborations",
-      createdAt: now,
-    });
+    const notifText = `${creatorName} resubmitted ${previousSubmission.deliverableType} (v${newVersionNumber}) after rework for "${campaignTitle}".`;
+    await query(
+      `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+       VALUES ($1, $2, 'deliverable_resubmitted', $3, '/collaborations', $4, NOW())`,
+      [connection.brandId, connection.creatorId, notifText, now]
+    );
 
     // Notify Admin
-    const admins = await Profile.find({ role: "admin" }).select("_id").lean();
-    for (const admin of admins) {
-      await Notification.create({
-        recipientId: admin._id,
-        senderId: connection.creatorId,
-        type: "deliverable_resubmitted",
-        text: `Creator ${creatorName} resubmitted ${previousSubmission.deliverableType} (v${newVersionNumber}) after rework for "${campaignTitle}".`,
-        createdAt: now,
-      });
+    const admins = await query(`SELECT id FROM profiles WHERE role = 'admin'`);
+    for (const admin of admins.rows) {
+      await query(
+        `INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, created_at, created_at_dt)
+         VALUES ($1, $2, 'deliverable_resubmitted', $3, '/admin/tasks', $4, NOW())`,
+        [admin.id, connection.creatorId, notifText, now]
+      );
     }
 
-    // Post resubmission status message in conversation chat
+    // Post to chat
     try {
-      const convFilter = {
-        creatorId: connection.creatorId,
-        brandId: connection.brandId,
-      };
-      if (connection.campaignId) convFilter.campaignId = connection.campaignId;
-      const conversation = await Conversation.findOne(convFilter);
-      if (conversation) {
-        await Message.create({
-          conversationId: conversation._id,
-          senderId: connection.creatorId,
-          text: `[Deliverable Resubmitted] ${creatorName} resubmitted ${previousSubmission.deliverableType} (v${newVersionNumber}) after rework. Status: RESUBMITTED.`,
-          messageType: "deliverable_submission",
-          metadata: {
-            submissionId: newSubmission._id,
-            parentSubmissionId: previousSubmission._id,
-            deliverableType: previousSubmission.deliverableType,
-            contentUrl,
-            caption: caption || "",
-            status: "RESUBMITTED",
-            version: newVersionNumber,
-            reworkCount,
-            resubmittedAt: now,
-          },
-          read: false,
-        });
+      const convRes = await query(
+        `SELECT id FROM conversations 
+         WHERE creator_id = $1 AND brand_id = $2 
+           AND (($3::uuid IS NULL AND campaign_id IS NULL) OR campaign_id = $3::uuid)
+         LIMIT 1`,
+        [connection.creatorId, connection.brandId, connection.campaignId || null]
+      );
+      if (convRes.rows.length > 0) {
+        await query(
+          `INSERT INTO messages (conversation_id, sender_id, text, message_type, metadata, read)
+           VALUES ($1, $2, $3, 'deliverable_submission', $4::jsonb, false)`,
+          [
+            convRes.rows[0].id,
+            connection.creatorId,
+            `[Deliverable Resubmitted] ${creatorName} resubmitted ${previousSubmission.deliverableType} (v${newVersionNumber}) after rework. Status: RESUBMITTED.`,
+            JSON.stringify({
+              submissionId: newSubmission.id,
+              parentSubmissionId: previousSubmission.id,
+              deliverableType: previousSubmission.deliverableType,
+              contentUrl,
+              caption: caption || "",
+              status: "RESUBMITTED",
+              version: newVersionNumber,
+              reworkCount,
+              resubmittedAt: now,
+            }),
+          ]
+        );
       }
     } catch (chatErr) {
       console.warn("Could not post resubmission message to chat:", chatErr);
@@ -942,7 +999,7 @@ export const resubmitDeliverableContent = async (req, res) => {
       message: `Deliverable ${previousSubmission.deliverableType} v${newVersionNumber} resubmitted successfully.`,
       data: {
         submission: newSubmission,
-        deliverablesTracking: connection.deliverablesTracking,
+        deliverablesTracking,
       },
     });
   } catch (error) {
@@ -955,19 +1012,12 @@ export const resubmitDeliverableContent = async (req, res) => {
   }
 };
 
-// 6. Delete Deliverable Submission (Creator can delete their own submitted/rejected submissions; Brand/Admin can delete if needed)
+// 6. Delete Deliverable Submission
 export const deleteDeliverableSubmission = async (req, res) => {
   try {
     const { submissionId } = req.params;
+    const submission = await findSubmission(submissionId);
 
-    if (!mongoose.Types.ObjectId.isValid(submissionId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid submission ID.",
-      });
-    }
-
-    const submission = await Submission.findById(submissionId);
     if (!submission) {
       return res.status(404).json({
         success: false,
@@ -975,7 +1025,7 @@ export const deleteDeliverableSubmission = async (req, res) => {
       });
     }
 
-    const connection = await Connection.findById(submission.connectionId);
+    const connection = await findConnection(submission.connectionId);
     if (!connection) {
       return res.status(404).json({
         success: false,
@@ -983,10 +1033,10 @@ export const deleteDeliverableSubmission = async (req, res) => {
       });
     }
 
-    // Security Check: Creator of submission, Brand or Admin can delete
     if (req.user) {
-      const isCreator = String(submission.creatorId) === String(req.user._id);
-      const isBrand = String(submission.brandId) === String(req.user._id);
+      const userProfileId = String(req.user.id || req.user._id);
+      const isCreator = String(submission.creatorId) === userProfileId;
+      const isBrand = String(submission.brandId) === userProfileId;
       const isAdmin = req.user.role === "admin";
 
       if (!isCreator && !isBrand && !isAdmin) {
@@ -996,7 +1046,6 @@ export const deleteDeliverableSubmission = async (req, res) => {
         });
       }
 
-      // If submission is APPROVED, only admin or brand can delete it to avoid accidental state inconsistency
       if (submission.status === "APPROVED" && isCreator && !isAdmin) {
         return res.status(400).json({
           success: false,
@@ -1005,25 +1054,25 @@ export const deleteDeliverableSubmission = async (req, res) => {
       }
     }
 
-    await Submission.findByIdAndDelete(submissionId);
+    await query(`DELETE FROM submissions WHERE id = $1`, [submission.id]);
 
-    // Recalculate deliverables tracking and approval status on connection
     const now = Date.now();
-    const approvedCountForType = await Submission.countDocuments({
-      connectionId: connection._id,
-      deliverableType: submission.deliverableType,
-      status: "APPROVED",
-    });
-
-    const submittedCountForType = await Submission.countDocuments({
-      connectionId: connection._id,
-      deliverableType: submission.deliverableType,
-      status: { $in: ["SUBMITTED", "RESUBMITTED"] },
-    });
-
-    const deliverableItem = connection.deliverablesTracking?.find(
-      (d) => d.type === submission.deliverableType
+    const appRes = await query(
+      `SELECT COUNT(*)::int as count FROM submissions 
+       WHERE connection_id = $1 AND deliverable_type = $2 AND status = 'APPROVED'`,
+      [connection.id, submission.deliverableType]
     );
+    const approvedCountForType = appRes.rows[0]?.count || 0;
+
+    const subCountRes = await query(
+      `SELECT COUNT(*)::int as count FROM submissions 
+       WHERE connection_id = $1 AND deliverable_type = $2 AND status IN ('SUBMITTED', 'RESUBMITTED')`,
+      [connection.id, submission.deliverableType]
+    );
+    const submittedCountForType = subCountRes.rows[0]?.count || 0;
+
+    let deliverablesTracking = connection.deliverablesTracking || [];
+    const deliverableItem = deliverablesTracking.find((d) => d.type === submission.deliverableType);
 
     if (deliverableItem) {
       deliverableItem.completedQuantity = approvedCountForType;
@@ -1039,30 +1088,48 @@ export const deleteDeliverableSubmission = async (req, res) => {
       deliverableItem.updatedAt = now;
     }
 
-    // Recalculate overall completion
     const allApproved =
-      connection.deliverablesTracking &&
-      connection.deliverablesTracking.length > 0 &&
-      connection.deliverablesTracking.every(
+      deliverablesTracking.length > 0 &&
+      deliverablesTracking.every(
         (deliv) => (deliv.completedQuantity || 0) >= (deliv.requiredQuantity || 1)
       );
 
-    connection.allDeliverablesCompleted = allApproved;
+    let approvalCompletedAt = connection.approvalCompletedAt;
+    let paymentReleaseEligibleAt = connection.paymentReleaseEligibleAt;
+    let paymentReleaseStatus = connection.paymentReleaseStatus;
+
     if (!allApproved) {
-      connection.approvalCompletedAt = null;
-      connection.paymentReleaseEligibleAt = null;
-      connection.paymentReleaseStatus = "NOT_STARTED";
+      approvalCompletedAt = null;
+      paymentReleaseEligibleAt = null;
+      paymentReleaseStatus = "NOT_STARTED";
     }
-    connection.updatedAt = now;
-    await connection.save();
+
+    await query(
+      `UPDATE connections
+       SET deliverables_tracking = $1::jsonb,
+           all_deliverables_completed = $2,
+           approval_completed_at = $3,
+           payment_release_eligible_at = $4,
+           payment_release_status = $5,
+           updated_at = NOW()
+       WHERE id = $6`,
+      [
+        JSON.stringify(deliverablesTracking),
+        allApproved,
+        approvalCompletedAt,
+        paymentReleaseEligibleAt,
+        paymentReleaseStatus,
+        connection.id,
+      ]
+    );
 
     res.status(200).json({
       success: true,
       message: "Submission deleted successfully.",
       data: {
         deletedSubmissionId: submissionId,
-        deliverablesTracking: connection.deliverablesTracking,
-        allDeliverablesCompleted: connection.allDeliverablesCompleted,
+        deliverablesTracking,
+        allDeliverablesCompleted: allApproved,
       },
     });
   } catch (error) {
@@ -1074,5 +1141,3 @@ export const deleteDeliverableSubmission = async (req, res) => {
     });
   }
 };
-
-

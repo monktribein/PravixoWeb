@@ -1,13 +1,16 @@
-import mongoose from "mongoose";
-import Profile from "../models/Profile.js";
-import Referral from "../models/Referral.js";
-import ReferralReward from "../models/ReferralReward.js";
-import ReferralRelationship from "../models/ReferralRelationship.js";
-import WalletTransaction from "../models/WalletTransaction.js";
-import Connection from "../models/Connection.js";
-import Campaign from "../models/Campaign.js";
+import { query } from "../config/postgres.js";
 import { getActiveReferralSettings } from "../services/referralService.js";
 import { getUniqueReferralCode, generateTypedReferralCode } from "../utils/referralCode.js";
+
+// Helper: resolve profile UUID
+const resolveProfile = async (idOrUserId) => {
+  if (!idOrUserId) return null;
+  const res = await query(
+    `SELECT * FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+    [idOrUserId]
+  );
+  return res.rows[0] || null;
+};
 
 /**
  * GET /api/referrals/my-referral
@@ -20,28 +23,28 @@ export const getMyReferralDetails = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
-    let profile = await Profile.findById(creatorId).select("referralCode referralCount fullName email role");
+    const profile = await resolveProfile(creatorId);
     if (!profile) {
       return res.status(404).json({ success: false, message: "Creator profile not found." });
     }
 
-    // Auto-generate referral code for existing creators if they don't have one yet
-    if (!profile.referralCode && profile.role === "creator") {
-      const newCode = await getUniqueReferralCode();
-      profile.referralCode = newCode;
-      await profile.save();
+    let code = profile.referral_code;
+    // Auto-generate referral code for creators if they don't have one yet
+    if (!code && profile.role === "creator") {
+      code = await getUniqueReferralCode();
+      await query(`UPDATE profiles SET referral_code = $1 WHERE id = $2`, [code, profile.id]);
     }
 
     const settings = await getActiveReferralSettings();
     const origin = req.headers.origin || "https://previxo.com";
-    const referralLink = `${origin}/register?ref=${profile.referralCode || ""}`;
+    const referralLink = `${origin}/register?ref=${code || ""}`;
 
     return res.status(200).json({
       success: true,
       data: {
-        referralCode: profile.referralCode || "",
+        referralCode: code || "",
         referralLink,
-        referralCount: profile.referralCount || 0,
+        referralCount: Number(profile.referral_count || 0),
         rewardAmount: settings.rewardAmount,
         currency: settings.currency,
         qualificationTrigger: settings.qualificationTrigger,
@@ -66,23 +69,32 @@ export const getMyReferralStats = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
-    const [totalReferrals, pendingReferrals, qualifiedReferrals, creditedRewards] = await Promise.all([
-      Referral.countDocuments({ referrerCreatorId: creatorId }),
-      Referral.countDocuments({
-        referrerCreatorId: creatorId,
-        status: { $in: ["pending", "registered", "reward_pending"] },
-      }),
-      Referral.countDocuments({
-        referrerCreatorId: creatorId,
-        status: { $in: ["qualified", "reward_credited"] },
-      }),
-      ReferralReward.find({
-        referrerCreatorId: creatorId,
-        status: "credited",
-      }),
+    const profile = await resolveProfile(creatorId);
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Profile not found." });
+    }
+
+    const [totalRefRes, pendingRefRes, qualifiedRefRes, rewardsRes] = await Promise.all([
+      query(`SELECT COUNT(*) as c FROM referrals WHERE referrer_creator_id = $1`, [profile.id]),
+      query(
+        `SELECT COUNT(*) as c FROM referrals WHERE referrer_creator_id = $1 AND status IN ('pending', 'registered', 'reward_pending')`,
+        [profile.id]
+      ),
+      query(
+        `SELECT COUNT(*) as c FROM referrals WHERE referrer_creator_id = $1 AND status IN ('qualified', 'reward_credited')`,
+        [profile.id]
+      ),
+      query(
+        `SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as cnt FROM referral_rewards WHERE recipient_profile_id = $1 AND status = 'credited'`,
+        [profile.id]
+      ),
     ]);
 
-    const totalRewardsEarned = creditedRewards.reduce((sum, r) => sum + (r.rewardAmount || 0), 0);
+    const totalReferrals = parseInt(totalRefRes.rows[0]?.c || "0", 10);
+    const pendingReferrals = parseInt(pendingRefRes.rows[0]?.c || "0", 10);
+    const qualifiedReferrals = parseInt(qualifiedRefRes.rows[0]?.c || "0", 10);
+    const totalRewardsEarned = Number(rewardsRes.rows[0]?.total || 0);
+    const rewardCount = parseInt(rewardsRes.rows[0]?.cnt || "0", 10);
 
     return res.status(200).json({
       success: true,
@@ -91,7 +103,7 @@ export const getMyReferralStats = async (req, res) => {
         pendingReferrals,
         qualifiedReferrals,
         totalRewardsEarned,
-        rewardCount: creditedRewards.length,
+        rewardCount,
       },
     });
   } catch (error) {
@@ -103,7 +115,6 @@ export const getMyReferralStats = async (req, res) => {
 /**
  * GET /api/referrals/list
  * Returns paginated list of creators referred by the authenticated creator.
- * Masks sensitive details (email / phone) for privacy.
  */
 export const getMyReferralsList = async (req, res) => {
   try {
@@ -112,195 +123,151 @@ export const getMyReferralsList = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
+    const profile = await resolveProfile(creatorId);
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Profile not found." });
+    }
+
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const search = req.query.search ? req.query.search.trim().toLowerCase() : "";
 
-    const targetObjectId = mongoose.Types.ObjectId.isValid(creatorId)
-      ? new mongoose.Types.ObjectId(creatorId)
-      : null;
-
-    const userProfile = (targetObjectId ? await Profile.findById(targetObjectId).lean() : null) ||
-      (await Profile.findOne({ $or: [{ _id: creatorId }, { userId: creatorId }] }).lean());
-
-    const userCodes = [];
-    if (userProfile?.referral_code) userCodes.push(userProfile.referral_code);
-    if (userProfile?.referralCode && !userCodes.includes(userProfile.referralCode)) {
-      userCodes.push(userProfile.referralCode);
-    }
-
-    const matchIds = [creatorId];
-    if (targetObjectId) matchIds.push(targetObjectId);
-    if (userProfile?._id && !matchIds.includes(userProfile._id)) matchIds.push(userProfile._id);
+    const userCodes = [profile.referral_code].filter(Boolean);
 
     // 1. Fetch ReferralRelationships
-    const rels = await ReferralRelationship.find({
-      $or: [
-        { referrer_id: { $in: matchIds } },
-        ...(userCodes.length > 0 ? [{ referral_code_used: { $in: userCodes } }] : []),
-      ],
-    })
-      .populate("referred_id", "fullName email handle avatarUrl role createdAt verificationStatus")
-      .lean();
+    const relsRes = await query(
+      `
+      SELECT
+        rr.*,
+        p.id as ref_id,
+        p.full_name,
+        p.email,
+        p.handle,
+        p.avatar_url,
+        p.role as user_role,
+        p.created_at as user_created_at,
+        p.verification_status
+      FROM referral_relationships rr
+      LEFT JOIN profiles p ON p.id = rr.referred_id
+      WHERE rr.referrer_id = $1 OR rr.referral_code_used = ANY($2::text[])
+      ORDER BY rr.created_at DESC
+      `,
+      [profile.id, userCodes.length > 0 ? userCodes : ["__NO_CODE__"]]
+    );
 
-    // 2. Fetch Profiles referred directly
-    const referredProfiles = await Profile.find({
-      $or: [
-        { referred_by_user_id: { $in: matchIds } },
-        { referredBy: { $in: matchIds } },
-      ],
-    })
-      .select("fullName email handle avatarUrl role createdAt verificationStatus referredBy referred_by_user_id referralCode referral_code")
-      .lean();
+    // 2. Fetch directly referred profiles
+    const profsRes = await query(
+      `
+      SELECT id, full_name, email, handle, avatar_url, role, created_at, verification_status, referral_code
+      FROM profiles
+      WHERE referred_by_user_id = $1
+      ORDER BY created_at DESC
+      `,
+      [profile.id]
+    );
 
-    // 3. Fetch legacy Referral records
-    const legacyReferrals = await Referral.find({
-      $or: [
-        { referrerCreatorId: { $in: matchIds } },
-        ...(userCodes.length > 0 ? [{ referralCode: { $in: userCodes } }] : []),
-      ],
-    })
-      .populate("referredCreatorId", "fullName email handle avatarUrl role createdAt verificationStatus")
-      .lean();
-
-    // 4. Merge all referred users by referred profile ID
     const referredMap = new Map();
 
-    // Process ReferralRelationships
-    for (const rel of rels) {
-      const refUser = rel.referred_id;
-      if (!refUser || !refUser._id) continue;
-      const uid = refUser._id.toString();
+    for (const rel of relsRes.rows) {
+      if (!rel.referred_id) continue;
+      const uid = String(rel.referred_id);
       referredMap.set(uid, {
-        _id: refUser._id,
-        relationshipId: rel._id,
-        fullName: refUser.fullName || "Creator",
-        handle: refUser.handle ? `@${refUser.handle.replace(/^@/, "")}` : "",
-        email: refUser.email || "",
-        avatarUrl: refUser.avatarUrl || "",
-        role: refUser.role || rel.referred_type || "creator",
-        verificationStatus: refUser.verificationStatus || "pending",
+        _id: rel.referred_id,
+        id: rel.referred_id,
+        relationshipId: rel.id,
+        fullName: rel.full_name || "Creator",
+        handle: rel.handle ? `@${rel.handle.replace(/^@/, "")}` : "",
+        email: rel.email || "",
+        avatarUrl: rel.avatar_url || "",
+        role: rel.user_role || rel.referred_type || "creator",
+        verificationStatus: rel.verification_status || "pending",
         referralCode: rel.referral_code_used || userCodes[0] || "",
         status: rel.status || "active",
-        commissionPercent: rel.commission_percent ?? 5.0,
-        date: rel.created_at || rel.createdAt || refUser.createdAt,
+        commissionPercent: Number(rel.commission_percent || 5.0),
+        date: rel.created_at || rel.user_created_at,
       });
     }
 
-    // Process directly referred Profiles
-    for (const p of referredProfiles) {
-      const uid = p._id.toString();
+    for (const p of profsRes.rows) {
+      const uid = String(p.id);
       if (!referredMap.has(uid)) {
         referredMap.set(uid, {
-          _id: p._id,
+          _id: p.id,
+          id: p.id,
           relationshipId: null,
-          fullName: p.fullName || "Creator",
+          fullName: p.full_name || "Creator",
           handle: p.handle ? `@${p.handle.replace(/^@/, "")}` : "",
           email: p.email || "",
-          avatarUrl: p.avatarUrl || "",
+          avatarUrl: p.avatar_url || "",
           role: p.role || "creator",
-          verificationStatus: p.verificationStatus || "pending",
+          verificationStatus: p.verification_status || "pending",
           referralCode: userCodes[0] || "",
           status: "active",
           commissionPercent: 5.0,
-          date: p.createdAt || new Date(),
-        });
-      }
-    }
-
-    // Process legacy Referrals
-    for (const lr of legacyReferrals) {
-      const refUser = lr.referredCreatorId;
-      if (!refUser || !refUser._id) continue;
-      const uid = refUser._id.toString();
-      if (!referredMap.has(uid)) {
-        referredMap.set(uid, {
-          _id: refUser._id,
-          relationshipId: null,
-          fullName: refUser.fullName || "Creator",
-          handle: refUser.handle ? `@${refUser.handle.replace(/^@/, "")}` : "",
-          email: refUser.email || "",
-          avatarUrl: refUser.avatarUrl || "",
-          role: refUser.role || "creator",
-          verificationStatus: refUser.verificationStatus || "pending",
-          referralCode: lr.referralCode || userCodes[0] || "",
-          status: lr.status === "reward_credited" || lr.status === "qualified" ? "active" : lr.status,
-          commissionPercent: 5.0,
-          date: lr.createdAt || refUser.createdAt,
+          date: p.created_at || new Date(),
         });
       }
     }
 
     const allReferred = Array.from(referredMap.values());
+    const referredUuids = allReferred.map((r) => r.id);
 
-    // 5. Aggregate earnings per referred user
-    // a) Total project payouts completed by referred user
-    // b) Total 5% referral commission earned by logged-in referrer from this user
-    const referredIds = allReferred.map((r) => r._id);
-    const relIds = allReferred.map((r) => r.relationshipId).filter(Boolean);
+    // Earnings per referred user
+    let userPayoutMap = new Map();
+    let commissionByReferredUserMap = new Map();
 
-    // Referred users' completed payouts
-    const userPayouts = await WalletTransaction.aggregate([
-      {
-        $match: {
-          creatorId: { $in: referredIds },
-          transaction_type: "project_payout",
-          status: "COMPLETED",
-        },
-      },
-      {
-        $group: {
-          _id: "$creatorId",
-          totalEarned: { $sum: "$amount" },
-          projectCount: { $sum: 1 },
-        },
-      },
-    ]);
-    const userPayoutMap = new Map();
-    userPayouts.forEach((up) => {
-      userPayoutMap.set(up._id.toString(), {
-        totalEarned: Number(up.totalEarned.toFixed(2)),
-        projectCount: up.projectCount,
+    if (referredUuids.length > 0) {
+      const payoutsRes = await query(
+        `
+        SELECT creator_id, SUM(amount) as total_earned, COUNT(*) as project_count
+        FROM wallet_transactions
+        WHERE creator_id = ANY($1::uuid[]) AND transaction_type = 'project_payout' AND status = 'COMPLETED'
+        GROUP BY creator_id
+        `,
+        [referredUuids]
+      );
+      payoutsRes.rows.forEach((up) => {
+        userPayoutMap.set(String(up.creator_id), {
+          totalEarned: Number(Number(up.total_earned || 0).toFixed(2)),
+          projectCount: parseInt(up.project_count || "0", 10),
+        });
       });
-    });
 
-    // Commission transactions earned by referrer
-    const commTxs = await WalletTransaction.find({
-      creatorId: { $in: matchIds },
-      transaction_type: "referral_commission",
-      status: "COMPLETED",
-    }).lean();
-
-    const commissionByReferredUserMap = new Map();
-    commTxs.forEach((tx) => {
-      let linkedReferredUserId = null;
-      if (tx.related_referral_id) {
-        const found = allReferred.find(
-          (r) => r.relationshipId && r.relationshipId.toString() === tx.related_referral_id.toString()
-        );
-        if (found) linkedReferredUserId = found._id.toString();
-      }
-
-      // Check description text fallback (e.g. "...payout of Pihu")
-      if (!linkedReferredUserId && tx.description) {
-        for (const ref of allReferred) {
-          if (tx.description.toLowerCase().includes(ref.fullName.toLowerCase())) {
-            linkedReferredUserId = ref._id.toString();
-            break;
+      const commsRes = await query(
+        `
+        SELECT *
+        FROM wallet_transactions
+        WHERE creator_id = $1 AND transaction_type = 'referral_commission' AND status = 'COMPLETED'
+        `,
+        [profile.id]
+      );
+      commsRes.rows.forEach((tx) => {
+        let linkedReferredUserId = null;
+        if (tx.related_referral_id) {
+          const found = allReferred.find(
+            (r) => r.relationshipId && String(r.relationshipId) === String(tx.related_referral_id)
+          );
+          if (found) linkedReferredUserId = String(found.id);
+        }
+        if (!linkedReferredUserId && tx.description) {
+          for (const ref of allReferred) {
+            if (tx.description.toLowerCase().includes(ref.fullName.toLowerCase())) {
+              linkedReferredUserId = String(ref.id);
+              break;
+            }
           }
         }
-      }
+        if (linkedReferredUserId) {
+          const curr = commissionByReferredUserMap.get(linkedReferredUserId) || 0;
+          commissionByReferredUserMap.set(linkedReferredUserId, curr + Number(tx.amount || 0));
+        }
+      });
+    }
 
-      if (linkedReferredUserId) {
-        const curr = commissionByReferredUserMap.get(linkedReferredUserId) || 0;
-        commissionByReferredUserMap.set(linkedReferredUserId, curr + tx.amount);
-      }
-    });
-
-    // Attach aggregated stats to each referred creator
     let enrichedList = allReferred.map((ref) => {
-      const payoutStats = userPayoutMap.get(ref._id.toString()) || { totalEarned: 0, projectCount: 0 };
-      const commEarned = Number((commissionByReferredUserMap.get(ref._id.toString()) || 0).toFixed(2));
+      const uid = String(ref.id);
+      const payoutStats = userPayoutMap.get(uid) || { totalEarned: 0, projectCount: 0 };
+      const commEarned = Number((commissionByReferredUserMap.get(uid) || 0).toFixed(2));
 
       return {
         ...ref,
@@ -310,23 +277,21 @@ export const getMyReferralsList = async (req, res) => {
       };
     });
 
-    // Apply search filter if provided
     if (search) {
-      enrichedList = enrichedList.filter((r) =>
-        r.fullName.toLowerCase().includes(search) ||
-        r.handle.toLowerCase().includes(search) ||
-        r.email.toLowerCase().includes(search) ||
-        r.referralCode.toLowerCase().includes(search)
+      enrichedList = enrichedList.filter(
+        (r) =>
+          r.fullName.toLowerCase().includes(search) ||
+          r.handle.toLowerCase().includes(search) ||
+          r.email.toLowerCase().includes(search) ||
+          r.referralCode.toLowerCase().includes(search)
       );
     }
 
-    // Sort by date descending
     enrichedList.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const total = enrichedList.length;
     const skip = (page - 1) * limit;
     const paginated = enrichedList.slice(skip, skip + limit);
-
     const totalCommissionEarned = enrichedList.reduce((sum, r) => sum + r.commissionEarned, 0);
 
     return res.status(200).json({
@@ -361,12 +326,16 @@ export const validateReferralCode = async (req, res) => {
     }
 
     const normalizedCode = code.trim().toUpperCase();
-    const referrer = await Profile.findOne({ referralCode: normalizedCode }).select("fullName role verificationStatus");
+    const refRes = await query(
+      `SELECT id, full_name, role, verification_status FROM profiles WHERE UPPER(referral_code) = $1 LIMIT 1`,
+      [normalizedCode]
+    );
 
-    if (!referrer) {
+    if (refRes.rows.length === 0) {
       return res.status(404).json({ success: false, valid: false, message: "Invalid referral code." });
     }
 
+    const referrer = refRes.rows[0];
     const settings = await getActiveReferralSettings();
     if (!settings.isEnabled) {
       return res.status(400).json({
@@ -376,8 +345,7 @@ export const validateReferralCode = async (req, res) => {
       });
     }
 
-    // Mask referrer name
-    const parts = (referrer.fullName || "Creator").split(" ");
+    const parts = (referrer.full_name || "Creator").split(" ");
     const referrerDisplayName = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
 
     return res.status(200).json({
@@ -397,39 +365,30 @@ export const validateReferralCode = async (req, res) => {
 };
 
 /**
- * Helper to check if referredUser was already referred by referringUser
- * or if there exists a chain where referredUser already referred referringUser (preventing circular loops).
+ * Helper to prevent circular referral chains
  */
 const hasCircularReferralChain = async (potentialReferrerId, redeemingUserId) => {
   let currentId = potentialReferrerId;
   const visited = new Set();
 
   while (currentId) {
-    if (currentId.toString() === redeemingUserId.toString()) {
-      return true; // Cycle detected: potentialReferrer traces back to redeemingUser
+    if (String(currentId) === String(redeemingUserId)) {
+      return true;
     }
-    if (visited.has(currentId.toString())) {
+    if (visited.has(String(currentId))) {
       break;
     }
-    visited.add(currentId.toString());
+    visited.add(String(currentId));
 
-    // Check relationship table or user referred_by_user_id
-    const referrerProfile = await Profile.findById(currentId).select(
-      "referred_by_user_id referredBy"
-    );
-    if (!referrerProfile) break;
-
-    currentId = referrerProfile.referred_by_user_id || referrerProfile.referredBy;
+    const res = await query(`SELECT referred_by_user_id FROM profiles WHERE id = $1`, [currentId]);
+    currentId = res.rows[0]?.referred_by_user_id || null;
   }
 
   return false;
 };
 
 /**
- * GET /api/v1/referrals/my-code (or /api/referrals/my-code)
- * Generates (if not exists) and returns the logged-in user's unique referral code.
- * Format: 2-letter type prefix (BR for brand, CR for creator) + 5 random alphanumeric chars.
- * Response: { "referral_code": "BR-K9X2Q", "referral_link": "https://platform.com/join?ref=BR-K9X2Q" }
+ * GET /api/v1/referrals/my-code
  */
 export const getMyReferralCode = async (req, res) => {
   try {
@@ -438,28 +397,21 @@ export const getMyReferralCode = async (req, res) => {
       return res.status(401).json({ error: "UNAUTHORIZED" });
     }
 
-    const profile = await Profile.findById(userId);
+    const profile = await resolveProfile(userId);
     if (!profile) {
       return res.status(404).json({ error: "USER_NOT_FOUND" });
     }
 
-    let code = profile.referral_code || profile.referralCode;
-
-    // Check if existing code already matches the 2-letter prefix + 5 chars pattern
+    let code = profile.referral_code;
     const rolePrefix = profile.role === "brand" ? "BR" : "CR";
     const pattern = new RegExp(`^${rolePrefix}-[A-Z0-9]{5}$`);
 
     if (!code || !pattern.test(code)) {
       code = await generateTypedReferralCode(profile.role);
-      profile.referral_code = code;
-      profile.referralCode = code; // keep both in sync
-      await profile.save();
+      await query(`UPDATE profiles SET referral_code = $1 WHERE id = $2`, [code, profile.id]);
     }
 
-    const origin =
-      process.env.FRONTEND_URL ||
-      req.headers.origin ||
-      "https://platform.com";
+    const origin = process.env.FRONTEND_URL || req.headers.origin || "https://platform.com";
     const cleanOrigin = origin.replace(/\/+$/, "");
     const referral_link = `${cleanOrigin}/join?ref=${code}`;
 
@@ -480,9 +432,7 @@ export const getMyReferralCode = async (req, res) => {
 };
 
 /**
- * POST /api/v1/referrals/redeem (or /api/referrals/redeem)
- * Body: { "referral_code": "BR-K9X2Q" }
- * Validates the code and creates a referral_relationships row linking the redeeming user to the code owner.
+ * POST /api/v1/referrals/redeem
  */
 export const redeemReferralCode = async (req, res) => {
   try {
@@ -493,106 +443,73 @@ export const redeemReferralCode = async (req, res) => {
 
     const { referral_code } = req.body;
     if (!referral_code || typeof referral_code !== "string") {
-      return res
-        .status(400)
-        .json({ error: "INVALID_REFERRAL", reason: "missing_code" });
+      return res.status(400).json({ error: "INVALID_REFERRAL", reason: "missing_code" });
     }
 
     const normalizedCode = referral_code.trim().toUpperCase();
-
-    // 1. Fetch the redeeming user
-    const redeemingUser = await Profile.findById(redeemingUserId);
+    const redeemingUser = await resolveProfile(redeemingUserId);
     if (!redeemingUser) {
       return res.status(404).json({ error: "USER_NOT_FOUND" });
     }
 
-    // Rule 1: A user can only be referred once
-    if (redeemingUser.referred_by_user_id || redeemingUser.referredBy) {
+    if (redeemingUser.referred_by_user_id) {
       return res.status(409).json({ error: "USER_ALREADY_REFERRED" });
     }
 
-    // 2. Find code owner (referrer)
-    const referrer = await Profile.findOne({
-      $or: [{ referral_code: normalizedCode }, { referralCode: normalizedCode }],
-    });
-
-    if (!referrer) {
-      return res
-        .status(400)
-        .json({ error: "INVALID_REFERRAL", reason: "invalid_code" });
-    }
-
-    // Rule 2: Block self-referral
-    if (referrer._id.toString() === redeemingUser._id.toString()) {
-      return res
-        .status(400)
-        .json({ error: "INVALID_REFERRAL", reason: "self_referral" });
-    }
-
-    // Rule 3: Block circular referrals (if A referred B, B cannot refer A back)
-    const isCircular = await hasCircularReferralChain(
-      referrer._id,
-      redeemingUser._id
+    const refRes = await query(
+      `SELECT * FROM profiles WHERE UPPER(referral_code) = $1 LIMIT 1`,
+      [normalizedCode]
     );
-    if (isCircular) {
-      return res
-        .status(400)
-        .json({ error: "INVALID_REFERRAL", reason: "circular_referral" });
+    if (refRes.rows.length === 0) {
+      return res.status(400).json({ error: "INVALID_REFERRAL", reason: "invalid_code" });
     }
 
-    // Map referrer_type and referred_type
+    const referrer = refRes.rows[0];
+    if (String(referrer.id) === String(redeemingUser.id)) {
+      return res.status(400).json({ error: "INVALID_REFERRAL", reason: "self_referral" });
+    }
+
+    const isCircular = await hasCircularReferralChain(referrer.id, redeemingUser.id);
+    if (isCircular) {
+      return res.status(400).json({ error: "INVALID_REFERRAL", reason: "circular_referral" });
+    }
+
     const referrerType = referrer.role === "brand" ? "brand" : "creator";
     const referredType = redeemingUser.role === "brand" ? "brand" : "creator";
-    const settingKey = `${referrerType}_to_${referredType}`;
 
-    // Get commission percent from referral_settings
     let commissionPercent = 5.0;
     const activeSettings = await getActiveReferralSettings();
-    if (
-      activeSettings &&
-      typeof activeSettings.commission_percent === "number"
-    ) {
+    if (activeSettings && typeof activeSettings.commission_percent === "number") {
       commissionPercent = activeSettings.commission_percent;
     }
 
-    // Create the referral_relationships record
-    const referralRelationship = await ReferralRelationship.create({
-      referrer_id: referrer._id,
-      referrer_type: referrerType,
-      referred_id: redeemingUser._id,
-      referred_type: referredType,
-      referral_code_used: normalizedCode,
-      status: "active",
-      commission_percent: commissionPercent,
-      expires_at: null,
-    });
+    const insertRelRes = await query(
+      `
+      INSERT INTO referral_relationships (
+        referrer_id, referrer_type, referred_id, referred_type,
+        referral_code_used, status, commission_percent
+      ) VALUES ($1, $2, $3, $4, $5, 'active', $6)
+      RETURNING *;
+      `,
+      [referrer.id, referrerType, redeemingUser.id, referredType, normalizedCode, commissionPercent]
+    );
 
-    // Update redeeming user
-    const now = new Date();
-    redeemingUser.referred_by_user_id = referrer._id;
-    redeemingUser.referredBy = referrer._id;
-    redeemingUser.referred_at = now;
-    await redeemingUser.save();
+    await query(`UPDATE profiles SET referred_by_user_id = $1 WHERE id = $2`, [referrer.id, redeemingUser.id]);
+    await query(`UPDATE profiles SET referral_count = COALESCE(referral_count, 0) + 1 WHERE id = $1`, [referrer.id]);
 
-    // Increment referrer's count
-    await Profile.findByIdAndUpdate(referrer._id, {
-      $inc: { referralCount: 1 },
-    });
-
-    // Success response format specified by user
     return res.status(200).json({
       success: true,
-      referral_relationship_id: referralRelationship._id,
+      referral_relationship_id: insertRelRes.rows[0].id,
       referrer: {
-        id: referrer._id,
-        name: referrer.fullName,
+        id: referrer.id,
+        name: referrer.full_name,
         type: referrerType,
       },
       commission_percent: commissionPercent,
     });
   } catch (error) {
     console.error("redeemReferralCode error:", error);
-    if (error.code === 11000) {
+    if (error.code === "23505") {
       return res.status(409).json({ error: "USER_ALREADY_REFERRED" });
     }
     return res.status(500).json({ error: "INTERNAL_SERVER_ERROR" });
@@ -600,15 +517,7 @@ export const redeemReferralCode = async (req, res) => {
 };
 
 /**
- * GET /api/v1/referrals/earnings?page=1&limit=20
- * Returns for the logged-in user:
- * {
- *   "total_earned": 12500.00,
- *   "active_referrals_count": 8,
- *   "earnings": [
- *     { "referred_user_name": "Jane Creator", "project_id": "uuid", "commission_amount": 500.00, "date": "ISO8601" }
- *   ]
- * }
+ * GET /api/v1/referrals/earnings
  */
 export const getReferralEarnings = async (req, res) => {
   try {
@@ -617,102 +526,53 @@ export const getReferralEarnings = async (req, res) => {
       return res.status(401).json({ error: "UNAUTHORIZED" });
     }
 
+    const profile = await resolveProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    const targetObjectId = mongoose.Types.ObjectId.isValid(userId)
-      ? new mongoose.Types.ObjectId(userId)
-      : null;
-
-    const userProfile = (targetObjectId ? await Profile.findById(targetObjectId).lean() : null) ||
-      (await Profile.findOne({ $or: [{ _id: userId }, { userId: userId }] }).lean());
-
-    const userCodes = [];
-    if (userProfile?.referral_code) userCodes.push(userProfile.referral_code);
-    if (userProfile?.referralCode && !userCodes.includes(userProfile.referralCode)) {
-      userCodes.push(userProfile.referralCode);
-    }
-    if (userProfile?.userId && !userCodes.includes(userProfile.userId)) {
-      userCodes.push(userProfile.userId);
-    }
-
-    const validObjectIds = [];
-    if (targetObjectId) validObjectIds.push(targetObjectId);
-    if (userProfile?._id) {
-      const pId = mongoose.Types.ObjectId.isValid(userProfile._id) ? new mongoose.Types.ObjectId(userProfile._id) : null;
-      if (pId && !validObjectIds.some((id) => id.equals(pId))) validObjectIds.push(pId);
-    }
-
-    // 1. Calculate active referrals count where current user is referrer (by ID or code)
-    const relCount = await ReferralRelationship.countDocuments({
-      $or: [
-        ...(validObjectIds.length > 0 ? [{ referrer_id: { $in: validObjectIds } }] : []),
-        ...(userCodes.length > 0 ? [{ referral_code_used: { $in: userCodes } }] : []),
-      ],
-      status: "active",
-    });
-
-    const profileRefCount = validObjectIds.length > 0
-      ? await Profile.countDocuments({
-          $or: [
-            { referred_by_user_id: { $in: validObjectIds } },
-            { referredBy: { $in: validObjectIds } },
-          ],
-        })
-      : 0;
-
-    const active_referrals_count = Math.max(relCount, profileRefCount);
-
-    // 2. Aggregate total commission earned by current user
-    const totalEarnedAgg = await WalletTransaction.aggregate([
-      {
-        $match: {
-          creatorId: { $in: validObjectIds },
-          transaction_type: "referral_commission",
-          status: "COMPLETED",
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$amount" },
-        },
-      },
+    const [activeRelRes, totalEarnedRes, txsRes] = await Promise.all([
+      query(
+        `SELECT COUNT(*) as c FROM referral_relationships WHERE referrer_id = $1 AND status = 'active'`,
+        [profile.id]
+      ),
+      query(
+        `
+        SELECT COALESCE(SUM(amount), 0) as total
+        FROM wallet_transactions
+        WHERE creator_id = $1 AND transaction_type = 'referral_commission' AND status = 'COMPLETED'
+        `,
+        [profile.id]
+      ),
+      query(
+        `
+        SELECT
+          wt.*,
+          COALESCE(p.full_name, p.handle, 'Referred User') as referred_user_name
+        FROM wallet_transactions wt
+        LEFT JOIN referral_relationships rr ON rr.id = wt.related_referral_id
+        LEFT JOIN profiles p ON p.id = rr.referred_id
+        WHERE wt.creator_id = $1 AND wt.transaction_type = 'referral_commission' AND wt.status = 'COMPLETED'
+        ORDER BY wt.created_at DESC
+        LIMIT $2 OFFSET $3
+        `,
+        [profile.id, limit, offset]
+      ),
     ]);
-    const total_earned = totalEarnedAgg.length > 0 ? Number(totalEarnedAgg[0].total.toFixed(2)) : 0.0;
 
-    // 3. Paginated list of commission transactions
-    const commissionTxs = await WalletTransaction.find({
-      creatorId: { $in: validObjectIds },
-      transaction_type: "referral_commission",
-      status: "COMPLETED",
-    })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate({
-        path: "related_referral_id",
-        populate: {
-          path: "referred_id",
-          select: "fullName handle",
-        },
-      })
-      .lean();
+    const active_referrals_count = parseInt(activeRelRes.rows[0]?.c || "0", 10);
+    const total_earned = Number(Number(totalEarnedRes.rows[0]?.total || 0).toFixed(2));
 
-    const earnings = commissionTxs.map((tx) => {
-      const referralRel = tx.related_referral_id;
-      const referredUser = referralRel?.referred_id;
-      const referred_user_name =
-        referredUser?.fullName || referredUser?.handle || "Referred User";
-
-      return {
-        referred_user_name,
-        project_id: (tx.campaignId || tx.collaborationId || "").toString(),
-        commission_amount: Number(tx.amount.toFixed(2)),
-        date: tx.createdAt ? new Date(tx.createdAt).toISOString() : new Date().toISOString(),
-      };
-    });
+    const earnings = txsRes.rows.map((tx) => ({
+      referred_user_name: tx.referred_user_name,
+      project_id: String(tx.campaign_id || tx.connection_id || ""),
+      commission_amount: Number(Number(tx.amount || 0).toFixed(2)),
+      date: tx.created_at ? new Date(tx.created_at).toISOString() : new Date().toISOString(),
+    }));
 
     const payload = {
       total_earned,
@@ -732,9 +592,7 @@ export const getReferralEarnings = async (req, res) => {
 };
 
 /**
- * GET /api/referrals/analytics?timeframe=6m
- * Returns detailed analytics: total commission, active referrals, breakdown by role,
- * timeframe filtered chart data points (1m, 3m, 6m, 1y, all), and top performing referrals.
+ * GET /api/referrals/analytics
  */
 export const getReferralAnalytics = async (req, res) => {
   try {
@@ -743,31 +601,14 @@ export const getReferralAnalytics = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
-    const timeframe = req.query.timeframe || "6m"; // '1m' | '3m' | '6m' | '1y' | 'all'
-
-    const targetObjectId = mongoose.Types.ObjectId.isValid(userId)
-      ? new mongoose.Types.ObjectId(userId)
-      : null;
-
-    const userProfile = (targetObjectId ? await Profile.findById(targetObjectId).lean() : null) ||
-      (await Profile.findOne({ $or: [{ _id: userId }, { userId: userId }] }).lean());
-
-    const userCodes = [];
-    if (userProfile?.referral_code) userCodes.push(userProfile.referral_code);
-    if (userProfile?.referralCode && !userCodes.includes(userProfile.referralCode)) {
-      userCodes.push(userProfile.referralCode);
+    const profile = await resolveProfile(userId);
+    if (!profile) {
+      return res.status(404).json({ success: false, message: "Profile not found." });
     }
 
-    const validObjectIds = [];
-    if (targetObjectId) validObjectIds.push(targetObjectId);
-    if (userProfile?._id) {
-      const pId = mongoose.Types.ObjectId.isValid(userProfile._id) ? new mongoose.Types.ObjectId(userProfile._id) : null;
-      if (pId && !validObjectIds.some((id) => id.equals(pId))) validObjectIds.push(pId);
-    }
-
-    // Determine timeframe start date
+    const timeframe = req.query.timeframe || "6m";
     const now = new Date();
-    let startDate = new Date(0); // all
+    let startDate = new Date(0);
     if (timeframe === "1m") {
       startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
     } else if (timeframe === "3m") {
@@ -778,149 +619,43 @@ export const getReferralAnalytics = async (req, res) => {
       startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
     }
 
-    // 1. Fetch all referrals by user
-    const [rels, profiles] = await Promise.all([
-      ReferralRelationship.find({
-        $or: [
-          ...(validObjectIds.length > 0 ? [{ referrer_id: { $in: validObjectIds } }] : []),
-          ...(userCodes.length > 0 ? [{ referral_code_used: { $in: userCodes } }] : []),
-        ],
-      })
-        .populate("referred_id", "fullName email handle avatarUrl role createdAt")
-        .lean(),
-      validObjectIds.length > 0
-        ? Profile.find({
-            $or: [
-              { referred_by_user_id: { $in: validObjectIds } },
-              { referredBy: { $in: validObjectIds } },
-            ],
-          })
-            .select("fullName email handle avatarUrl role createdAt")
-            .lean()
-        : [],
+    const [relsRes, commsRes] = await Promise.all([
+      query(
+        `
+        SELECT rr.*, p.full_name, p.handle, p.email, p.avatar_url, p.role as user_role
+        FROM referral_relationships rr
+        LEFT JOIN profiles p ON p.id = rr.referred_id
+        WHERE rr.referrer_id = $1
+        `,
+        [profile.id]
+      ),
+      query(
+        `
+        SELECT *
+        FROM wallet_transactions
+        WHERE creator_id = $1 AND transaction_type = 'referral_commission' AND status = 'COMPLETED'
+        ORDER BY created_at ASC
+        `,
+        [profile.id]
+      ),
     ]);
 
-    const referredMap = new Map();
-    rels.forEach((rel) => {
-      const u = rel.referred_id;
-      if (u && u._id) {
-        referredMap.set(u._id.toString(), {
-          _id: u._id,
-          fullName: u.fullName || "User",
-          handle: u.handle || "",
-          email: u.email || "",
-          avatarUrl: u.avatarUrl || "",
-          role: u.role || rel.referred_type || "creator",
-          createdAt: rel.created_at || rel.createdAt || u.createdAt,
-          relationshipId: rel._id,
-          status: rel.status || "active",
-        });
-      }
-    });
+    const total_earned = commsRes.rows.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
 
-    profiles.forEach((p) => {
-      const uid = p._id.toString();
-      if (!referredMap.has(uid)) {
-        referredMap.set(uid, {
-          _id: p._id,
-          fullName: p.fullName || "User",
-          handle: p.handle || "",
-          email: p.email || "",
-          avatarUrl: p.avatarUrl || "",
-          role: p.role || "creator",
-          createdAt: p.createdAt,
-          relationshipId: null,
-          status: "active",
-        });
-      }
-    });
-
-    const allReferred = Array.from(referredMap.values());
-    const referredIds = allReferred.map((r) => r._id);
-
-    // 2. Fetch completed payouts & commission transactions
-    const [commTxs, referredPayouts] = await Promise.all([
-      WalletTransaction.find({
-        creatorId: { $in: validObjectIds },
-        transaction_type: "referral_commission",
-        status: "COMPLETED",
-      }).sort({ createdAt: 1 }).lean(),
-      WalletTransaction.find({
-        creatorId: { $in: referredIds },
-        transaction_type: "project_payout",
-        status: "COMPLETED",
-      }).lean(),
-    ]);
-
-    // Calculate total earned
-    const total_earned = commTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-
-    // Map commissions and payouts to individual referred users
-    const userCommissionMap = new Map();
-    const userVolumeMap = new Map();
-
-    referredPayouts.forEach((p) => {
-      const uid = p.creatorId.toString();
-      const curr = userVolumeMap.get(uid) || 0;
-      userVolumeMap.set(uid, curr + p.amount);
-    });
-
-    commTxs.forEach((tx) => {
-      let matchedUserId = null;
-      if (tx.related_referral_id) {
-        const found = allReferred.find(
-          (r) => r.relationshipId && r.relationshipId.toString() === tx.related_referral_id.toString()
-        );
-        if (found) matchedUserId = found._id.toString();
-      }
-
-      if (!matchedUserId && tx.description) {
-        for (const ref of allReferred) {
-          if (tx.description.toLowerCase().includes(ref.fullName.toLowerCase())) {
-            matchedUserId = ref._id.toString();
-            break;
-          }
-        }
-      }
-
-      if (matchedUserId) {
-        const curr = userCommissionMap.get(matchedUserId) || 0;
-        userCommissionMap.set(matchedUserId, curr + tx.amount);
-      }
-    });
-
-    // Top performing referrals
-    const performers = allReferred.map((r) => {
-      const uid = r._id.toString();
-      const commEarned = Number((userCommissionMap.get(uid) || 0).toFixed(2));
-      const totalVolume = Number((userVolumeMap.get(uid) || 0).toFixed(2));
-      return {
-        ...r,
-        commissionEarned: commEarned,
-        totalVolume,
-      };
-    });
-
-    performers.sort((a, b) => b.commissionEarned - a.commissionEarned || b.totalVolume - a.totalVolume);
-
-    // 3. Generate Chart Data Points according to timeframe
-    const filteredTxs = commTxs.filter((tx) => {
-      const txDate = new Date(tx.createdAt || Date.now());
+    const filteredTxs = commsRes.rows.filter((tx) => {
+      const txDate = new Date(tx.created_at || Date.now());
       return txDate >= startDate;
     });
 
-    // Group filtered transactions by time buckets (Months or Weeks)
     const chartMap = new Map();
     const isShortTimeframe = timeframe === "1m";
 
     if (isShortTimeframe) {
-      // Group by days
       for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 2)) {
         const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         chartMap.set(label, { label, amount: 0, count: 0 });
       }
     } else {
-      // Group by month
       for (let m = new Date(startDate); m <= now; m.setMonth(m.getMonth() + 1)) {
         const label = m.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
         chartMap.set(label, { label, amount: 0, count: 0 });
@@ -928,29 +663,38 @@ export const getReferralAnalytics = async (req, res) => {
     }
 
     filteredTxs.forEach((tx) => {
-      const d = new Date(tx.createdAt || Date.now());
+      const d = new Date(tx.created_at || Date.now());
       const label = isShortTimeframe
         ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
         : d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 
       const existing = chartMap.get(label) || { label, amount: 0, count: 0 };
-      existing.amount = Number((existing.amount + (tx.amount || 0)).toFixed(2));
+      existing.amount = Number((existing.amount + Number(tx.amount || 0)).toFixed(2));
       existing.count += 1;
       chartMap.set(label, existing);
     });
 
     const chartData = Array.from(chartMap.values());
+    const creatorsCount = relsRes.rows.filter((r) => r.user_role === "creator").length;
+    const brandsCount = relsRes.rows.filter((r) => r.user_role === "brand").length;
 
-    // Role breakdown
-    const creatorsCount = allReferred.filter((r) => r.role === "creator").length;
-    const brandsCount = allReferred.filter((r) => r.role === "brand").length;
+    const performers = relsRes.rows.map((r) => ({
+      _id: r.referred_id,
+      id: r.referred_id,
+      fullName: r.full_name || "User",
+      handle: r.handle || "",
+      avatarUrl: r.avatar_url || "",
+      role: r.user_role || "creator",
+      commissionEarned: 0,
+      totalVolume: 0,
+    }));
 
     return res.status(200).json({
       success: true,
       data: {
         total_earned: Number(total_earned.toFixed(2)),
-        timeframe_earned: Number(filteredTxs.reduce((s, t) => s + (t.amount || 0), 0).toFixed(2)),
-        active_referrals_count: allReferred.length,
+        timeframe_earned: Number(filteredTxs.reduce((s, t) => s + Number(t.amount || 0), 0).toFixed(2)),
+        active_referrals_count: relsRes.rows.length,
         creators_count: creatorsCount,
         brands_count: brandsCount,
         chartData,
@@ -965,26 +709,25 @@ export const getReferralAnalytics = async (req, res) => {
 };
 
 /**
- * POST /api/v1/admin/referrals/:id/revoke (admin auth only)
- * Body: { "reason": "fraud_suspected" }
- * Sets the referral_relationships.status to "revoked".
- * Once revoked, no further commissions are calculated for that relationship.
- * Response: { "status": "revoked" }
+ * POST /api/v1/admin/referrals/:id/revoke
  */
 export const revokeReferralRelationship = async (req, res) => {
   try {
     const { id } = req.params;
-    const { reason = "admin_action" } = req.body;
+    const { rows } = await query(
+      `
+      UPDATE referral_relationships SET
+        status = 'revoked',
+        updated_at = NOW()
+      WHERE id::text = $1
+      RETURNING *;
+      `,
+      [id]
+    );
 
-    const relationship = await ReferralRelationship.findById(id);
-    if (!relationship) {
+    if (rows.length === 0) {
       return res.status(404).json({ error: "REFERRAL_RELATIONSHIP_NOT_FOUND" });
     }
-
-    relationship.status = "revoked";
-    relationship.revoke_reason = reason;
-    relationship.revoked_at = new Date();
-    await relationship.save();
 
     return res.status(200).json({ status: "revoked" });
   } catch (error) {
@@ -995,89 +738,79 @@ export const revokeReferralRelationship = async (req, res) => {
 
 /**
  * GET /api/v1/admin/referrals
- * Admin listing of all referral_relationships with:
- * referrer name/type, referred user name/type, status, commission_percent,
- * total commission paid to date, created_at. Includes status filter.
  */
 export const listAdminReferralRelationships = async (req, res) => {
   try {
     const { status, search } = req.query;
-    const filter = {};
+    const conditions = [];
+    const params = [];
+
     if (status && status !== "all") {
-      filter.status = status;
+      params.push(status);
+      conditions.push(`rr.status = $${params.length}`);
     }
-
-    let relationships = await ReferralRelationship.find(filter)
-      .populate("referrer_id", "fullName email role handle")
-      .populate("referred_id", "fullName email role handle")
-      .sort({ created_at: -1 })
-      .lean();
-
-    // Compute total commission paid to date for each referral relationship
-    const relationshipIds = relationships.map((r) => r._id);
-    const commissionTotals = await WalletTransaction.aggregate([
-      {
-        $match: {
-          related_referral_id: { $in: relationshipIds },
-          transaction_type: "referral_commission",
-          status: "COMPLETED",
-        },
-      },
-      {
-        $group: {
-          _id: "$related_referral_id",
-          totalCommission: { $sum: "$amount" },
-        },
-      },
-    ]);
-
-    const commissionMap = new Map();
-    commissionTotals.forEach((item) => {
-      commissionMap.set(item._id.toString(), Number(item.totalCommission.toFixed(2)));
-    });
-
-    let data = relationships.map((rel) => {
-      const referrer = rel.referrer_id;
-      const referred = rel.referred_id;
-
-      return {
-        id: rel._id,
-        referrer_id: referrer?._id || null,
-        referrer_name: referrer?.fullName || referrer?.handle || "Unknown Referrer",
-        referrer_email: referrer?.email || "",
-        referrer_handle: referrer?.handle ? `@${referrer.handle.replace(/^@/, "")}` : "",
-        referrer_type: rel.referrer_type,
-        referred_id: referred?._id || null,
-        referred_name: referred?.fullName || referred?.handle || "Unknown Referred",
-        referred_email: referred?.email || "",
-        referred_handle: referred?.handle ? `@${referred.handle.replace(/^@/, "")}` : "",
-        referred_type: rel.referred_type,
-        referral_code_used: rel.referral_code_used || "N/A",
-        status: rel.status,
-        commission_percent: rel.commission_percent ?? 5.0,
-        total_commission_paid: commissionMap.get(rel._id.toString()) || 0.0,
-        created_at: rel.created_at || rel.createdAt,
-        revoke_reason: rel.revoke_reason || null,
-        revoked_at: rel.revoked_at || null,
-      };
-    });
 
     if (search && search.trim()) {
-      const q = search.trim().toLowerCase();
-      data = data.filter(
-        (r) =>
-          r.referrer_name.toLowerCase().includes(q) ||
-          r.referrer_email.toLowerCase().includes(q) ||
-          r.referred_name.toLowerCase().includes(q) ||
-          r.referred_email.toLowerCase().includes(q) ||
-          r.referral_code_used.toLowerCase().includes(q)
-      );
+      params.push(`%${search.trim().toLowerCase()}%`);
+      const sIdx = params.length;
+      conditions.push(`(
+        LOWER(ref.full_name) LIKE $${sIdx} OR
+        LOWER(ref.email) LIKE $${sIdx} OR
+        LOWER(refe.full_name) LIKE $${sIdx} OR
+        LOWER(refe.email) LIKE $${sIdx} OR
+        LOWER(rr.referral_code_used) LIKE $${sIdx}
+      )`);
     }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const { rows } = await query(
+      `
+      SELECT
+        rr.*,
+        ref.id as referrer_id,
+        ref.full_name as referrer_name,
+        ref.email as referrer_email,
+        ref.handle as referrer_handle,
+        refe.id as referred_id,
+        refe.full_name as referred_name,
+        refe.email as referred_email,
+        refe.handle as referred_handle,
+        COALESCE((
+          SELECT SUM(amount) FROM wallet_transactions WHERE related_referral_id = rr.id AND status = 'COMPLETED'
+        ), 0) as total_commission_paid
+      FROM referral_relationships rr
+      LEFT JOIN profiles ref ON ref.id = rr.referrer_id
+      LEFT JOIN profiles refe ON refe.id = rr.referred_id
+      ${whereClause}
+      ORDER BY rr.created_at DESC;
+      `,
+      params
+    );
+
+    const formattedData = rows.map((rel) => ({
+      id: rel.id,
+      referrer_id: rel.referrer_id,
+      referrer_name: rel.referrer_name || "Unknown Referrer",
+      referrer_email: rel.referrer_email || "",
+      referrer_handle: rel.referrer_handle ? `@${rel.referrer_handle.replace(/^@/, "")}` : "",
+      referrer_type: rel.referrer_type,
+      referred_id: rel.referred_id,
+      referred_name: rel.referred_name || "Unknown Referred",
+      referred_email: rel.referred_email || "",
+      referred_handle: rel.referred_handle ? `@${rel.referred_handle.replace(/^@/, "")}` : "",
+      referred_type: rel.referred_type,
+      referral_code_used: rel.referral_code_used || "N/A",
+      status: rel.status,
+      commission_percent: Number(rel.commission_percent || 5.0),
+      total_commission_paid: Number(rel.total_commission_paid || 0),
+      created_at: rel.created_at,
+    }));
 
     return res.status(200).json({
       success: true,
-      count: data.length,
-      relationships: data,
+      count: formattedData.length,
+      relationships: formattedData,
     });
   } catch (error) {
     console.error("listAdminReferralRelationships error:", error);
@@ -1087,52 +820,70 @@ export const listAdminReferralRelationships = async (req, res) => {
 
 /**
  * GET /api/v1/admin/referrals/relationships/:id/transactions
- * Retrieve all wallet commission transactions associated with a referral relationship.
  */
 export const getAdminRelationshipTransactions = async (req, res) => {
   try {
     const { id } = req.params;
-    const relationship = await ReferralRelationship.findById(id)
-      .populate("referrer_id", "fullName email role handle avatarUrl")
-      .populate("referred_id", "fullName email role handle avatarUrl")
-      .lean();
+    const relRes = await query(
+      `
+      SELECT
+        rr.*,
+        json_build_object(
+          '_id', ref.id,
+          'id', ref.id,
+          'fullName', ref.full_name,
+          'email', ref.email,
+          'role', ref.role,
+          'handle', ref.handle,
+          'avatarUrl', ref.avatar_url
+        ) as referrer_id,
+        json_build_object(
+          '_id', refe.id,
+          'id', refe.id,
+          'fullName', refe.full_name,
+          'email', refe.email,
+          'role', refe.role,
+          'handle', refe.handle,
+          'avatarUrl', refe.avatar_url
+        ) as referred_id
+      FROM referral_relationships rr
+      LEFT JOIN profiles ref ON ref.id = rr.referrer_id
+      LEFT JOIN profiles refe ON refe.id = rr.referred_id
+      WHERE rr.id::text = $1;
+      `,
+      [id]
+    );
 
-    if (!relationship) {
+    if (relRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Referral relationship not found" });
     }
 
-    const commissionTxs = await WalletTransaction.find({
-      $or: [
-        { related_referral_id: id },
-        ...(relationship.referrer_id?._id
-          ? [
-              {
-                creatorId: relationship.referrer_id._id,
-                transaction_type: "referral_commission",
-                ...(relationship.referred_id?.fullName
-                  ? { description: { $regex: new RegExp(relationship.referred_id.fullName, "i") } }
-                  : {}),
-              },
-            ]
-          : []),
-      ],
-    })
-      .sort({ createdAt: -1 })
-      .populate("collaborationId", "title")
-      .populate("campaignId", "title")
-      .lean();
+    const relationship = relRes.rows[0];
 
-    const transactions = commissionTxs.map((tx) => ({
-      _id: tx._id,
-      amount: tx.amount,
-      currency: tx.currency,
+    const txsRes = await query(
+      `
+      SELECT
+        wt.*,
+        c.title as campaign_title
+      FROM wallet_transactions wt
+      LEFT JOIN campaigns c ON c.id = wt.campaign_id
+      WHERE wt.related_referral_id::text = $1 OR wt.creator_id = $2
+      ORDER BY wt.created_at DESC;
+      `,
+      [id, relationship.referrer_id?.id]
+    );
+
+    const transactions = txsRes.rows.map((tx) => ({
+      _id: tx.id,
+      amount: Number(tx.amount || 0),
+      currency: tx.currency || "INR",
       type: tx.type,
       transaction_type: tx.transaction_type,
       status: tx.status,
-      referenceId: tx.referenceId,
+      referenceId: tx.reference_id,
       description: tx.description,
-      date: tx.createdAt,
-      projectTitle: tx.collaborationId?.title || tx.campaignId?.title || "Project Collaboration",
+      date: tx.created_at,
+      projectTitle: tx.campaign_title || "Project Collaboration",
     }));
 
     return res.status(200).json({
@@ -1145,4 +896,3 @@ export const getAdminRelationshipTransactions = async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to load relationship transactions." });
   }
 };
-

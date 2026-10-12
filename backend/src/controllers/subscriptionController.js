@@ -1,21 +1,27 @@
-import mongoose from "mongoose";
+import { query } from "../config/postgres.js";
+import {
+  formatSubscriptionPackage,
+  formatSubscriptionOffer,
+  formatUserSubscription,
+} from "../utils/formatters.js";
 
-import SubscriptionPackage from "../models/SubscriptionPackage.js";
-import SubscriptionOffer from "../models/SubscriptionOffer.js";
-import UserSubscription from "../models/UserSubscription.js";
-import Profile from "../models/Profile.js";
-import Notification from "../models/Notification.js";
+const resolveProfileId = async (idOrUserId) => {
+  if (!idOrUserId) return null;
+  const res = await query(
+    `SELECT id FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+    [idOrUserId]
+  );
+  return res.rows[0]?.id || null;
+};
 
 // =====================================================
 // GET SUBSCRIPTION PACKAGES
-// GET /api/subscriptions/packages
 // =====================================================
-
 export const getPackages = async (req, res) => {
   try {
     const roleQuery = (req.query.role || "").toLowerCase();
 
-    // Default Brand Add-on Services Packages (Basic, Pro, Elite)
+    // Default packages
     const defaultBrandPackages = [
       {
         name: "Basic",
@@ -75,7 +81,6 @@ export const getPackages = async (req, res) => {
       },
     ];
 
-    // Default Creator Packages (Basic, Pro, Elite)
     const defaultCreatorPackages = [
       {
         name: "Basic",
@@ -99,79 +104,77 @@ export const getPackages = async (req, res) => {
         price: 999,
         originalPrice: 1999,
         billingPeriod: "month",
-        badge: "Popular (3 Months Free Trial)",
+        badge: "Recommended",
         targetRole: "creator",
         features: [
-          "Verified Blue Tick Badge on Profile & Media Kit",
-          "Unlimited Campaign Applications & Priority Bids",
-          "7.5% Tiered Referral Commission Income",
-          "Featured Top Search Ranking on Brand Explore",
-          "Advanced Performance & Analytics Insights",
-          "Direct Escrow Payout Protection",
+          "Everything in Basic",
+          "Unlimited Campaign Applications",
+          "Priority Listing in Brand Discovery",
+          "Verified Creator Badge",
+          "Live Social Media Sync & Analytics",
+          "Zero Platform Commission on Deals",
         ],
         sortOrder: 2,
         active: true,
       },
       {
         name: "Elite",
-        price: 1999,
-        originalPrice: 3999,
+        price: 2499,
+        originalPrice: 4999,
         billingPeriod: "month",
-        badge: "50% OFF ELITE",
+        badge: "VIP Creator",
         targetRole: "creator",
         features: [
-          "VIP Gold Creator Badge & Spotlight Top Placement",
-          "Dedicated Talent Manager & Pitch Assistance",
-          "10% Maximum Tiered Referral Commission",
-          "Exclusive Direct Brand Invitation Deal Flow",
-          "Instant Wallet Payouts & Zero Escrow Hold",
-          "24/7 Priority Support",
+          "Everything in Pro",
+          "Featured on Homepage & Brand Newsletters",
+          "Dedicated Talent Manager",
+          "Guaranteed Brand Collab Introductions",
+          "Same-Day Instant Escrow Release",
+          "VIP 24/7 WhatsApp Support",
         ],
         sortOrder: 3,
         active: true,
       },
     ];
 
-    // Wipe any messy duplicates or out-of-sync docs
-    const existing = await SubscriptionPackage.find().lean();
-    if (!existing || existing.length === 0 || existing.length > 6) {
-      await SubscriptionPackage.deleteMany({});
-      await SubscriptionPackage.create([...defaultBrandPackages, ...defaultCreatorPackages]);
-    } else {
-      // Upsert each cleanly
-      for (const bPkg of defaultBrandPackages) {
-        await SubscriptionPackage.updateOne(
-          { name: bPkg.name, targetRole: "brand" },
-          { $set: bPkg },
-          { upsert: true }
+    let dbPackagesRes = await query(
+      `SELECT * FROM subscription_packages WHERE active = true ORDER BY sort_order ASC;`
+    );
+
+    // Seed defaults if empty
+    if (dbPackagesRes.rows.length === 0) {
+      const allDefaults = [...defaultBrandPackages, ...defaultCreatorPackages];
+      for (const p of allDefaults) {
+        await query(
+          `
+          INSERT INTO subscription_packages (
+            name, price, original_price, billing_period, badge, target_role, features, sort_order, active
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9);
+          `,
+          [
+            p.name,
+            p.price,
+            p.originalPrice,
+            p.billingPeriod,
+            p.badge,
+            p.targetRole,
+            JSON.stringify(p.features),
+            p.sortOrder,
+            p.active,
+          ]
         );
       }
-      for (const cPkg of defaultCreatorPackages) {
-        await SubscriptionPackage.updateOne(
-          { name: cPkg.name, targetRole: "creator" },
-          { $set: cPkg },
-          { upsert: true }
-        );
-      }
-      // Remove any unwanted remnants with price 5000 under creator or non-conforming
-      await SubscriptionPackage.deleteMany({
-        $and: [
-          { targetRole: { $nin: ["brand", "creator"] } },
-          { name: { $nin: ["Basic", "Pro", "Elite"] } },
-        ],
-      });
+
+      dbPackagesRes = await query(
+        `SELECT * FROM subscription_packages WHERE active = true ORDER BY sort_order ASC;`
+      );
     }
 
-    const filter = { active: true };
-    if (roleQuery === "brand" || roleQuery === "customer") {
-      filter.targetRole = "brand";
-    } else if (roleQuery === "creator" || roleQuery === "influencer") {
-      filter.targetRole = "creator";
-    }
+    let packages = dbPackagesRes.rows.map(formatSubscriptionPackage);
 
-    const packages = await SubscriptionPackage.find(filter)
-      .sort({ sortOrder: 1 })
-      .lean();
+    if (roleQuery === "brand" || roleQuery === "creator") {
+      packages = packages.filter((p) => p.targetRole === roleQuery || p.targetRole === "both");
+    }
 
     return res.status(200).json({
       success: true,
@@ -179,7 +182,6 @@ export const getPackages = async (req, res) => {
     });
   } catch (error) {
     console.error("Get subscription packages error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch subscription packages.",
@@ -188,48 +190,35 @@ export const getPackages = async (req, res) => {
 };
 
 // =====================================================
-// GET SUBSCRIPTION OFFERS
-// GET /api/subscriptions/offers
+// GET ACTIVE OFFERS
 // =====================================================
-
 export const getOffers = async (req, res) => {
   try {
+    const roleQuery = (req.query.role || "").toLowerCase();
     const now = Date.now();
 
-    let offers = await SubscriptionOffer.find({
-      active: true,
-      expiryDate: {
-        $gt: now,
-      },
-    })
-      .populate("packageId")
-      .sort({ expiryDate: 1 })
-      .lean();
+    const { rows } = await query(
+      `
+      SELECT
+        so.*,
+        row_to_json(sp.*) as package
+      FROM subscription_offers so
+      LEFT JOIN subscription_packages sp ON sp.id = so.package_id
+      WHERE so.active = true AND so.expiry_date > $1
+      ORDER BY so.created_at DESC;
+      `,
+      [now]
+    );
 
-    // If no active offer exists, create default 50% OFF promo on Elite package
-    if (!offers || offers.length === 0) {
-      const elitePkg = await SubscriptionPackage.findOne({ name: /^Elite$/i });
-      if (elitePkg) {
-        const promoExpiry = Date.now() + 90 * 24 * 60 * 60 * 1000; // 90 days validity
-        await SubscriptionOffer.create({
-          packageId: elitePkg._id,
-          name: "Elite 50% OFF Launch Promo",
-          description: "Get 50% discount on the Elite Annual Plan. Unlock unlimited campaigns & dedicated manager for just ₹999/year!",
-          discountPercentage: 50,
-          targetUsers: "both",
-          expiryDate: promoExpiry,
-          buttonText: "Claim 50% Off",
-          active: true,
-        });
+    let offers = rows.map((r) => ({
+      ...formatSubscriptionOffer(r),
+      package: formatSubscriptionPackage(r.package),
+    }));
 
-        offers = await SubscriptionOffer.find({
-          active: true,
-          expiryDate: { $gt: now },
-        })
-          .populate("packageId")
-          .sort({ expiryDate: 1 })
-          .lean();
-      }
+    if (roleQuery === "brand") {
+      offers = offers.filter((o) => o.targetUsers === "brands" || o.targetUsers === "both");
+    } else if (roleQuery === "creator") {
+      offers = offers.filter((o) => o.targetUsers === "creators" || o.targetUsers === "both");
     }
 
     return res.status(200).json({
@@ -238,7 +227,6 @@ export const getOffers = async (req, res) => {
     });
   } catch (error) {
     console.error("Get subscription offers error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch subscription offers.",
@@ -248,49 +236,64 @@ export const getOffers = async (req, res) => {
 
 // =====================================================
 // GET USER SUBSCRIPTION
-// GET /api/subscriptions/user/:profileId
 // =====================================================
-
 export const getUserSubscription = async (req, res) => {
   try {
     const { profileId } = req.params;
+    const resolvedId = await resolveProfileId(profileId);
 
-    if (!mongoose.Types.ObjectId.isValid(profileId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid profile ID.",
+    if (!resolvedId) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+        pending: null,
       });
     }
 
-    let activeSubscription = await UserSubscription.findOne({
-      profileId,
-      status: "active",
-    })
-      .populate("packageId")
-      .populate("offerId")
-      .sort({ createdAt: -1 });
+    const { rows } = await query(
+      `
+      SELECT
+        us.*,
+        row_to_json(sp.*) as package,
+        row_to_json(so.*) as offer
+      FROM user_subscriptions us
+      LEFT JOIN subscription_packages sp ON sp.id = us.package_id
+      LEFT JOIN subscription_offers so ON so.id = us.offer_id
+      WHERE us.profile_id = $1 AND us.status = 'active'
+      ORDER BY us.created_at DESC
+      LIMIT 1;
+      `,
+      [resolvedId]
+    );
 
-    // Check if subscription has expired (e.g. 3-month trial or 1-year plan elapsed)
-    if (activeSubscription && activeSubscription.expiryDate && activeSubscription.expiryDate < Date.now()) {
-      activeSubscription.status = "expired";
-      await activeSubscription.save();
-      activeSubscription = null; // Reverts back to Starter plan automatically
+    let activeSub = rows[0] || null;
+
+    if (activeSub && activeSub.expiry_date && Number(activeSub.expiry_date) < Date.now()) {
+      await query(`UPDATE user_subscriptions SET status = 'expired', updated_at = NOW() WHERE id = $1;`, [activeSub.id]);
+      activeSub = null;
     }
 
-    // Clear any legacy pending subscription requests so users can directly upgrade via payment gateway
-    await UserSubscription.updateMany(
-      { profileId, status: "pending" },
-      { $set: { status: "cancelled" } }
+    await query(
+      `UPDATE user_subscriptions SET status = 'cancelled', updated_at = NOW() WHERE profile_id = $1 AND status = 'pending';`,
+      [resolvedId]
     );
+
+    let formattedData = null;
+    if (activeSub) {
+      formattedData = {
+        ...formatUserSubscription(activeSub),
+        packageId: formatSubscriptionPackage(activeSub.package),
+        offerId: formatSubscriptionOffer(activeSub.offer),
+      };
+    }
 
     return res.status(200).json({
       success: true,
-      data: activeSubscription ? (activeSubscription.toObject ? activeSubscription.toObject() : activeSubscription) : null,
+      data: formattedData,
       pending: null,
     });
   } catch (error) {
     console.error("Get user subscription error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch user subscription.",
@@ -298,12 +301,9 @@ export const getUserSubscription = async (req, res) => {
   }
 };
 
-// =====================================================
-// =====================================================
-// INITIATE SUBSCRIPTION RAZORPAY ORDER
-// POST /api/subscriptions/order
-// =====================================================
-
+// ==========================================
+// INITIATE SUBSCRIPTION ORDER
+// ==========================================
 export const createSubscriptionOrder = async (req, res) => {
   try {
     const { profileId, packageId, offerId } = req.body;
@@ -315,50 +315,45 @@ export const createSubscriptionOrder = async (req, res) => {
       });
     }
 
-    if (
-      !mongoose.Types.ObjectId.isValid(profileId) ||
-      !mongoose.Types.ObjectId.isValid(packageId)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid profile ID or package ID.",
-      });
-    }
-
-    const profile = await Profile.findById(profileId);
-    if (!profile) {
+    const resolvedId = await resolveProfileId(profileId);
+    if (!resolvedId) {
       return res.status(404).json({
         success: false,
         message: "User profile not found.",
       });
     }
 
-    const pkg = await SubscriptionPackage.findOne({ _id: packageId, active: true });
-    if (!pkg) {
+    const pkgRes = await query(
+      `SELECT * FROM subscription_packages WHERE id::text = $1 AND active = true LIMIT 1;`,
+      [packageId]
+    );
+
+    if (pkgRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Subscription package not found or inactive.",
       });
     }
 
+    const pkg = pkgRes.rows[0];
     let finalPrice = Number(pkg.price);
 
-    // Apply offer discount if available
     let appliedOffer = null;
-    if (offerId && mongoose.Types.ObjectId.isValid(offerId)) {
-      appliedOffer = await SubscriptionOffer.findOne({
-        _id: offerId,
-        active: true,
-        expiryDate: { $gt: Date.now() },
-      });
-      if (appliedOffer && appliedOffer.discountPercentage) {
-        finalPrice = Math.round(finalPrice * (1 - appliedOffer.discountPercentage / 100));
+    if (offerId) {
+      const offerRes = await query(
+        `SELECT * FROM subscription_offers WHERE id::text = $1 AND active = true AND expiry_date > $2 LIMIT 1;`,
+        [offerId, Date.now()]
+      );
+      if (offerRes.rows.length > 0) {
+        appliedOffer = offerRes.rows[0];
+        if (appliedOffer.discount_percentage) {
+          finalPrice = Math.round(finalPrice * (1 - Number(appliedOffer.discount_percentage) / 100));
+        }
       }
     }
 
-    const receiptId = `SUB-${Date.now()}-${profile._id.toString().slice(-4).toUpperCase()}`;
+    const receiptId = `SUB-${Date.now()}-${resolvedId.slice(-4).toUpperCase()}`;
 
-    // Import createOrder dynamically or use paymentServices
     const { createOrder } = await import("../services/paymentServices.js");
     const order = await createOrder({
       amount: Math.max(1, finalPrice),
@@ -374,12 +369,12 @@ export const createSubscriptionOrder = async (req, res) => {
         currency: order.currency || "INR",
         keyId: process.env.RAZORPAY_KEY_ID || "rzp_test_placeholder",
         package: {
-          id: pkg._id,
+          id: pkg.id,
           name: pkg.name,
           price: finalPrice,
-          billingPeriod: pkg.billingPeriod,
+          billingPeriod: pkg.billing_period,
         },
-        offerId: appliedOffer?._id || undefined,
+        offerId: appliedOffer?.id || undefined,
       },
     });
   } catch (error) {
@@ -391,11 +386,9 @@ export const createSubscriptionOrder = async (req, res) => {
   }
 };
 
-// =====================================================
+// ==========================================
 // VERIFY SUBSCRIPTION PAYMENT & DIRECT ACTIVATION
-// POST /api/subscriptions/verify
-// =====================================================
-
+// ==========================================
 export const verifySubscriptionPayment = async (req, res) => {
   try {
     const {
@@ -414,25 +407,26 @@ export const verifySubscriptionPayment = async (req, res) => {
       });
     }
 
-    const profile = await Profile.findById(profileId);
-    if (!profile) {
+    const profRes = await query(`SELECT * FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1;`, [profileId]);
+    if (profRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Profile not found.",
       });
     }
+    const profile = profRes.rows[0];
 
-    const pkg = await SubscriptionPackage.findById(packageId);
-    if (!pkg) {
+    const pkgRes = await query(`SELECT * FROM subscription_packages WHERE id::text = $1 LIMIT 1;`, [packageId]);
+    if (pkgRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Subscription package not found.",
       });
     }
+    const pkg = pkgRes.rows[0];
 
-    // Optional signature verification
-    const { verifySignature } = await import("../services/paymentServices.js");
     if (razorpayOrderId && razorpayPaymentId && razorpaySignature) {
+      const { verifySignature } = await import("../services/paymentServices.js");
       const isValid = verifySignature({
         orderId: razorpayOrderId,
         paymentId: razorpayPaymentId,
@@ -446,10 +440,9 @@ export const verifySubscriptionPayment = async (req, res) => {
       }
     }
 
-    // Calculate duration
     const startDate = Date.now();
     let expiryDate;
-    const billingPeriod = (pkg.billingPeriod || "month").toLowerCase();
+    const billingPeriod = (pkg.billing_period || "month").toLowerCase();
 
     if (billingPeriod.includes("year") || billingPeriod.includes("annual")) {
       expiryDate = startDate + 365 * 24 * 60 * 60 * 1000;
@@ -461,65 +454,61 @@ export const verifySubscriptionPayment = async (req, res) => {
       expiryDate = startDate + 30 * 24 * 60 * 60 * 1000;
     }
 
-    // Deactivate previous active subscriptions
-    await UserSubscription.updateMany(
-      { profileId, status: "active" },
-      { $set: { status: "expired" } }
+    // Expire previous subscriptions
+    await query(
+      `UPDATE user_subscriptions SET status = 'expired', updated_at = NOW() WHERE profile_id = $1 AND status = 'active';`,
+      [profile.id]
     );
 
-    // Create activated subscription directly
-    const subscription = await UserSubscription.create({
-      profileId,
-      packageId: pkg._id,
-      offerId: offerId || undefined,
-      startDate,
-      expiryDate,
-      status: "active",
-      amountPaid: Number(pkg.price),
-      razorpayOrderId: razorpayOrderId || null,
-      razorpayPaymentId: razorpayPaymentId || null,
-      razorpaySignature: razorpaySignature || null,
-    });
+    const insRes = await query(
+      `
+      INSERT INTO user_subscriptions (
+        profile_id, package_id, offer_id, start_date, expiry_date,
+        status, amount_paid, razorpay_order_id, razorpay_payment_id, razorpay_signature
+      ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9)
+      RETURNING *;
+      `,
+      [
+        profile.id,
+        pkg.id,
+        offerId || null,
+        startDate,
+        expiryDate,
+        Number(pkg.price),
+        razorpayOrderId || null,
+        razorpayPaymentId || null,
+        razorpaySignature || null,
+      ]
+    );
 
-    // Notify Admins about plan purchase
+    const subscription = insRes.rows[0];
+
+    // Notify admins
     try {
-      const admins = await Profile.find({ role: "admin" }).select("_id").lean();
+      const adminRes = await query(`SELECT id FROM profiles WHERE role = 'admin';`);
       const userTypeLabel = profile.role === "creator" ? "Creator" : profile.role === "brand" ? "Brand" : "User";
-      const notifText = `🎉 ${userTypeLabel} "${profile.fullName}" purchased the "${pkg.name}" plan (₹${pkg.price}/${pkg.billingPeriod}) via direct payment!`;
+      const notifText = `🎉 ${userTypeLabel} "${profile.full_name}" purchased the "${pkg.name}" plan (₹${pkg.price}/${pkg.billing_period}) via direct payment!`;
 
-      for (const admin of admins) {
-        await Notification.create({
-          recipientId: admin._id,
-          senderId: profile._id,
-          type: "subscription_activated",
-          text: notifText,
-          targetUrl: "/subscriptions",
-          metadata: {
-            subscriptionId: subscription._id,
-            packageId: pkg._id,
-            packageName: pkg.name,
-            profileId: profile._id,
-            profileName: profile.fullName,
-            role: profile.role,
-            amountPaid: pkg.price,
-            paymentId: razorpayPaymentId,
-          },
-          createdAt: Date.now(),
-        });
+      for (const admin of adminRes.rows) {
+        await query(
+          `
+          INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, read, created_at)
+          VALUES ($1, $2, 'subscription_activated', $3, '/subscriptions', false, NOW());
+          `,
+          [admin.id, profile.id, notifText]
+        );
       }
     } catch (notifErr) {
       console.error("Failed to notify admins of subscription purchase:", notifErr);
     }
 
-    const populatedSub = await UserSubscription.findById(subscription._id)
-      .populate("packageId")
-      .populate("offerId")
-      .lean();
-
     return res.status(200).json({
       success: true,
       message: `Congratulations! Your ${pkg.name} plan has been activated successfully.`,
-      data: populatedSub,
+      data: {
+        ...formatUserSubscription(subscription),
+        packageId: formatSubscriptionPackage(pkg),
+      },
     });
   } catch (error) {
     console.error("Verify subscription payment error:", error);
@@ -530,18 +519,12 @@ export const verifySubscriptionPayment = async (req, res) => {
   }
 };
 
-// =====================================================
+// ==========================================
 // CREATE SUBSCRIPTION (DIRECT ACTIVATION FALLBACK)
-// POST /api/subscriptions
-// =====================================================
-
+// ==========================================
 export const createSubscription = async (req, res) => {
   try {
-    const {
-      profileId,
-      packageId,
-      offerId,
-    } = req.body;
+    const { profileId, packageId, offerId } = req.body;
 
     if (!profileId || !packageId) {
       return res.status(400).json({
@@ -550,29 +533,27 @@ export const createSubscription = async (req, res) => {
       });
     }
 
-    const profile = await Profile.findById(profileId).select("fullName role email handle avatarUrl");
-    if (!profile) {
+    const profRes = await query(`SELECT * FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1;`, [profileId]);
+    if (profRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "User profile not found.",
       });
     }
+    const profile = profRes.rows[0];
 
-    const subscriptionPackage = await SubscriptionPackage.findOne({
-      _id: packageId,
-      active: true,
-    });
-
-    if (!subscriptionPackage) {
+    const pkgRes = await query(`SELECT * FROM subscription_packages WHERE id::text = $1 AND active = true LIMIT 1;`, [packageId]);
+    if (pkgRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Subscription package not found or inactive.",
       });
     }
+    const subscriptionPackage = pkgRes.rows[0];
 
     const startDate = Date.now();
     let expiryDate;
-    const billingPeriod = (subscriptionPackage.billingPeriod || "month").toLowerCase();
+    const billingPeriod = (subscriptionPackage.billing_period || "month").toLowerCase();
 
     if (billingPeriod.includes("year") || billingPeriod.includes("annual")) {
       expiryDate = startDate + 365 * 24 * 60 * 60 * 1000;
@@ -582,60 +563,56 @@ export const createSubscription = async (req, res) => {
       expiryDate = startDate + 30 * 24 * 60 * 60 * 1000;
     }
 
-    // Deactivate previous active subscriptions
-    await UserSubscription.updateMany(
-      { profileId, status: "active" },
-      { $set: { status: "expired" } }
+    await query(
+      `UPDATE user_subscriptions SET status = 'expired', updated_at = NOW() WHERE profile_id = $1 AND status = 'active';`,
+      [profile.id]
     );
 
-    // Direct active creation
-    const subscription = await UserSubscription.create({
-      profileId,
-      packageId,
-      offerId: offerId || undefined,
-      startDate,
-      expiryDate,
-      status: "active",
-      amountPaid: Number(subscriptionPackage.price),
-    });
+    const insRes = await query(
+      `
+      INSERT INTO user_subscriptions (
+        profile_id, package_id, offer_id, start_date, expiry_date, status, amount_paid
+      ) VALUES ($1, $2, $3, $4, $5, 'active', $6)
+      RETURNING *;
+      `,
+      [
+        profile.id,
+        subscriptionPackage.id,
+        offerId || null,
+        startDate,
+        expiryDate,
+        Number(subscriptionPackage.price),
+      ]
+    );
+
+    const subscription = insRes.rows[0];
 
     // Notify Admins
     try {
-      const admins = await Profile.find({ role: "admin" }).select("_id").lean();
+      const adminRes = await query(`SELECT id FROM profiles WHERE role = 'admin';`);
       const userTypeLabel = profile.role === "creator" ? "Creator" : profile.role === "brand" ? "Brand" : "User";
-      const notifText = `🎉 ${userTypeLabel} "${profile.fullName}" activated the "${subscriptionPackage.name}" plan (₹${subscriptionPackage.price}/${subscriptionPackage.billingPeriod}).`;
+      const notifText = `🎉 ${userTypeLabel} "${profile.full_name}" activated the "${subscriptionPackage.name}" plan (₹${subscriptionPackage.price}/${subscriptionPackage.billing_period}).`;
 
-      for (const admin of admins) {
-        await Notification.create({
-          recipientId: admin._id,
-          senderId: profile._id,
-          type: "subscription_activated",
-          text: notifText,
-          targetUrl: "/subscriptions",
-          metadata: {
-            subscriptionId: subscription._id,
-            packageId: subscriptionPackage._id,
-            packageName: subscriptionPackage.name,
-            profileId: profile._id,
-            profileName: profile.fullName,
-            role: profile.role,
-          },
-          createdAt: Date.now(),
-        });
+      for (const admin of adminRes.rows) {
+        await query(
+          `
+          INSERT INTO notifications (recipient_id, sender_id, type, text, target_url, read, created_at)
+          VALUES ($1, $2, 'subscription_activated', $3, '/subscriptions', false, NOW());
+          `,
+          [admin.id, profile.id, notifText]
+        );
       }
     } catch (notifErr) {
       console.error("Failed to create admin notification:", notifErr);
     }
 
-    const populatedSubscription = await UserSubscription.findById(subscription._id)
-      .populate("packageId")
-      .populate("offerId")
-      .lean();
-
     return res.status(201).json({
       success: true,
       message: `Your ${subscriptionPackage.name} plan is now active!`,
-      data: populatedSubscription,
+      data: {
+        ...formatUserSubscription(subscription),
+        packageId: formatSubscriptionPackage(subscriptionPackage),
+      },
     });
   } catch (error) {
     console.error("Create subscription error:", error);
@@ -646,38 +623,22 @@ export const createSubscription = async (req, res) => {
   }
 };
 
-// =====================================================
+// ==========================================
 // CANCEL SUBSCRIPTION
-// PATCH /api/subscriptions/:subscriptionId/cancel
-// =====================================================
-
+// ==========================================
 export const cancelSubscription = async (req, res) => {
   try {
     const { subscriptionId } = req.params;
 
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        subscriptionId
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid subscription ID.",
-      });
-    }
-
-    const subscription =
-      await UserSubscription.findById(
-        subscriptionId
-      );
-
-    if (!subscription) {
+    const findRes = await query(`SELECT * FROM user_subscriptions WHERE id::text = $1;`, [subscriptionId]);
+    if (findRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Subscription not found.",
       });
     }
 
+    const subscription = findRes.rows[0];
     if (subscription.status === "cancelled") {
       return res.status(400).json({
         success: false,
@@ -685,18 +646,18 @@ export const cancelSubscription = async (req, res) => {
       });
     }
 
-    subscription.status = "cancelled";
-
-    await subscription.save();
+    const updRes = await query(
+      `UPDATE user_subscriptions SET status = 'cancelled', updated_at = NOW() WHERE id = $1 RETURNING *;`,
+      [subscription.id]
+    );
 
     return res.status(200).json({
       success: true,
       message: "Subscription cancelled successfully.",
-      data: subscription,
+      data: formatUserSubscription(updRes.rows[0]),
     });
   } catch (error) {
     console.error("Cancel subscription error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to cancel subscription.",
