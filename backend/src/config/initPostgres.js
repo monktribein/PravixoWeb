@@ -475,6 +475,18 @@ export const initPostgresTables = async () => {
       created_at_dt TIMESTAMPTZ DEFAULT NOW(),
       updated_at_dt TIMESTAMPTZ DEFAULT NOW()
     );
+
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS target_id UUID REFERENCES profiles(id) ON DELETE CASCADE;
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS brand_id UUID REFERENCES profiles(id) ON DELETE CASCADE;
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_role VARCHAR(50) DEFAULT 'brand';
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL;
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT '';
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS text TEXT DEFAULT '';
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS campaign_ref VARCHAR(255) DEFAULT '';
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'approved';
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS visible BOOLEAN DEFAULT TRUE;
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS created_at_dt TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS updated_at_dt TIMESTAMPTZ DEFAULT NOW();
   `);
 
   // 21. Blogs Table
