@@ -57,12 +57,17 @@ app.use(
 );
 app.use(express.json());
 
-// Serve uploaded media
+// Serve uploaded media and avatars
 const uploadDir = path.join(process.cwd(), "public", "uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 app.use("/uploads", express.static(uploadDir));
+
+const avatarsDir = path.join(process.cwd(), "public", "avatars");
+if (fs.existsSync(avatarsDir)) {
+  app.use("/avatars", express.static(avatarsDir));
+}
 
 
 // =====================================================

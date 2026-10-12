@@ -29,7 +29,7 @@ import {
 
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { getGenderAvatar, DEFAULT_BANNER } from "../utils/avatar";
+import { getGenderAvatar, resolveAvatarUrl, DEFAULT_BANNER } from "../utils/avatar";
 import { cn } from "@/lib/utils";
 
 import {
@@ -231,14 +231,12 @@ export const loader = async ({ params }) => {
           available: true,
 
           avatar:
-            (profile.avatarUrl && profile.avatarUrl !== "undefined" && profile.avatarUrl !== "null")
-              ? (profile.avatarUrl.startsWith("/") ? `${(import.meta.env.VITE_API_URL || "http://localhost:5000").replace("/api", "")}${profile.avatarUrl}` : profile.avatarUrl)
-              : getGenderAvatar(profile.fullName || "User", profile.gender, profile.role),
+            resolveAvatarUrl(profile.avatarUrl || profile.avatar) ||
+            getGenderAvatar(profile.fullName || "User", profile.gender, profile.role),
 
           cover:
-            (profile.coverUrl && profile.coverUrl !== "undefined" && profile.coverUrl !== "null")
-              ? (profile.coverUrl.startsWith("/") ? `${(import.meta.env.VITE_API_URL || "http://localhost:5000").replace("/api", "")}${profile.coverUrl}` : profile.coverUrl)
-              : fallbackCover,
+            resolveAvatarUrl(profile.coverUrl || profile.cover) ||
+            fallbackCover,
 
           bio:
             profile.bio ||
@@ -673,11 +671,14 @@ export default function InfluencerDetails() {
   const fallbackAvatar = getGenderAvatar("Creator", "male", "creator");
 
   const resolveImageUrl = (url) => {
-    if (!url) return null;
-    if (url.startsWith("http")) return url;
+    if (!url || url === "undefined" || url === "null") return null;
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+    if (url.startsWith("/avatars/") || url.startsWith("/icons/") || url.startsWith("/assets/")) return url;
     let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
     if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
-    return `${apiUrl}${url}`;
+    if (apiUrl.endsWith("/")) apiUrl = apiUrl.slice(0, -1);
+    const cleanPath = url.startsWith("/") ? url : `/${url}`;
+    return `${apiUrl}${cleanPath}`;
   };
 
   const [inf, setInf] = useState(() => {

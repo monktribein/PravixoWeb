@@ -33,6 +33,7 @@ export function resolveImageUrl(url, fallbackName = "User", gender = "", role = 
   }
 
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("/avatars/") || url.startsWith("/icons/") || url.startsWith("/assets/")) return url;
   let apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
   if (apiUrl.endsWith("/api")) apiUrl = apiUrl.slice(0, -4);
   return `${apiUrl}${url.startsWith("/") ? url : `/${url}`}`;

@@ -41,9 +41,11 @@ import { addonApi } from "../services/addonServices";
 import { useAuth } from "../components/auth/AuthProvider";
 
 const resolveImageUrl = (url) => {
-  if (!url) return "";
-  if (typeof url !== "string") return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+  if (!url || url === "undefined" || url === "null" || typeof url !== "string") return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
+    return url;
+  }
+  if (url.startsWith("/avatars/") || url.startsWith("/icons/") || url.startsWith("/assets/") || url.startsWith("/favicon")) {
     return url;
   }
   const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000";

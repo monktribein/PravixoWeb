@@ -47,7 +47,7 @@ export const AVATAR_PRESETS = {
 
 // Helper to resolve avatar and media URLs correctly across public/uploaded assets
 export function resolveAvatarUrl(url) {
-  if (!url) return "";
+  if (!url || url === "undefined" || url === "null" || typeof url !== "string" || !url.trim()) return "";
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) {
     return url;
   }
