@@ -43,9 +43,16 @@ export const initPostgresTables = async () => {
       verification_status VARCHAR(50) DEFAULT 'unverified',
       kyc_documents JSONB DEFAULT '[]'::jsonb,
       is_active BOOLEAN DEFAULT TRUE,
+      is_suspended BOOLEAN DEFAULT FALSE,
+      suspension_reason TEXT DEFAULT '',
+      suspended_until TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN DEFAULT FALSE;
+    ALTER TABLE profiles ADD COLUMN IF NOT EXISTS suspension_reason TEXT DEFAULT '';
+    ALTER TABLE profiles ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMPTZ;
   `);
 
   // 2. OTPs Table
