@@ -256,6 +256,13 @@ export const getById = async (req, res) => {
     );
     const pricingTiers = tiersRes.rows.map(formatPricingTier);
 
+    // Fetch social connections
+    const socialRes = await query(
+      "SELECT * FROM social_connections WHERE profile_id = $1 ORDER BY created_at DESC",
+      [profile.id]
+    );
+    const socialConnections = socialRes.rows.map(formatSocialConnection);
+
     const rating =
       reviews.length === 0
         ? 5.0
@@ -273,6 +280,7 @@ export const getById = async (req, res) => {
         rating,
         reviewsCount: reviews.length,
         pricingTiers,
+        socialConnections,
       },
     });
   } catch (error) {
@@ -330,6 +338,12 @@ export const getByHandle = async (req, res) => {
     );
     const pricingTiers = tiersRes.rows.map(formatPricingTier);
 
+    const socialByHandleRes = await query(
+      "SELECT * FROM social_connections WHERE profile_id = $1 ORDER BY created_at DESC",
+      [profile.id]
+    );
+    const socialConnections = socialByHandleRes.rows.map(formatSocialConnection);
+
     const rating =
       reviews.length === 0
         ? 5.0
@@ -345,6 +359,7 @@ export const getByHandle = async (req, res) => {
         reviewsCount: reviews.length,
         reviews,
         pricingTiers,
+        socialConnections,
       },
     });
   } catch (error) {

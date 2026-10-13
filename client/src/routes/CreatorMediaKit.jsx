@@ -137,25 +137,43 @@ export default function CreatorMediaKit() {
         const data = profileRes.data?.data || profileRes.data;
         setCreator(data);
 
-        if (data?._id) {
+        // Preload pricing tiers and social connections if available in profile payload
+        if (data?.pricingTiers && Array.isArray(data.pricingTiers) && data.pricingTiers.length > 0) {
+          setPricingTiers(data.pricingTiers);
+        } else if (data?.customPricingPackages && Array.isArray(data.customPricingPackages) && data.customPricingPackages.length > 0) {
+          setPricingTiers(data.customPricingPackages);
+        }
+
+        if (data?.socialConnections && Array.isArray(data.socialConnections) && data.socialConnections.length > 0) {
+          setSocialConnections(data.socialConnections);
+        }
+
+        const profileId = data?._id || data?.id;
+        if (profileId) {
           // Fetch portfolio, pricing, social connections and reviews in parallel
           const [portfolioRes, pricingRes, socialRes] = await Promise.allSettled([
-            api.get(`/portfolio/profile/${data._id}`),
-            api.get(`/pricing/profile/${data._id}`),
-            api.get(`/social/profile/${data._id}`),
+            api.get(`/portfolio/profile/${profileId}`),
+            api.get(`/pricing/profile/${profileId}`),
+            api.get(`/social/profile/${profileId}`),
           ]);
 
           if (portfolioRes.status === "fulfilled") {
             setPortfolio(portfolioRes.value.data?.data || portfolioRes.value.data || []);
           }
           if (pricingRes.status === "fulfilled") {
-            setPricingTiers(pricingRes.value.data?.data || pricingRes.value.data || []);
+            const tiers = pricingRes.value.data?.data || pricingRes.value.data || [];
+            if (Array.isArray(tiers) && tiers.length > 0) {
+              setPricingTiers(tiers);
+            }
           }
           if (socialRes.status === "fulfilled") {
-            setSocialConnections(socialRes.value.data?.data || socialRes.value.data || []);
+            const conns = socialRes.value.data?.data || socialRes.value.data || [];
+            if (Array.isArray(conns) && conns.length > 0) {
+              setSocialConnections(conns);
+            }
           }
 
-          fetchCreatorReviews(data._id);
+          fetchCreatorReviews(profileId);
         }
       } catch (err) {
         console.error("Failed to load Media Kit profile:", err);
@@ -431,10 +449,57 @@ export default function CreatorMediaKit() {
     ? portfolio
     : portfolio.filter((item) => (item.type || item.mediaType || "post").toLowerCase() === activeMediaTab);
 
-  // Live Social Feeds Data (Instagram, YouTube, Facebook)
-  const instaHandleClean = creator.instagramHandle ? creator.instagramHandle.replace("@", "").trim() : "";
-  const ytHandleClean = creator.youtubeHandle ? creator.youtubeHandle.replace("@", "").trim() : "";
-  const fbHandleClean = creator.facebookHandle ? creator.facebookHandle.replace("@", "").trim() : "";
+  // Safely parse creator custom feeds from DB / API
+  const userCustomFeeds = (() => {
+    let f = creator.customSocialFeeds ?? creator.custom_social_feeds;
+    if (typeof f === "string") {
+      try { f = JSON.parse(f); } catch (e) { f = []; }
+    }
+    return Array.isArray(f) ? f : [];
+  })();
+
+  const igConn = socialConnections.find((c) => c.platform?.toLowerCase() === "instagram");
+  const ytConn = socialConnections.find((c) => c.platform?.toLowerCase() === "youtube");
+  const fbConn = socialConnections.find((c) => c.platform?.toLowerCase() === "facebook");
+  const twConn = socialConnections.find((c) => ["twitter", "x"].includes(c.platform?.toLowerCase()));
+  const liConn = socialConnections.find((c) => c.platform?.toLowerCase() === "linkedin");
+
+  const instaHandleClean = (
+    creator.instagramHandle ||
+    creator.instagram_handle ||
+    igConn?.handle ||
+    creator.socialLinks?.instagram ||
+    (userCustomFeeds.length > 0 ? (creator.handle || rawHandle) : (creator.handle || rawHandle))
+  )?.replace(/^@/, "").trim() || "";
+
+  const ytHandleClean = (
+    creator.youtubeHandle ||
+    creator.youtube_handle ||
+    ytConn?.handle ||
+    creator.socialLinks?.youtube
+  )?.replace(/^@/, "").trim() || "";
+
+  const fbHandleClean = (
+    creator.facebookHandle ||
+    creator.facebook_handle ||
+    fbConn?.handle ||
+    creator.socialLinks?.facebook
+  )?.replace(/^@/, "").trim() || "";
+
+  const twHandleClean = (
+    creator.twitterHandle ||
+    creator.twitter_handle ||
+    twConn?.handle ||
+    creator.socialLinks?.twitter ||
+    creator.socialLinks?.x
+  )?.replace(/^@/, "").trim() || "";
+
+  const liHandleClean = (
+    creator.linkedinHandle ||
+    creator.linkedin_handle ||
+    liConn?.handle ||
+    creator.socialLinks?.linkedin
+  )?.trim() || "";
 
   // Default verified feeds fallback
   const defaultInstagramFeeds = [
@@ -554,55 +619,51 @@ export default function CreatorMediaKit() {
     },
   ];
 
-  // Filter custom uploaded/pasted social feeds from profile
-  const userCustomFeeds = Array.isArray(creator.customSocialFeeds) ? creator.customSocialFeeds : [];
-
   const customInstagram = userCustomFeeds
-    .filter((f) => !f.platform || f.platform === "instagram")
+    .filter((f) => !f.platform || f.platform.toLowerCase() === "instagram")
     .map((f, i) => {
       const thumb = f.thumbnail || f.thumbnailUrl || f.mediaUrl || f.imageUrl || "";
       return {
-        id: f._id || `cust-ig-${i}`,
+        id: f._id || f.id || `cust-ig-${i}`,
         type: f.type || "reel",
         thumbnail: thumb || "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80",
         caption: f.caption || "Featured Creator Content ✨",
-        likes: f.likes || "15.4K",
-        comments: f.comments || "420",
-        views: f.views || "68K",
+        likes: f.likes || "1.8K",
+        comments: f.comments || "45",
+        views: f.views || "15.4K",
         timeAgo: f.createdAt ? new Date(f.createdAt).toLocaleDateString() : "Recent",
-        url: f.postUrl || `https://instagram.com/${instaHandleClean || rawHandle}`,
+        url: f.postUrl || f.url || f.permalink || `https://instagram.com/${instaHandleClean || rawHandle}`,
         badge: f.badge || (f.type === "reel" ? "Viral Reel" : "Recent Post"),
       };
     });
 
-
   const customYouTube = userCustomFeeds
-    .filter((f) => f.platform === "youtube")
+    .filter((f) => f.platform && f.platform.toLowerCase() === "youtube")
     .map((f, i) => ({
-      id: f._id || `cust-yt-${i}`,
+      id: f._id || f.id || `cust-yt-${i}`,
       type: f.type || "short",
-      thumbnail: f.thumbnail || "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&auto=format&fit=crop&q=80",
+      thumbnail: f.thumbnail || f.thumbnailUrl || f.mediaUrl || f.imageUrl || "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&auto=format&fit=crop&q=80",
       caption: f.caption || "YouTube Feature Video 🎬",
       likes: f.likes || "12.2K",
       comments: f.comments || "310",
       views: f.views || "95K",
       timeAgo: f.createdAt ? new Date(f.createdAt).toLocaleDateString() : "Recent",
-      url: f.postUrl || `https://youtube.com/@${ytHandleClean || rawHandle}`,
+      url: f.postUrl || f.url || f.permalink || `https://youtube.com/@${ytHandleClean || rawHandle}`,
       badge: f.badge || (f.type === "short" ? "YT Short" : "YouTube Video"),
     }));
 
   const customFacebook = userCustomFeeds
-    .filter((f) => f.platform === "facebook")
+    .filter((f) => f.platform && f.platform.toLowerCase() === "facebook")
     .map((f, i) => ({
-      id: f._id || `cust-fb-${i}`,
+      id: f._id || f.id || `cust-fb-${i}`,
       type: f.type || "post",
-      thumbnail: f.thumbnail || "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?w=600&auto=format&fit=crop&q=80",
+      thumbnail: f.thumbnail || f.thumbnailUrl || f.mediaUrl || f.imageUrl || "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?w=600&auto=format&fit=crop&q=80",
       caption: f.caption || "Facebook Community Story 🌟",
       likes: f.likes || "8.5K",
       comments: f.comments || "190",
       views: f.views || "42K",
       timeAgo: f.createdAt ? new Date(f.createdAt).toLocaleDateString() : "Recent",
-      url: f.postUrl || `https://facebook.com/${fbHandleClean || rawHandle}`,
+      url: f.postUrl || f.url || f.permalink || `https://facebook.com/${fbHandleClean || rawHandle}`,
       badge: f.badge || "Facebook Post",
     }));
 
@@ -874,18 +935,20 @@ export default function CreatorMediaKit() {
           <div className="space-y-6">
             {/* SOCIAL ACCOUNTS LIST */}
             <div className="p-6 rounded-3xl bg-card border border-border shadow-sm space-y-4">
-              <h3 className="text-base font-bold font-display text-foreground flex items-center justify-between">
-                <span>Social Presence</span>
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold font-display text-foreground flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-primary" /> Social Presence
+                </h3>
                 <span className="text-xs text-muted-foreground font-normal">Audited Channels</span>
-              </h3>
+              </div>
 
               <div className="space-y-3">
-                {creator.instagramHandle && (
+                {instaHandleClean && (
                   <a
                     href={
-                      creator.instagramHandle.startsWith("http")
-                        ? creator.instagramHandle
-                        : `https://instagram.com/${creator.instagramHandle.replace("@", "").trim()}`
+                      instaHandleClean.startsWith("http")
+                        ? instaHandleClean
+                        : `https://instagram.com/${instaHandleClean}`
                     }
                     target="_blank"
                     rel="noopener noreferrer"
@@ -897,7 +960,7 @@ export default function CreatorMediaKit() {
                       </div>
                       <div>
                         <div className="font-bold text-sm text-foreground flex items-center gap-1.5 group-hover:text-pink-500 transition-colors">
-                          @{creator.instagramHandle.replace("@", "")}
+                          @{instaHandleClean}
                           <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         <div className="text-xs text-muted-foreground">Instagram Creator</div>
@@ -905,21 +968,19 @@ export default function CreatorMediaKit() {
                     </div>
                     <div className="text-right">
                       <div className="font-extrabold text-sm text-foreground">
-                        {formatFollowers(creator.instagramFollowers || 0)}
+                        {formatFollowers(creator.instagramFollowers || creator.instagram_followers || igConn?.followers || totalFollowers || 0)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">Followers</div>
                     </div>
                   </a>
                 )}
 
-                {creator.youtubeHandle && (
+                {ytHandleClean && (
                   <a
                     href={
-                      creator.youtubeHandle.startsWith("http")
-                        ? creator.youtubeHandle
-                        : creator.youtubeHandle.startsWith("@")
-                        ? `https://youtube.com/${creator.youtubeHandle.trim()}`
-                        : `https://youtube.com/@${creator.youtubeHandle.trim()}`
+                      ytHandleClean.startsWith("http")
+                        ? ytHandleClean
+                        : `https://youtube.com/@${ytHandleClean}`
                     }
                     target="_blank"
                     rel="noopener noreferrer"
@@ -931,7 +992,7 @@ export default function CreatorMediaKit() {
                       </div>
                       <div>
                         <div className="font-bold text-sm text-foreground flex items-center gap-1.5 group-hover:text-red-500 transition-colors">
-                          {creator.youtubeHandle}
+                          @{ytHandleClean}
                           <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         <div className="text-xs text-muted-foreground">YouTube Channel</div>
@@ -939,19 +1000,19 @@ export default function CreatorMediaKit() {
                     </div>
                     <div className="text-right">
                       <div className="font-extrabold text-sm text-foreground">
-                        {formatFollowers(creator.youtubeFollowers || 0)}
+                        {formatFollowers(creator.youtubeFollowers || creator.youtube_followers || ytConn?.followers || 0)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">Subscribers</div>
                     </div>
                   </a>
                 )}
 
-                {creator.facebookHandle && (
+                {fbHandleClean && (
                   <a
                     href={
-                      creator.facebookHandle.startsWith("http")
-                        ? creator.facebookHandle
-                        : `https://facebook.com/${creator.facebookHandle.replace("@", "").trim()}`
+                      fbHandleClean.startsWith("http")
+                        ? fbHandleClean
+                        : `https://facebook.com/${fbHandleClean}`
                     }
                     target="_blank"
                     rel="noopener noreferrer"
@@ -963,7 +1024,7 @@ export default function CreatorMediaKit() {
                       </div>
                       <div>
                         <div className="font-bold text-sm text-foreground flex items-center gap-1.5 group-hover:text-blue-500 transition-colors">
-                          {creator.facebookHandle}
+                          {fbHandleClean}
                           <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         <div className="text-xs text-muted-foreground">Facebook Page</div>
@@ -971,19 +1032,19 @@ export default function CreatorMediaKit() {
                     </div>
                     <div className="text-right">
                       <div className="font-extrabold text-sm text-foreground">
-                        {formatFollowers(creator.facebookFollowers || 0)}
+                        {formatFollowers(creator.facebookFollowers || creator.facebook_followers || fbConn?.followers || 0)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">Followers</div>
                     </div>
                   </a>
                 )}
 
-                {creator.twitterHandle && (
+                {twHandleClean && (
                   <a
                     href={
-                      creator.twitterHandle.startsWith("http")
-                        ? creator.twitterHandle
-                        : `https://x.com/${creator.twitterHandle.replace("@", "").trim()}`
+                      twHandleClean.startsWith("http")
+                        ? twHandleClean
+                        : `https://x.com/${twHandleClean}`
                     }
                     target="_blank"
                     rel="noopener noreferrer"
@@ -995,7 +1056,7 @@ export default function CreatorMediaKit() {
                       </div>
                       <div>
                         <div className="font-bold text-sm text-foreground flex items-center gap-1.5 group-hover:text-sky-500 transition-colors">
-                          @{creator.twitterHandle.replace("@", "")}
+                          @{twHandleClean}
                           <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         <div className="text-xs text-muted-foreground">X (Twitter)</div>
@@ -1003,19 +1064,19 @@ export default function CreatorMediaKit() {
                     </div>
                     <div className="text-right">
                       <div className="font-extrabold text-sm text-foreground">
-                        {formatFollowers(creator.twitterFollowers || 0)}
+                        {formatFollowers(creator.twitterFollowers || creator.twitter_followers || twConn?.followers || 0)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">Followers</div>
                     </div>
                   </a>
                 )}
 
-                {creator.linkedinHandle && (
+                {liHandleClean && (
                   <a
                     href={
-                      creator.linkedinHandle.startsWith("http")
-                        ? creator.linkedinHandle
-                        : `https://linkedin.com/in/${creator.linkedinHandle.trim()}`
+                      liHandleClean.startsWith("http")
+                        ? liHandleClean
+                        : `https://linkedin.com/in/${liHandleClean}`
                     }
                     target="_blank"
                     rel="noopener noreferrer"
@@ -1027,7 +1088,7 @@ export default function CreatorMediaKit() {
                       </div>
                       <div>
                         <div className="font-bold text-sm text-foreground flex items-center gap-1.5 group-hover:text-blue-500 transition-colors">
-                          {creator.linkedinHandle}
+                          {liHandleClean}
                           <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         <div className="text-xs text-muted-foreground">LinkedIn Profile</div>
@@ -1035,7 +1096,7 @@ export default function CreatorMediaKit() {
                     </div>
                     <div className="text-right">
                       <div className="font-extrabold text-sm text-foreground">
-                        {formatFollowers(creator.linkedinFollowers || 0)}
+                        {formatFollowers(creator.linkedinFollowers || creator.linkedin_followers || liConn?.followers || 0)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">Connections</div>
                     </div>
@@ -1064,46 +1125,54 @@ export default function CreatorMediaKit() {
                         <div className="text-xs text-muted-foreground">{tier.description || "Dedicated video / post deliverable"}</div>
                       </div>
                       <div className="text-right font-extrabold text-gradient-sunset text-base font-display">
-                        {formatINR(tier.price || 0)}
+                        {tier.price > 0 ? formatINR(tier.price) : "Contact for Quote"}
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : (
+              ) : creator.startingPrice > 0 ? (
                 <div className="space-y-2.5">
                   <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/80 flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-sm text-foreground">1x Instagram Reel / Video</div>
-                      <div className="text-xs text-muted-foreground">High-energy product demo + hook</div>
+                      <div className="font-bold text-sm text-foreground">Sponsored Post / Video</div>
+                      <div className="text-xs text-muted-foreground">Standard brand integration deliverable</div>
                     </div>
                     <div className="text-right font-extrabold text-gradient-sunset text-base font-display">
-                      {creator.startingPrice > 0 ? formatINR(creator.startingPrice) : "₹15,000"}
+                      {formatINR(creator.startingPrice)}
                     </div>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/80 flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-sm text-foreground">2x Story Frames with Link</div>
+                      <div className="font-bold text-sm text-foreground">Story & Link Share</div>
                       <div className="text-xs text-muted-foreground">24hr live swipe up with direct CTA</div>
                     </div>
                     <div className="text-right font-extrabold text-gradient-sunset text-base font-display">
-                      {creator.startingPrice > 0 ? formatINR(Math.round(creator.startingPrice * 0.4)) : "₹6,000"}
+                      {formatINR(Math.round(creator.startingPrice * 0.4))}
                     </div>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/80 flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-sm text-foreground">Full Campaign Bundle</div>
-                      <div className="text-xs text-muted-foreground">1 Reel + 3 Stories + Whitelist Rights</div>
+                      <div className="font-bold text-sm text-foreground">Multi-Format Campaign</div>
+                      <div className="text-xs text-muted-foreground">Video + Story + Cross-channel showcase</div>
                     </div>
                     <div className="text-right font-extrabold text-gradient-sunset text-base font-display">
-                      {creator.startingPrice > 0 ? formatINR(Math.round(creator.startingPrice * 1.8)) : "₹25,000"}
+                      {formatINR(Math.round(creator.startingPrice * 1.8))}
                     </div>
                   </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-secondary/30 border border-dashed border-border/80 text-center space-y-2">
+                  <p className="text-sm font-semibold text-foreground">Custom Collaboration Rates</p>
+                  <p className="text-xs text-muted-foreground">
+                    This creator accepts tailored scopes, sponsored reels, and barter collaborations based on brand campaign requirements.
+                  </p>
+                  <span className="inline-block text-xs font-bold text-primary">Rates customized upon inquiry</span>
                 </div>
               )}
 
               <div className="pt-2">
                 <Button
-                  onClick={() => handleHireAction(`/messages?with=${creator._id}`)}
+                  onClick={() => handleHireAction(`/messages?with=${creator._id || creator.id}`)}
                   className="w-full rounded-2xl gradient-sunset hover:opacity-90 text-white font-bold text-sm h-11 cursor-pointer border-0 shadow-glow"
                 >
                   Request Custom Scope of Work (SOW)
@@ -1150,7 +1219,7 @@ export default function CreatorMediaKit() {
                 <span>Instagram ({liveInstagramFeeds.length})</span>
               </button>
 
-              {creator.youtubeHandle && (
+              {(ytHandleClean || customYouTube.length > 0) && (
                 <button
                   onClick={() => setActiveSocialFeedTab("youtube")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -1160,11 +1229,11 @@ export default function CreatorMediaKit() {
                   }`}
                 >
                   <FaYoutube className="w-3.5 h-3.5" />
-                  <span>YouTube</span>
+                  <span>YouTube ({liveYouTubeFeeds.length})</span>
                 </button>
               )}
 
-              {creator.facebookHandle && (
+              {(fbHandleClean || customFacebook.length > 0) && (
                 <button
                   onClick={() => setActiveSocialFeedTab("facebook")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -1174,7 +1243,7 @@ export default function CreatorMediaKit() {
                   }`}
                 >
                   <FaFacebook className="w-3.5 h-3.5" />
-                  <span>Facebook</span>
+                  <span>Facebook ({liveFacebookFeeds.length})</span>
                 </button>
               )}
             </div>
@@ -1219,10 +1288,9 @@ export default function CreatorMediaKit() {
                       />
                     ) : (
                       <img
-                        src={feedItem.thumbnail}
+                        src={feedItem.thumbnail || "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80"}
                         alt={feedItem.caption || "Content preview"}
                         referrerPolicy="no-referrer"
-                        crossOrigin="anonymous"
                         loading="lazy"
                         onError={(e) => {
                           e.target.onerror = null;

@@ -38,8 +38,20 @@ export const formatProfile = (p) => {
     quoraFollowers: Number(p.quora_followers || 0),
     twitterHandle: p.twitter_handle || "",
     twitterFollowers: Number(p.twitter_followers || 0),
-    customSocialFeeds: p.custom_social_feeds || [],
-    customPricingPackages: p.custom_pricing_packages || [],
+    customSocialFeeds: (() => {
+      let f = p.custom_social_feeds;
+      if (typeof f === "string") {
+        try { return JSON.parse(f); } catch (e) { return []; }
+      }
+      return Array.isArray(f) ? f : [];
+    })(),
+    customPricingPackages: (() => {
+      let pk = p.custom_pricing_packages;
+      if (typeof pk === "string") {
+        try { return JSON.parse(pk); } catch (e) { return []; }
+      }
+      return Array.isArray(pk) ? pk : [];
+    })(),
     socialLinks: p.social_links || {},
     verificationStatus: p.verification_status || "unverified",
     kycDocuments: p.kyc_documents || [],
@@ -57,8 +69,20 @@ export const formatProfile = (p) => {
     gstCertificateStorageId: p.gst_certificate_storage_id || "",
     mediaKitBio: p.media_kit_bio || "",
     mediaKitTagline: p.media_kit_tagline || "",
-    audienceHighlights: p.audience_highlights || {},
-    pastBrandsWorkedWith: p.past_brands_worked_with || [],
+    audienceHighlights: (() => {
+      let a = p.audience_highlights;
+      if (typeof a === "string") {
+        try { return JSON.parse(a); } catch (e) { return {}; }
+      }
+      return a || {};
+    })(),
+    pastBrandsWorkedWith: (() => {
+      let b = p.past_brands_worked_with;
+      if (typeof b === "string") {
+        try { return JSON.parse(b); } catch (e) { return []; }
+      }
+      return Array.isArray(b) ? b : [];
+    })(),
     prefNiches: p.pref_niches || "",
     prefBudget: p.pref_budget || "",
     prefReach: p.pref_reach || "",
