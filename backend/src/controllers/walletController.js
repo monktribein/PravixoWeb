@@ -5,6 +5,11 @@ import {
   formatWithdrawal,
 } from "../utils/formatters.js";
 import { sendPushToUsers } from "../utils/webPush.js";
+import {
+  createOrder,
+  verifySignature,
+  capturePayment,
+} from "../services/paymentServices.js";
 
 /**
  * Helper to credit a creator's wallet atomically and idempotently upon admin payout release.
@@ -215,7 +220,6 @@ export const createDepositOrder = async (req, res) => {
       });
     }
 
-    const { createOrder } = await import("../services/razorpayService.js");
     const receiptId = `DEP-${Date.now()}-${String(userId).slice(-4).toUpperCase()}`;
 
     const order = await createOrder({
@@ -261,8 +265,6 @@ export const verifyDepositPayment = async (req, res) => {
         message: "Payment verification credentials missing.",
       });
     }
-
-    const { verifySignature, capturePayment } = await import("../services/razorpayService.js");
 
     const isValid = verifySignature({
       orderId: gatewayOrderId,

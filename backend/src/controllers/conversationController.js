@@ -276,13 +276,33 @@ export const getConversations = async (req, res) => {
       return timeB - timeA;
     });
 
+    const filteredResults = sortedResults.filter((item) => {
+      if (role === "creator" && item.deletedForCreator) return false;
+      if (role === "brand" && item.deletedForBrand) return false;
+      return item.lastMessage || item.conversationType?.startsWith("admin_");
+    });
+
+    // Deduplicate conversations by other user so multiple duplicate conversation rows don't flood the UI
+    const seenOtherProfiles = new Map();
+    const dedupedConversations = [];
+
+    for (const item of filteredResults) {
+      const otherKey = item.conversationType?.startsWith("admin_")
+        ? "admin"
+        : String(item.otherProfile?._id || item.otherProfile?.id || item.id);
+
+      if (!seenOtherProfiles.has(otherKey)) {
+        seenOtherProfiles.set(otherKey, item);
+        dedupedConversations.push(item);
+      } else {
+        const existing = seenOtherProfiles.get(otherKey);
+        existing.unreadCount = (existing.unreadCount || 0) + (item.unreadCount || 0);
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      data: sortedResults.filter((item) => {
-        if (role === "creator" && item.deletedForCreator) return false;
-        if (role === "brand" && item.deletedForBrand) return false;
-        return item.lastMessage || item.conversationType?.startsWith("admin_");
-      }),
+      data: dedupedConversations,
     });
   } catch (error) {
     console.error("Get conversations error:", error);

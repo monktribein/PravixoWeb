@@ -6,7 +6,7 @@ import {
   updatePortfolioImage,
   deletePortfolioImage,
   reorderPortfolioImages,
-} from "../controllers/portfolioImageController.js";
+} from "../controllers/profileImageController.js";
 
 const router = express.Router();
 

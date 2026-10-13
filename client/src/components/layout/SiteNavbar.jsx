@@ -167,47 +167,54 @@ export function SiteNavbar() {
           isNavVisible ? "translate-y-0" : "-translate-y-full"
         }`}
       >
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-3 sm:px-4 lg:px-6 xl:px-8">
           
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 shrink-0 mr-2 lg:mr-4">
+          <Link to="/" className="flex items-center gap-2 shrink-0 mr-1.5 lg:mr-3 xl:mr-4">
             <img
               src={logoImg}
               alt="Pravixo"
               className="h-8 w-auto object-contain dark:bg-white/90 dark:p-0.5 dark:rounded-md"
             />
-            <span className="font-display text-lg font-bold tracking-tight text-foreground dark:text-white">
+            <span className="font-display text-base lg:text-lg font-bold tracking-tight text-foreground dark:text-white">
               Pravixo
             </span>
           </Link>
 
           {/* Desktop Links */}
-          <nav className="hidden items-center gap-0.5 lg:gap-1 md:flex overflow-x-auto no-scrollbar">
+          <nav className="hidden items-center gap-0.5 xl:gap-1 md:flex shrink-0">
             {links.map((l) => {
               const active = pathname === l.to;
               return (
                 <Link
                   key={l.to}
                   to={l.to}
-                  className={`rounded-full px-2.5 lg:px-3.5 py-1.5 text-xs lg:text-sm font-medium transition-colors shrink-0 whitespace-nowrap ${
+                  className={`rounded-full px-2 lg:px-2.5 xl:px-3.5 py-1 lg:py-1.5 text-xs lg:text-[13px] xl:text-sm font-medium transition-colors shrink-0 whitespace-nowrap ${
                     active
                       ? "bg-secondary text-foreground font-semibold"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {l.label}
+                  {l.label === "Creator" || l.label === "Brand" ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                      <span>{l.label}</span>
+                    </span>
+                  ) : (
+                    l.label
+                  )}
                 </Link>
               );
             })}
           </nav>
 
           {/* Right Controls */}
-          <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
+          <div className="flex items-center gap-1 lg:gap-1.5 xl:gap-2 shrink-0">
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
               aria-label="Toggle theme"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card transition-colors hover:bg-secondary cursor-pointer shrink-0"
+              className="flex h-8 w-8 lg:h-9 lg:w-9 items-center justify-center rounded-full border border-border bg-card transition-colors hover:bg-secondary cursor-pointer shrink-0"
             >
               {theme === "dark" ? (
                 <Sun className="h-4 w-4" />
@@ -222,7 +229,7 @@ export function SiteNavbar() {
                 <NotificationBell profileId={profile?._id} />
                 <Link
                   to="/connections"
-                  className="relative flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card transition-colors hover:bg-secondary shrink-0"
+                  className="relative flex h-8 w-8 lg:h-9 lg:w-9 items-center justify-center rounded-full border border-border bg-card transition-colors hover:bg-secondary shrink-0"
                   aria-label="Connections"
                 >
                   <UserPlus className="h-4 w-4" />
@@ -235,7 +242,7 @@ export function SiteNavbar() {
 
                 <Link
                   to="/messages"
-                  className="relative flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card transition-colors hover:bg-secondary shrink-0"
+                  className="relative flex h-8 w-8 lg:h-9 lg:w-9 items-center justify-center rounded-full border border-border bg-card transition-colors hover:bg-secondary shrink-0"
                   aria-label="Messages"
                 >
                   <MessageSquare className="h-4 w-4" />
@@ -250,30 +257,30 @@ export function SiteNavbar() {
 
             {/* Auth Buttons / Profile Pill & Dropdown */}
             {loading ? (
-              <div className="h-9 w-24 rounded-full bg-secondary animate-pulse shrink-0" />
+              <div className="h-8 lg:h-9 w-20 lg:w-24 rounded-full bg-secondary animate-pulse shrink-0" />
             ) : user ? (
-              <div className="hidden items-center gap-2 sm:flex relative shrink-0" ref={userDropdownRef}>
+              <div className="hidden items-center gap-1.5 sm:flex relative shrink-0" ref={userDropdownRef}>
                 <button
                   type="button"
                   onClick={() => setIsUserDropdownOpen((prev) => !prev)}
-                  className="flex h-9 items-center gap-2 rounded-full border border-border bg-card pl-1 pr-3 transition-all hover:bg-secondary hover:border-border/80 cursor-pointer shadow-xs focus:outline-none"
+                  className="flex h-8 lg:h-9 items-center gap-1.5 lg:gap-2 rounded-full border border-border bg-card pl-1 pr-2 xl:pr-3 transition-all hover:bg-secondary hover:border-border/80 cursor-pointer shadow-xs focus:outline-none"
                   aria-expanded={isUserDropdownOpen}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <img
                       src={
                         resolveImageUrl(profile?.avatarUrl) ||
                         getGenderAvatar(profile?.fullName || profile?.name || user?.email, profile?.gender, profile?.role)
                       }
                       alt=""
-                      className="h-7 w-7 rounded-full object-cover border border-border/50"
+                      className="h-6 w-6 lg:h-7 lg:w-7 rounded-full object-cover border border-border/50"
                       onError={(e) => {
                         e.target.onerror = null;
                         e.target.src = getGenderAvatar(profile?.fullName || profile?.name || user?.email, profile?.gender, profile?.role);
                       }}
                     />
                   </div>
-                  <span className="max-w-[110px] truncate text-sm font-medium text-foreground">
+                  <span className="max-w-[65px] lg:max-w-[85px] xl:max-w-[120px] truncate text-xs xl:text-sm font-medium text-foreground">
                     {profile?.fullName || profile?.name || user.email}
                   </span>
                   <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${isUserDropdownOpen ? "rotate-180" : ""}`} />

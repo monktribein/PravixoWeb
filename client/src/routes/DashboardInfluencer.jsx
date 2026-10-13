@@ -2026,6 +2026,35 @@ const CAMPAIGNS_PER_PAGE = 6;
 
   return (
     <div className="w-full max-w-full overflow-x-hidden">
+      {/* Push Notification Permission Banner - Right below Navbar */}
+      {showPushBanner && (
+        <div className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-2.5 px-4 shadow-md sticky top-16 z-40 border-b border-blue-500/20">
+          <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-bold">🔔 NEW</span>
+              <span>Turn on notifications to get instant alerts whenever brands launch new campaigns!</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                disabled={enablingPush}
+                className="bg-white text-blue-700 hover:bg-slate-100 font-bold text-xs h-7 px-3 rounded-full cursor-pointer"
+                onClick={handleEnablePush}
+              >
+                {enablingPush ? "Enabling..." : "Enable Notifications"}
+              </Button>
+              <button
+                className="hover:opacity-80 p-1 cursor-pointer"
+                onClick={() => setShowPushBanner(false)}
+                aria-label="Dismiss banner"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sticky Top Promo Banner */}
       {activeOffer && !dismissedBanner && (
         <div className="bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-white py-2 px-4 shadow-md sticky top-16 z-40">
@@ -2049,35 +2078,6 @@ const CAMPAIGNS_PER_PAGE = 6;
               <button
                 className="hover:opacity-80 p-1 cursor-pointer"
                 onClick={() => setDismissedBanner(true)}
-                aria-label="Dismiss banner"
-              >
-                <X className="h-4.5 w-4.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Push Notification Permission Banner */}
-      {showPushBanner && (
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-2.5 px-4 shadow-md sticky top-16 z-40">
-          <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-bold">🔔 NEW</span>
-              <span>Turn on notifications to get instant alerts whenever brands launch new campaigns!</span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button
-                size="sm"
-                disabled={enablingPush}
-                className="bg-white text-blue-700 hover:bg-slate-100 font-bold text-xs h-7 px-3 rounded-full cursor-pointer"
-                onClick={handleEnablePush}
-              >
-                {enablingPush ? "Enabling..." : "Enable Notifications"}
-              </Button>
-              <button
-                className="hover:opacity-80 p-1 cursor-pointer"
-                onClick={() => setShowPushBanner(false)}
                 aria-label="Dismiss banner"
               >
                 <X className="h-4.5 w-4.5" />
