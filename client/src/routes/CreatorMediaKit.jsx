@@ -88,6 +88,19 @@ export default function CreatorMediaKit() {
 
   const mediaKitRef = useRef(null);
 
+  // Deduplicate Pricing Packages / Rate Cards (Hook defined at top level to obey Rules of Hooks)
+  const uniquePricingTiers = useMemo(() => {
+    if (!pricingTiers || !Array.isArray(pricingTiers)) return [];
+    const map = new Map();
+    for (const t of pricingTiers) {
+      const key = (t.name || "").trim().toLowerCase();
+      if (key && !map.has(key)) {
+        map.set(key, t);
+      }
+    }
+    return Array.from(map.values());
+  }, [pricingTiers]);
+
   const resolveImageUrl = (url) => {
     if (!url) return null;
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url;
@@ -562,18 +575,6 @@ export default function CreatorMediaKit() {
       };
     });
 
-  // Deduplicate Pricing Packages / Rate Cards
-  const uniquePricingTiers = useMemo(() => {
-    if (!pricingTiers || !Array.isArray(pricingTiers)) return [];
-    const map = new Map();
-    for (const t of pricingTiers) {
-      const key = (t.name || "").trim().toLowerCase();
-      if (key && !map.has(key)) {
-        map.set(key, t);
-      }
-    }
-    return Array.from(map.values());
-  }, [pricingTiers]);
 
   const customYouTube = userCustomFeeds
     .filter((f) => f.platform === "youtube")

@@ -31,6 +31,7 @@ import { NotificationBell } from "./NotificationBell";
 
 
 import { getGenderAvatar } from "@/utils/avatar";
+import { subscribeToPush } from "@/utils/pushNotification";
 
 const baseLinks = [
   { to: "/", label: "Home" },
@@ -53,8 +54,38 @@ export function SiteNavbar() {
   const [connectionCount, setConnectionCount] = useState(0);
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [showPushBanner, setShowPushBanner] = useState(false);
+  const [enablingPush, setEnablingPush] = useState(false);
   const userDropdownRef = useRef(null);
   const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "default") {
+        setShowPushBanner(true);
+      }
+    }
+  }, []);
+
+  const handleEnablePush = async () => {
+    setEnablingPush(true);
+    try {
+      const res = await subscribeToPush();
+      if (res?.success) {
+        setShowPushBanner(false);
+        toast.success("Push notifications enabled! You'll receive alerts for new campaigns.");
+      } else if (res?.reason === "denied") {
+        setShowPushBanner(false);
+        toast.info("Notifications are blocked in browser settings.");
+      } else {
+        setShowPushBanner(false);
+      }
+    } catch (err) {
+      console.error("Push subscription error:", err);
+    } finally {
+      setEnablingPush(false);
+    }
+  };
 
   // Click outside to close user dropdown
   useEffect(() => {
@@ -455,6 +486,35 @@ export function SiteNavbar() {
           </div>
         </div>
 
+        {/* Push Notification Permission Banner - Exactly flush directly under navbar */}
+        {showPushBanner && user && (profile?.role === "creator" || pathname.startsWith("/dashboard/creator")) && (
+          <div className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-2 px-4 shadow-md border-t border-blue-500/20">
+            <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-bold">🔔 NEW</span>
+                <span>Turn on notifications to get instant alerts whenever brands launch new campaigns!</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  disabled={enablingPush}
+                  className="bg-white text-blue-700 hover:bg-slate-100 font-bold text-xs h-7 px-3 rounded-full cursor-pointer"
+                  onClick={handleEnablePush}
+                >
+                  {enablingPush ? "Enabling..." : "Enable Notifications"}
+                </Button>
+                <button
+                  className="hover:opacity-80 p-1 cursor-pointer"
+                  onClick={() => setShowPushBanner(false)}
+                  aria-label="Dismiss banner"
+                >
+                  <X className="h-4.5 w-4.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mobile menu drawer */}
         <AnimatePresence>
           {open && (
@@ -658,6 +718,11 @@ export function SiteNavbar() {
           )}
         </AnimatePresence>
       </header>
+
+      {/* Spacer for push notification banner when visible so page content sits smoothly beneath it */}
+      {showPushBanner && user && (profile?.role === "creator" || pathname.startsWith("/dashboard/creator")) && (
+        <div className="h-10 sm:h-9 shrink-0" />
+      )}
 
       {/* Logout Modal */}
       <AnimatePresence>
