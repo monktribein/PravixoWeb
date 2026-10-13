@@ -30,9 +30,20 @@ export const getByProfile = async (req, res) => {
 
     const pricing = result.rows.map(formatPricingTier);
 
+    // Deduplicate repetitive tiers by normalized name (case-insensitive)
+    const seen = new Set();
+    const uniquePricing = [];
+    for (const tier of pricing) {
+      const key = (tier.name || "").trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        uniquePricing.push(tier);
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      data: pricing,
+      data: uniquePricing,
     });
   } catch (error) {
     console.error("Get pricing error:", error);
@@ -80,8 +91,19 @@ export const upsertMany = async (req, res) => {
 
     const targetProfileId = profileRes.rows[0].id;
 
+    // Deduplicate incoming tiers by normalized name
+    const seenNames = new Set();
+    const cleanTiers = [];
+    for (const t of tiers) {
+      const key = String(t?.name || "").trim().toLowerCase();
+      if (key && !seenNames.has(key)) {
+        seenNames.add(key);
+        cleanTiers.push(t);
+      }
+    }
+
     // Filter incoming IDs that are valid UUIDs
-    const incomingIds = tiers
+    const incomingIds = cleanTiers
       .map((t) => t?.id || t?._id)
       .filter((id) => id && isUuid(id));
 
@@ -97,8 +119,8 @@ export const upsertMany = async (req, res) => {
     }
 
     // Update existing or create new tiers
-    for (let index = 0; index < tiers.length; index++) {
-      const tier = tiers[index];
+    for (let index = 0; index < cleanTiers.length; index++) {
+      const tier = cleanTiers[index];
       const tierId = tier?.id || tier?._id;
       const name = String(tier?.name || `Tier ${index + 1}`).trim();
       const price = Number(tier?.price) || 0;

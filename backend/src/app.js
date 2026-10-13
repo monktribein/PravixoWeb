@@ -22,6 +22,7 @@ import messageRoutes from "./routes/messageRoutes.js";
 import conversationRoutes from "./routes/conversationRoutes.js";
 import portfolioRoutes from "./routes/portfolioRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
+import profileImageRoutes from "./routes/profileImageRoutes.js";
 import socialRoutes from "./routes/socialRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import otpRoutes from "./routes/otpRoutes.js";
@@ -124,6 +125,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/portfolio", portfolioRoutes);
 
 app.use("/api/profiles", profileRoutes);
+app.use("/api/profile-images", profileImageRoutes);
 
 app.use("/api/social", socialRoutes);
 

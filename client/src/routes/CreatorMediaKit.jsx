@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ShieldCheck,
@@ -546,18 +546,34 @@ export default function CreatorMediaKit() {
 
   const customInstagram = userCustomFeeds
     .filter((f) => !f.platform || f.platform === "instagram")
-    .map((f, i) => ({
-      id: f._id || `cust-ig-${i}`,
-      type: f.type || "reel",
-      thumbnail: f.thumbnail || "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80",
-      caption: f.caption || "Featured Creator Content ✨",
-      likes: f.likes || "15.4K",
-      comments: f.comments || "420",
-      views: f.views || "68K",
-      timeAgo: f.createdAt ? new Date(f.createdAt).toLocaleDateString() : "Recent",
-      url: f.postUrl || `https://instagram.com/${instaHandleClean || rawHandle}`,
-      badge: f.badge || (f.type === "reel" ? "Viral Reel" : "Instagram Post"),
-    }));
+    .map((f, i) => {
+      const thumb = f.thumbnail || f.thumbnailUrl || f.mediaUrl || f.imageUrl || "";
+      return {
+        id: f._id || `cust-ig-${i}`,
+        type: f.type || "reel",
+        thumbnail: thumb || "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80",
+        caption: f.caption || "Featured Creator Content ✨",
+        likes: f.likes || "15.4K",
+        comments: f.comments || "420",
+        views: f.views || "68K",
+        timeAgo: f.createdAt ? new Date(f.createdAt).toLocaleDateString() : "Recent",
+        url: f.postUrl || `https://instagram.com/${instaHandleClean || rawHandle}`,
+        badge: f.badge || (f.type === "reel" ? "Viral Reel" : "Recent Post"),
+      };
+    });
+
+  // Deduplicate Pricing Packages / Rate Cards
+  const uniquePricingTiers = useMemo(() => {
+    if (!pricingTiers || !Array.isArray(pricingTiers)) return [];
+    const map = new Map();
+    for (const t of pricingTiers) {
+      const key = (t.name || "").trim().toLowerCase();
+      if (key && !map.has(key)) {
+        map.set(key, t);
+      }
+    }
+    return Array.from(map.values());
+  }, [pricingTiers]);
 
   const customYouTube = userCustomFeeds
     .filter((f) => f.platform === "youtube")
@@ -1038,10 +1054,10 @@ export default function CreatorMediaKit() {
                 </span>
               </div>
 
-              {pricingTiers.length > 0 ? (
+              {uniquePricingTiers.length > 0 ? (
                 <div className="space-y-2.5">
-                  {pricingTiers.map((tier, idx) => (
-                    <div key={idx} className="p-3.5 rounded-2xl bg-secondary/40 border border-border/80 flex items-center justify-between">
+                  {uniquePricingTiers.map((tier, idx) => (
+                    <div key={idx} className="p-3.5 rounded-2xl bg-secondary/40 border border-border/80 flex items-center justify-between hover:border-primary/40 transition-all">
                       <div>
                         <div className="font-bold text-sm text-foreground">{tier.name || `Package ${idx + 1}`}</div>
                         <div className="text-xs text-muted-foreground">{tier.description || "Dedicated video / post deliverable"}</div>
@@ -1191,11 +1207,38 @@ export default function CreatorMediaKit() {
                 >
                   {/* Media Frame Header */}
                   <div className="relative aspect-[9/14] w-full overflow-hidden bg-secondary">
-                    <img
-                      src={feedItem.thumbnail}
-                      alt={feedItem.caption}
-                      className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
-                    />
+                    {feedItem.thumbnail?.endsWith?.(".mp4") ? (
+                      <video
+                        src={feedItem.thumbnail}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <img
+                        src={feedItem.thumbnail}
+                        alt={feedItem.caption || "Content preview"}
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          const fallbacks = [
+                            "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80",
+                            "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=600&auto=format&fit=crop&q=80",
+                            "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&auto=format&fit=crop&q=80",
+                            "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=600&auto=format&fit=crop&q=80",
+                            "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=600&auto=format&fit=crop&q=80",
+                            "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600&auto=format&fit=crop&q=80",
+                          ];
+                          const seed = Math.abs((feedItem.id || feedItem.caption || "fb").split("").reduce((acc, c) => acc + c.charCodeAt(0), 0));
+                          e.target.src = fallbacks[seed % fallbacks.length];
+                        }}
+                        className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
+                      />
+                    )}
 
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30" />

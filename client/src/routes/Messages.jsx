@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   MessageSquare,
@@ -1305,35 +1305,31 @@ export default function Messages() {
    * FILTER CONVERSATIONS
    * ----------------------------------------------------
    */
-  const filteredConversations = conversations.filter(
-    (conversation) => {
-      const name =
-        conversation?.otherProfile?.fullName || "";
-
-      const matchesSearch = name
-        .toLowerCase()
-        .includes(search.toLowerCase());
-
+  const filteredConversations = useMemo(() => {
+    const list = conversations.filter((conversation) => {
+      const name = conversation?.otherProfile?.fullName || "";
+      const matchesSearch = name.toLowerCase().includes(search.toLowerCase());
       if (!matchesSearch) return false;
-
-      if (activeFilter === "all") {
-        return !conversation.archived;
-      }
-
-      if (activeFilter === "unread") {
-        return (
-          !conversation.archived &&
-          conversation.unreadCount > 0
-        );
-      }
-
-      if (activeFilter === "archived") {
-        return conversation.archived;
-      }
-
+      if (activeFilter === "all") return !conversation.archived;
+      if (activeFilter === "unread") return !conversation.archived && conversation.unreadCount > 0;
+      if (activeFilter === "archived") return conversation.archived;
       return true;
+    });
+
+    // Deduplicate by other user so multiple duplicate conversation rows don't flood the UI
+    const seenMap = new Map();
+    const result = [];
+    for (const c of list) {
+      const key = c.conversationType?.startsWith("admin_")
+        ? "admin"
+        : String(c.otherProfile?._id || c.otherProfile?.id || c._id);
+      if (!seenMap.has(key)) {
+        seenMap.set(key, c);
+        result.push(c);
+      }
     }
-  );
+    return result;
+  }, [conversations, search, activeFilter]);
 
   /*
    * ----------------------------------------------------

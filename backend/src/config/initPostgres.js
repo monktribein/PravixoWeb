@@ -959,6 +959,36 @@ export const initPostgresTables = async () => {
       ADD COLUMN IF NOT EXISTS terms JSONB DEFAULT '[]'::jsonb;
   `);
 
+  // Column upgrades for addon_services table
+  await query(`
+    ALTER TABLE addon_services
+      ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS price NUMERIC DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS category VARCHAR(255) DEFAULT 'General',
+      ADD COLUMN IF NOT EXISTS image_url TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS creator_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS approval_status VARCHAR(50) DEFAULT 'approved',
+      ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS created_at BIGINT,
+      ADD COLUMN IF NOT EXISTS created_at_dt TIMESTAMPTZ DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS updated_at_dt TIMESTAMPTZ DEFAULT NOW();
+  `).catch(() => {});
+
+  // Column upgrades for addon_bookings table
+  await query(`
+    ALTER TABLE addon_bookings
+      ADD COLUMN IF NOT EXISTS profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS service_id UUID REFERENCES addon_services(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS booking_date BIGINT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS created_at BIGINT,
+      ADD COLUMN IF NOT EXISTS created_at_dt TIMESTAMPTZ DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS updated_at_dt TIMESTAMPTZ DEFAULT NOW();
+  `).catch(() => {});
+
   console.log("✅ All Full PostgreSQL tables initialized successfully in Supabase!");
 };
 
