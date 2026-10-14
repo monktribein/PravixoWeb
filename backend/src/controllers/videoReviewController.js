@@ -141,8 +141,10 @@ export const getVideoReviews = async (req, res) => {
       const target = rev.target;
       const targetName = rev.target_name || target?.full_name || "";
       const targetAvatar = rev.target_avatar || target?.avatar_url || "";
+      const targetHandle = (target?.handle || "").replace(/^@/, "");
       const reviewer = rev.reviewer;
-      const reviewerAvatar = rev.reviewer_avatar || reviewer?.avatar_url || "";
+      const reviewerAvatar = reviewer?.avatar_url || rev.reviewer_avatar || "";
+      const reviewerHandle = (reviewer?.handle || "").replace(/^@/, "");
       const targetRole = rev.target_role || target?.role || (reviewer?.role === "brand" ? "creator" : "brand");
       const reviewerRole = rev.reviewer_role || reviewer?.role || (targetRole === "creator" ? "brand" : "creator");
 
@@ -150,8 +152,10 @@ export const getVideoReviews = async (req, res) => {
         ...formatVideoReview(rev),
         targetName,
         targetAvatar,
+        targetHandle,
         targetRole,
         reviewerAvatar,
+        reviewerHandle,
         reviewerRole,
       };
     });
@@ -184,6 +188,8 @@ export const getVideoReviews = async (req, res) => {
           const targetRole = target?.role || "creator";
           const reviewerRole = r.reviewer_role || reviewer?.role || "brand";
           const revName = reviewer?.full_name || reviewer?.handle || "Verified Brand";
+          const revHandle = (reviewer?.handle || "").replace(/^@/, "");
+          const targetHandle = (target?.handle || "").replace(/^@/, "");
 
           enhanced.push({
             _id: r.id,
@@ -192,11 +198,13 @@ export const getVideoReviews = async (req, res) => {
             videoUrl: "",
             reviewerName: revName,
             reviewerAvatar: reviewer?.avatar_url || "",
+            reviewerHandle: revHandle,
             reviewerId: r.reviewer_id,
             reviewerRole,
             targetId: r.target_id,
             targetName: target?.full_name || target?.handle || "Verified Partner",
             targetAvatar: target?.avatar_url || "",
+            targetHandle,
             targetRole,
             campaignName: r.campaign_ref || "Brand Collaboration",
             reviewType: "text",

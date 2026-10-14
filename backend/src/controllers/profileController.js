@@ -242,12 +242,43 @@ export const getById = async (req, res) => {
       hiredCount = Number(countRes.rows[0]?.count || 0);
     }
 
-    // Fetch reviews
+    // Fetch reviews with reviewer profile details (avatar, handle, name)
     const reviewsRes = await query(
-      "SELECT * FROM reviews WHERE (target_id = $1 OR creator_id = $1) AND (visible IS TRUE OR visible IS NULL) ORDER BY created_at DESC",
+      `SELECT r.*,
+              row_to_json(p.*) as reviewer
+       FROM reviews r
+       LEFT JOIN profiles p ON r.reviewer_id = p.id
+       WHERE (r.target_id = $1 OR r.creator_id = $1)
+         AND (r.visible IS TRUE OR r.visible IS NULL)
+       ORDER BY r.created_at DESC`,
       [profile.id]
     );
-    const reviews = reviewsRes.rows.map(formatReview);
+    const reviews = reviewsRes.rows.map((row) => {
+      const review = formatReview(row);
+      const revProfile = row.reviewer ? formatProfile(row.reviewer) : null;
+      const cleanHandle = revProfile?.handle ? revProfile.handle.replace(/^@/, "") : "";
+      const finalName = revProfile?.fullName || revProfile?.handle || "Verified Brand";
+      const finalAvatar = revProfile?.avatarUrl || null;
+      const finalRole = review.reviewerRole || revProfile?.role || "brand";
+      return {
+        ...review,
+        reviewerName: finalName,
+        reviewerAvatar: finalAvatar,
+        reviewerHandle: cleanHandle,
+        reviewerRole: finalRole,
+        brandName: finalName,
+        brandAvatar: finalAvatar,
+        brandHandle: cleanHandle,
+        reviewer: {
+          id: revProfile?.id || review.reviewerId,
+          fullName: finalName,
+          name: finalName,
+          handle: cleanHandle,
+          avatarUrl: finalAvatar,
+          role: finalRole,
+        },
+      };
+    });
 
     // Fetch pricing tiers
     const tiersRes = await query(
@@ -328,12 +359,43 @@ export const getByHandle = async (req, res) => {
 
     const profile = formatProfile(result.rows[0]);
 
-    // Attach reviews & ratings
+    // Attach reviews & ratings with reviewer profile details (avatar, handle, name)
     const reviewsRes = await query(
-      "SELECT * FROM reviews WHERE (target_id = $1 OR creator_id = $1) AND (visible IS TRUE OR visible IS NULL) ORDER BY created_at DESC",
+      `SELECT r.*,
+              row_to_json(p.*) as reviewer
+       FROM reviews r
+       LEFT JOIN profiles p ON r.reviewer_id = p.id
+       WHERE (r.target_id = $1 OR r.creator_id = $1)
+         AND (r.visible IS TRUE OR r.visible IS NULL)
+       ORDER BY r.created_at DESC`,
       [profile.id]
     );
-    const reviews = reviewsRes.rows.map(formatReview);
+    const reviews = reviewsRes.rows.map((row) => {
+      const review = formatReview(row);
+      const revProfile = row.reviewer ? formatProfile(row.reviewer) : null;
+      const cleanHandle = revProfile?.handle ? revProfile.handle.replace(/^@/, "") : "";
+      const finalName = revProfile?.fullName || revProfile?.handle || "Verified Brand";
+      const finalAvatar = revProfile?.avatarUrl || null;
+      const finalRole = review.reviewerRole || revProfile?.role || "brand";
+      return {
+        ...review,
+        reviewerName: finalName,
+        reviewerAvatar: finalAvatar,
+        reviewerHandle: cleanHandle,
+        reviewerRole: finalRole,
+        brandName: finalName,
+        brandAvatar: finalAvatar,
+        brandHandle: cleanHandle,
+        reviewer: {
+          id: revProfile?.id || review.reviewerId,
+          fullName: finalName,
+          name: finalName,
+          handle: cleanHandle,
+          avatarUrl: finalAvatar,
+          role: finalRole,
+        },
+      };
+    });
 
     const tiersRes = await query(
       "SELECT * FROM pricing_tiers WHERE profile_id = $1 ORDER BY sort_order ASC",

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/TextArea";
@@ -511,6 +512,23 @@ export default function Reviews() {
               const isVideoReview = rev.reviewType === "video" || !!rev.videoUrl;
               const direct = isDirectVideo(rev.videoUrl);
 
+              const reviewerName = rev.reviewerName || rev.reviewer?.fullName || rev.reviewer?.name || "Verified User";
+              const reviewerHandle = (rev.reviewerHandle || rev.reviewer?.handle || "").replace(/^@/, "");
+              const reviewerRole = rev.reviewerRole || rev.reviewer?.role || (rev.targetRole === "brand" ? "creator" : "brand");
+              const reviewerAvatarUrl =
+                resolveMediaUrl(rev.reviewerAvatar || rev.reviewer?.avatarUrl) ||
+                getGenderAvatar(reviewerName, rev.reviewer?.gender || "", reviewerRole);
+              const reviewerLink = reviewerHandle
+                ? `/c/${reviewerHandle}`
+                : (rev.reviewerId ? (reviewerRole === "brand" ? `/brand/${rev.reviewerId}` : `/influencer/${rev.reviewerId}`) : null);
+
+              const targetName = rev.targetName || rev.target?.fullName || rev.target?.name || (rev.targetRole === "brand" ? "Brand Partner" : "Creator Partner");
+              const targetHandle = (rev.targetHandle || rev.target?.handle || "").replace(/^@/, "");
+              const targetRole = rev.targetRole || rev.target?.role || (reviewerRole === "brand" ? "creator" : "brand");
+              const targetLink = targetHandle
+                ? `/c/${targetHandle}`
+                : (rev.targetId ? (targetRole === "brand" ? `/brand/${rev.targetId}` : `/influencer/${rev.targetId}`) : null);
+
               return (
                 <div
                   key={rev._id}
@@ -557,39 +575,88 @@ export default function Reviews() {
                       /* TEXT REVIEW HEADER CARD */
                       <div className="p-5 pb-0 flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase shrink-0 overflow-hidden">
-                            <img
-                              src={
-                                resolveMediaUrl(rev.reviewerAvatar) ||
-                                getGenderAvatar(rev.reviewerName || "User", "", rev.targetRole === "brand" ? "creator" : "brand")
-                              }
-                              alt={rev.reviewerName || "User"}
-                              className="h-full w-full object-cover"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = getGenderAvatar(rev.reviewerName || "User", "", rev.targetRole === "brand" ? "creator" : "brand");
-                              }}
-                            />
-                          </div>
+                          {reviewerLink ? (
+                            <Link
+                              to={reviewerLink}
+                              className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase shrink-0 overflow-hidden hover:ring-2 hover:ring-primary/60 transition-all cursor-pointer group/avatar"
+                              title={`View ${reviewerName}'s profile`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <img
+                                src={reviewerAvatarUrl}
+                                alt={reviewerName}
+                                className="h-full w-full object-cover group-hover/avatar:scale-105 transition-transform"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = getGenderAvatar(reviewerName, "", reviewerRole);
+                                }}
+                              />
+                            </Link>
+                          ) : (
+                            <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase shrink-0 overflow-hidden">
+                              <img
+                                src={reviewerAvatarUrl}
+                                alt={reviewerName}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = getGenderAvatar(reviewerName, "", reviewerRole);
+                                }}
+                              />
+                            </div>
+                          )}
                           <div className="min-w-0">
-                            <h4 className="font-display text-sm font-bold text-foreground truncate">
-                              {rev.reviewerName}
-                            </h4>
-                            {rev.targetRole === "brand" ? (
-                              <span className="text-[11px] font-medium text-primary flex items-center gap-1 truncate">
+                            {reviewerLink ? (
+                              <Link
+                                to={reviewerLink}
+                                className="font-display text-sm font-bold text-foreground hover:text-primary transition-colors truncate block"
+                                onClick={(e) => e.stopPropagation()}
+                                title={`View ${reviewerName}'s profile`}
+                              >
+                                {reviewerName}
+                              </Link>
+                            ) : (
+                              <h4 className="font-display text-sm font-bold text-foreground truncate">
+                                {reviewerName}
+                              </h4>
+                            )}
+                            {targetRole === "brand" ? (
+                              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-1 truncate">
                                 <Building2 className="h-3 w-3 shrink-0 text-primary" />
-                                For Brand:{" "}
-                                <strong className="text-foreground">
-                                  {rev.targetName || rev.campaignName || "Brand Partner"}
-                                </strong>
+                                <span>For Brand:</span>{" "}
+                                {targetLink ? (
+                                  <Link
+                                    to={targetLink}
+                                    className="font-bold text-foreground hover:text-primary transition-colors underline-offset-2 hover:underline truncate"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title={`View ${targetName}'s profile`}
+                                  >
+                                    {targetName}
+                                  </Link>
+                                ) : (
+                                  <strong className="text-foreground truncate">
+                                    {targetName}
+                                  </strong>
+                                )}
                               </span>
                             ) : (
-                              <span className="text-[11px] font-medium text-accent flex items-center gap-1 truncate">
-                                <UserCheck className="h-3 w-3 shrink-0 text-accent" />
-                                For Creator:{" "}
-                                <strong className="text-foreground">
-                                  {rev.targetName || "Creator Partner"}
-                                </strong>
+                              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-1 truncate">
+                                <UserCheck className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span>For Creator:</span>{" "}
+                                {targetLink ? (
+                                  <Link
+                                    to={targetLink}
+                                    className="font-bold text-foreground hover:text-primary transition-colors underline-offset-2 hover:underline truncate"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title={`View ${targetName}'s profile`}
+                                  >
+                                    {targetName}
+                                  </Link>
+                                ) : (
+                                  <strong className="text-foreground truncate">
+                                    {targetName}
+                                  </strong>
+                                )}
                               </span>
                             )}
                           </div>
@@ -624,27 +691,92 @@ export default function Reviews() {
                       </div>
 
                       {isVideoReview && (
-                        <div className="space-y-0.5">
-                          <h4 className="font-display text-sm font-bold text-foreground">
-                            {rev.reviewerName}
-                          </h4>
-                          {rev.targetRole === "brand" ? (
-                            <p className="text-[11px] font-medium text-primary flex items-center gap-1">
-                              <Building2 className="h-3 w-3 shrink-0" />
-                              For Brand:{" "}
-                              <strong className="text-foreground">
-                                {rev.targetName || rev.campaignName || "Brand Partner"}
-                              </strong>
-                            </p>
+                        <div className="flex items-center gap-2.5 min-w-0 pt-0.5">
+                          {reviewerLink ? (
+                            <Link
+                              to={reviewerLink}
+                              className="h-8 w-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase shrink-0 overflow-hidden hover:ring-2 hover:ring-primary/60 transition-all cursor-pointer group/avatar"
+                              title={`View ${reviewerName}'s profile`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <img
+                                src={reviewerAvatarUrl}
+                                alt={reviewerName}
+                                className="h-full w-full object-cover group-hover/avatar:scale-105 transition-transform"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = getGenderAvatar(reviewerName, "", reviewerRole);
+                                }}
+                              />
+                            </Link>
                           ) : (
-                            <p className="text-[11px] font-medium text-accent flex items-center gap-1">
-                              <UserCheck className="h-3 w-3 shrink-0" />
-                              For Creator:{" "}
-                              <strong className="text-foreground">
-                                {rev.targetName || "Creator Partner"}
-                              </strong>
-                            </p>
+                            <div className="h-8 w-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs uppercase shrink-0 overflow-hidden">
+                              <img
+                                src={reviewerAvatarUrl}
+                                alt={reviewerName}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = getGenderAvatar(reviewerName, "", reviewerRole);
+                                }}
+                              />
+                            </div>
                           )}
+                          <div className="min-w-0">
+                            {reviewerLink ? (
+                              <Link
+                                to={reviewerLink}
+                                className="font-display text-sm font-bold text-foreground hover:text-primary transition-colors truncate block"
+                                onClick={(e) => e.stopPropagation()}
+                                title={`View ${reviewerName}'s profile`}
+                              >
+                                {reviewerName}
+                              </Link>
+                            ) : (
+                              <h4 className="font-display text-sm font-bold text-foreground truncate">
+                                {reviewerName}
+                              </h4>
+                            )}
+                            {targetRole === "brand" ? (
+                              <p className="text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-1 truncate">
+                                <Building2 className="h-3 w-3 shrink-0 text-primary" />
+                                <span>For Brand:</span>{" "}
+                                {targetLink ? (
+                                  <Link
+                                    to={targetLink}
+                                    className="font-bold text-foreground hover:text-primary transition-colors underline-offset-2 hover:underline truncate"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title={`View ${targetName}'s profile`}
+                                  >
+                                    {targetName}
+                                  </Link>
+                                ) : (
+                                  <strong className="text-foreground truncate">
+                                    {targetName}
+                                  </strong>
+                                )}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] font-medium text-slate-600 dark:text-slate-300 flex items-center gap-1 truncate">
+                                <UserCheck className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span>For Creator:</span>{" "}
+                                {targetLink ? (
+                                  <Link
+                                    to={targetLink}
+                                    className="font-bold text-foreground hover:text-primary transition-colors underline-offset-2 hover:underline truncate"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title={`View ${targetName}'s profile`}
+                                  >
+                                    {targetName}
+                                  </Link>
+                                ) : (
+                                  <strong className="text-foreground truncate">
+                                    {targetName}
+                                  </strong>
+                                )}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       )}
 

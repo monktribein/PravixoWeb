@@ -982,21 +982,60 @@ export default function CreatorMediaKit() {
                   </div>
                 )}
 
-                {creator.reviews?.length > 0 && (
+                {((reviewsList && reviewsList.length > 0) || (creator.reviews && creator.reviews.length > 0)) && (
                   <div className="space-y-3 pt-3">
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Client Reviews:</span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {creator.reviews.slice(0, 4).map((rev, i) => (
-                        <div key={i} className="p-3.5 rounded-2xl bg-secondary/40 border border-border/80 space-y-1.5 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-foreground">{rev.brandName || rev.customerName || "Brand Partner"}</span>
-                            <div className="flex items-center text-amber-500 font-bold">
-                              <Star className="w-3 h-3 fill-amber-400 mr-1" /> {rev.rating || 5}
+                      {((reviewsList && reviewsList.length > 0) ? reviewsList : creator.reviews).slice(0, 4).map((rev, i) => {
+                        const brandName = rev.brandName || rev.reviewerName || rev.reviewer?.fullName || rev.reviewer?.brandName || "Brand Partner";
+                        const brandHandle = (rev.brandHandle || rev.reviewerHandle || rev.reviewer?.handle || "").replace(/^@/, "");
+                        const brandAvatar = resolveImageUrl(rev.brandAvatar || rev.reviewerAvatar || rev.reviewer?.avatarUrl) || getGenderAvatar(brandName, "male", "brand");
+                        const brandLink = brandHandle ? `/c/${brandHandle}` : (rev.reviewerId ? `/influencer/${rev.reviewerId}` : null);
+
+                        return (
+                          <div key={i} className="p-3.5 rounded-2xl bg-secondary/40 border border-border/80 space-y-2 text-xs hover:border-primary/40 transition-all">
+                            <div className="flex items-center justify-between gap-2">
+                              {brandLink ? (
+                                <Link to={brandLink} className="flex items-center gap-2.5 min-w-0 group/brand hover:opacity-90">
+                                  <img
+                                    src={brandAvatar}
+                                    alt={brandName}
+                                    className="w-8 h-8 rounded-full object-cover border border-border shrink-0 group-hover/brand:ring-2 group-hover/brand:ring-primary/50 transition-all bg-background"
+                                  />
+                                  <div className="min-w-0">
+                                    <span className="font-bold text-foreground text-xs line-clamp-1 group-hover/brand:text-primary transition-colors flex items-center gap-1">
+                                      {brandName}
+                                      <CheckCircle2 className="w-3 h-3 text-blue-500 shrink-0" />
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground block line-clamp-1">Verified Brand</span>
+                                  </div>
+                                </Link>
+                              ) : (
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <img
+                                    src={brandAvatar}
+                                    alt={brandName}
+                                    className="w-8 h-8 rounded-full object-cover border border-border shrink-0 bg-background"
+                                  />
+                                  <div className="min-w-0">
+                                    <span className="font-bold text-foreground text-xs line-clamp-1 flex items-center gap-1">
+                                      {brandName}
+                                      <CheckCircle2 className="w-3 h-3 text-blue-500 shrink-0" />
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground block line-clamp-1">Verified Brand</span>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="flex items-center text-amber-500 font-bold shrink-0 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 text-[11px]">
+                                <Star className="w-3 h-3 fill-amber-400 mr-1" /> {rev.rating || 5}
+                              </div>
                             </div>
+                            <p className="text-muted-foreground italic line-clamp-3">
+                              "{rev.comment || rev.text || "Exceptional deliverable quality and on-time execution."}"
+                            </p>
                           </div>
-                          <p className="text-muted-foreground italic line-clamp-3">"{rev.comment || rev.text || "Exceptional deliverable quality and on-time execution."}"</p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
