@@ -452,6 +452,10 @@ export default function CreatorMediaKit() {
   // Safely parse creator custom feeds from DB / API
   const userCustomFeeds = (() => {
     let f = creator.customSocialFeeds ?? creator.custom_social_feeds;
+    // Fallback: If viewing own media kit, use profile's customSocialFeeds
+    if ((!f || (Array.isArray(f) && f.length === 0)) && isOwnProfile && Array.isArray(profile?.customSocialFeeds) && profile.customSocialFeeds.length > 0) {
+      f = profile.customSocialFeeds;
+    }
     if (typeof f === "string") {
       try { f = JSON.parse(f); } catch (e) { f = []; }
     }
@@ -468,9 +472,18 @@ export default function CreatorMediaKit() {
     creator.instagramHandle ||
     creator.instagram_handle ||
     igConn?.handle ||
+    (isOwnProfile ? (profile?.instagramHandle || profile?.instagram_handle) : "") ||
     creator.socialLinks?.instagram ||
-    (userCustomFeeds.length > 0 ? (creator.handle || rawHandle) : (creator.handle || rawHandle))
+    ""
   )?.replace(/^@/, "").trim() || "";
+
+  const instaFollowersCount = Number(
+    creator.instagramFollowers ||
+    creator.instagram_followers ||
+    igConn?.followers ||
+    (isOwnProfile ? (profile?.instagramFollowers || profile?.instagram_followers) : 0) ||
+    0
+  );
 
   const ytHandleClean = (
     creator.youtubeHandle ||
@@ -672,6 +685,54 @@ export default function CreatorMediaKit() {
   const liveYouTubeFeeds = customYouTube.length > 0 ? customYouTube : defaultYouTubeFeeds;
   const liveFacebookFeeds = customFacebook.length > 0 ? customFacebook : defaultFacebookFeeds;
 
+  // Calculate dynamic Average Views per Reel from live connected feeds or audience stats
+  const calculatedAvgViews = useMemo(() => {
+    // 1. If custom social feeds exist, calculate average from their real views
+    const targetFeeds = customInstagram.length > 0 ? customInstagram : liveInstagramFeeds;
+    const feedsWithViews = (targetFeeds || []).filter((f) => f && f.views);
+    if (feedsWithViews.length > 0 && customInstagram.length > 0) {
+      let sum = 0;
+      let validCount = 0;
+      for (const f of feedsWithViews) {
+        let v = String(f.views).trim().toUpperCase();
+        let num = 0;
+        if (v.endsWith("M")) {
+          num = parseFloat(v) * 1000000;
+        } else if (v.endsWith("K")) {
+          num = parseFloat(v) * 1000;
+        } else {
+          num = parseFloat(v.replace(/,/g, ""));
+        }
+        if (!isNaN(num) && num > 0) {
+          sum += num;
+          validCount++;
+        }
+      }
+      if (validCount > 0) {
+        const avg = Math.round(sum / validCount);
+        if (avg >= 1000000) return `${(avg / 1000000).toFixed(1)}M`;
+        if (avg >= 10000) return `${(avg / 1000).toFixed(0)}K`;
+        if (avg >= 1000) return `${(avg / 1000).toFixed(1)}K`;
+        return avg.toLocaleString();
+      }
+    }
+
+    // 2. If audienceHighlights has a custom string set
+    if (creator?.audienceHighlights?.avgViewsPerReel) {
+      return creator.audienceHighlights.avgViewsPerReel;
+    }
+
+    // 3. Fallback based on real follower count (typically 15% - 35% of followers)
+    if (instaFollowersCount > 0) {
+      const minV = Math.max(50, Math.round(instaFollowersCount * 0.15));
+      const maxV = Math.max(150, Math.round(instaFollowersCount * 0.35));
+      const fmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n);
+      return `${fmt(minV)} - ${fmt(maxV)}`;
+    }
+
+    return "200 - 500";
+  }, [customInstagram, liveInstagramFeeds, creator, instaFollowersCount]);
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-white pb-24">
       {/* Main Printable Container */}
@@ -818,7 +879,7 @@ export default function CreatorMediaKit() {
               <Eye className="w-4 h-4 text-purple-500" />
             </div>
             <div className="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-300 font-display">
-              {creator.audienceHighlights?.avgViewsPerReel || "35K - 90K"}
+              {calculatedAvgViews}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">High conversion organic reach</p>
           </div>
@@ -943,7 +1004,7 @@ export default function CreatorMediaKit() {
               </div>
 
               <div className="space-y-3">
-                {instaHandleClean && (
+                {instaHandleClean ? (
                   <a
                     href={
                       instaHandleClean.startsWith("http")
@@ -968,12 +1029,12 @@ export default function CreatorMediaKit() {
                     </div>
                     <div className="text-right">
                       <div className="font-extrabold text-sm text-foreground">
-                        {formatFollowers(creator.instagramFollowers || creator.instagram_followers || igConn?.followers || totalFollowers || 0)}
+                        {instaFollowersCount > 0 ? formatFollowers(instaFollowersCount) : "Connected"}
                       </div>
                       <div className="text-[10px] text-muted-foreground">Followers</div>
                     </div>
                   </a>
-                )}
+                ) : null}
 
                 {ytHandleClean && (
                   <a
@@ -1201,7 +1262,7 @@ export default function CreatorMediaKit() {
                 <span>Recent Posts & Viral Content</span>
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                Explore latest content, reels, engagement rates & video metrics from @{rawHandle}'s connected accounts.
+                Explore latest content, reels, engagement rates & video metrics from @{instaHandleClean || rawHandle}'s connected accounts.
               </p>
             </div>
 

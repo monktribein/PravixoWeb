@@ -30,6 +30,11 @@
 **/.env*
 !**/.env.example
 
+
+#---> ignore Read.txt -------->
+/Read.txt
+
+
 node_modules/
 **/node_modules/
 dist/

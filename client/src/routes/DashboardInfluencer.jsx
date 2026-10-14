@@ -1476,6 +1476,7 @@ const CAMPAIGNS_PER_PAGE = 6;
       if (updated && updateLocalProfile) {
         updateLocalProfile(updated);
       }
+      if (fetchProfile) fetchProfile();
       toast.success("Social presence and live feeds saved!");
     } catch (err) {
       console.error(err);
