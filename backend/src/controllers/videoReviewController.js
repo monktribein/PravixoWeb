@@ -143,14 +143,73 @@ export const getVideoReviews = async (req, res) => {
       const targetAvatar = rev.target_avatar || target?.avatar_url || "";
       const reviewer = rev.reviewer;
       const reviewerAvatar = rev.reviewer_avatar || reviewer?.avatar_url || "";
+      const targetRole = rev.target_role || target?.role || (reviewer?.role === "brand" ? "creator" : "brand");
+      const reviewerRole = rev.reviewer_role || reviewer?.role || (targetRole === "creator" ? "brand" : "creator");
 
       return {
         ...formatVideoReview(rev),
         targetName,
         targetAvatar,
+        targetRole,
         reviewerAvatar,
+        reviewerRole,
       };
     });
+
+    // Also include verified text reviews from `reviews` table if not already in video_reviews
+    try {
+      const revsRes = await query(`
+        SELECT
+          r.*,
+          row_to_json(t.*) as target,
+          row_to_json(rev.*) as reviewer
+        FROM reviews r
+        LEFT JOIN profiles t ON t.id = r.target_id
+        LEFT JOIN profiles rev ON rev.id = r.reviewer_id
+        WHERE (r.visible IS TRUE OR r.visible IS NULL)
+          AND (r.status IN ('approved', 'pending') OR r.status IS NULL)
+        ORDER BY r.created_at DESC;
+      `);
+
+      const existingKeys = new Set(
+        enhanced.map((e) => `${e.reviewerId}_${e.targetId}`.toLowerCase())
+      );
+
+      for (const r of revsRes.rows) {
+        const key = `${r.reviewer_id}_${r.target_id}`.toLowerCase();
+        if (!existingKeys.has(key)) {
+          existingKeys.add(key);
+          const target = r.target;
+          const reviewer = r.reviewer;
+          const targetRole = target?.role || "creator";
+          const reviewerRole = r.reviewer_role || reviewer?.role || "brand";
+          const revName = reviewer?.full_name || reviewer?.handle || "Verified Brand";
+
+          enhanced.push({
+            _id: r.id,
+            id: r.id,
+            thumbnailUrl: "",
+            videoUrl: "",
+            reviewerName: revName,
+            reviewerAvatar: reviewer?.avatar_url || "",
+            reviewerId: r.reviewer_id,
+            reviewerRole,
+            targetId: r.target_id,
+            targetName: target?.full_name || target?.handle || "Verified Partner",
+            targetAvatar: target?.avatar_url || "",
+            targetRole,
+            campaignName: r.campaign_ref || "Brand Collaboration",
+            reviewType: "text",
+            reviewText: r.text,
+            rating: Number(r.rating || 5),
+            createdAt: r.created_at_dt || r.created_at,
+            updatedAt: r.updated_at_dt,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Reviews table merge note:", e.message);
+    }
 
     return res.status(200).json({
       success: true,

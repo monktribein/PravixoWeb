@@ -90,16 +90,23 @@ export default function CreatorMediaKit() {
 
   // Deduplicate Pricing Packages / Rate Cards (Hook defined at top level to obey Rules of Hooks)
   const uniquePricingTiers = useMemo(() => {
-    if (!pricingTiers || !Array.isArray(pricingTiers)) return [];
+    const list = (pricingTiers && Array.isArray(pricingTiers) && pricingTiers.length > 0)
+      ? pricingTiers
+      : (creator?.customPricingPackages && Array.isArray(creator.customPricingPackages) && creator.customPricingPackages.length > 0)
+        ? creator.customPricingPackages
+        : (creator?.pricingTiers && Array.isArray(creator.pricingTiers) && creator.pricingTiers.length > 0)
+          ? creator.pricingTiers
+          : [];
+    if (!list || !Array.isArray(list)) return [];
     const map = new Map();
-    for (const t of pricingTiers) {
+    for (const t of list) {
       const key = (t.name || "").trim().toLowerCase();
       if (key && !map.has(key)) {
         map.set(key, t);
       }
     }
     return Array.from(map.values());
-  }, [pricingTiers]);
+  }, [pricingTiers, creator]);
 
   const resolveImageUrl = (url) => {
     if (!url) return null;
@@ -118,10 +125,11 @@ export default function CreatorMediaKit() {
     try {
       const res = await api.get(`/reviews/target/${creatorId}`);
       const data = res.data?.data || res.data || [];
-      setReviewsList(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length > 0) {
+        setReviewsList(data);
+      }
     } catch (err) {
       console.error("Failed to load reviews:", err);
-      setReviewsList([]);
     } finally {
       setLoadingReviews(false);
     }
@@ -137,11 +145,15 @@ export default function CreatorMediaKit() {
         const data = profileRes.data?.data || profileRes.data;
         setCreator(data);
 
-        // Preload pricing tiers and social connections if available in profile payload
+        // Preload pricing tiers and reviews if available in profile payload
         if (data?.pricingTiers && Array.isArray(data.pricingTiers) && data.pricingTiers.length > 0) {
           setPricingTiers(data.pricingTiers);
         } else if (data?.customPricingPackages && Array.isArray(data.customPricingPackages) && data.customPricingPackages.length > 0) {
           setPricingTiers(data.customPricingPackages);
+        }
+
+        if (data?.reviews && Array.isArray(data.reviews) && data.reviews.length > 0) {
+          setReviewsList(data.reviews);
         }
 
         if (data?.socialConnections && Array.isArray(data.socialConnections) && data.socialConnections.length > 0) {

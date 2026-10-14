@@ -244,7 +244,7 @@ export const getById = async (req, res) => {
 
     // Fetch reviews
     const reviewsRes = await query(
-      "SELECT * FROM reviews WHERE target_id = $1 AND visible = true",
+      "SELECT * FROM reviews WHERE (target_id = $1 OR creator_id = $1) AND (visible IS TRUE OR visible IS NULL) ORDER BY created_at DESC",
       [profile.id]
     );
     const reviews = reviewsRes.rows.map(formatReview);
@@ -254,7 +254,10 @@ export const getById = async (req, res) => {
       "SELECT * FROM pricing_tiers WHERE profile_id = $1 ORDER BY sort_order ASC",
       [profile.id]
     );
-    const pricingTiers = tiersRes.rows.map(formatPricingTier);
+    let pricingTiers = tiersRes.rows.map(formatPricingTier);
+    if (pricingTiers.length === 0 && profile.customPricingPackages?.length > 0) {
+      pricingTiers = profile.customPricingPackages;
+    }
 
     // Fetch social connections
     const socialRes = await query(
@@ -308,7 +311,7 @@ export const getByHandle = async (req, res) => {
     const cleanHandle = handle.trim().replace(/^@/, "");
 
     let result = await query(
-      "SELECT * FROM profiles WHERE handle ILIKE $1 OR handle ILIKE $2 LIMIT 1",
+      "SELECT * FROM profiles WHERE handle ILIKE $1 OR handle ILIKE $2 ORDER BY updated_at DESC, created_at DESC LIMIT 1",
       [cleanHandle, `@${cleanHandle}`]
     );
 
@@ -327,7 +330,7 @@ export const getByHandle = async (req, res) => {
 
     // Attach reviews & ratings
     const reviewsRes = await query(
-      "SELECT * FROM reviews WHERE target_id = $1 AND visible = true",
+      "SELECT * FROM reviews WHERE (target_id = $1 OR creator_id = $1) AND (visible IS TRUE OR visible IS NULL) ORDER BY created_at DESC",
       [profile.id]
     );
     const reviews = reviewsRes.rows.map(formatReview);
@@ -336,7 +339,10 @@ export const getByHandle = async (req, res) => {
       "SELECT * FROM pricing_tiers WHERE profile_id = $1 ORDER BY sort_order ASC",
       [profile.id]
     );
-    const pricingTiers = tiersRes.rows.map(formatPricingTier);
+    let pricingTiers = tiersRes.rows.map(formatPricingTier);
+    if (pricingTiers.length === 0 && profile.customPricingPackages?.length > 0) {
+      pricingTiers = profile.customPricingPackages;
+    }
 
     const socialByHandleRes = await query(
       "SELECT * FROM social_connections WHERE profile_id = $1 ORDER BY created_at DESC",

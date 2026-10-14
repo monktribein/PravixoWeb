@@ -13,22 +13,48 @@ export const getByProfile = async (req, res) => {
   try {
     const { profileId } = req.params;
 
-    if (!profileId || profileId === "undefined") {
-      return res.status(400).json({
-        success: false,
-        message: "Profile ID is required.",
+    if (!profileId || profileId === "undefined" || profileId === "null") {
+      return res.status(200).json({
+        success: true,
         data: [],
       });
     }
 
+    const cleanId = String(profileId).trim();
+
     const result = await query(
       `SELECT * FROM pricing_tiers
        WHERE profile_id::text = $1
+          OR profile_id IN (SELECT id FROM profiles WHERE id::text = $1 OR user_id = $1)
        ORDER BY sort_order ASC`,
-      [profileId.trim()]
+      [cleanId]
     );
 
-    const pricing = result.rows.map(formatPricingTier);
+    let pricing = result.rows.map(formatPricingTier);
+
+    // If pricing_tiers is empty, fallback to profiles.custom_pricing_packages
+    if (pricing.length === 0) {
+      const pRes = await query(
+        `SELECT custom_pricing_packages, starting_price FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
+        [cleanId]
+      );
+      if (pRes.rows[0]) {
+        let pk = pRes.rows[0].custom_pricing_packages;
+        if (typeof pk === "string") {
+          try { pk = JSON.parse(pk); } catch (e) { pk = []; }
+        }
+        if (Array.isArray(pk) && pk.length > 0) {
+          pricing = pk.map((t, idx) => ({
+            _id: t.id || t._id || `pkg-${idx}`,
+            id: t.id || t._id || `pkg-${idx}`,
+            name: t.name || `Package ${idx + 1}`,
+            price: Number(t.price || 0),
+            sortOrder: t.sortOrder !== undefined ? Number(t.sortOrder) : idx,
+            description: t.description || "",
+          }));
+        }
+      }
+    }
 
     // Deduplicate repetitive tiers by normalized name (case-insensitive)
     const seen = new Set();
@@ -76,10 +102,12 @@ export const upsertMany = async (req, res) => {
       });
     }
 
-    // Verify profile exists in Supabase
+    const cleanId = String(profileId).trim();
+
+    // Verify profile exists in Supabase (check both id and user_id)
     const profileRes = await query(
-      "SELECT id FROM profiles WHERE id::text = $1",
-      [profileId.trim()]
+      "SELECT id, handle FROM profiles WHERE id::text = $1 OR user_id = $1 LIMIT 1",
+      [cleanId]
     );
 
     if (profileRes.rows.length === 0) {
@@ -98,7 +126,12 @@ export const upsertMany = async (req, res) => {
       const key = String(t?.name || "").trim().toLowerCase();
       if (key && !seenNames.has(key)) {
         seenNames.add(key);
-        cleanTiers.push(t);
+        cleanTiers.push({
+          ...t,
+          name: t?.name?.trim() || "Package",
+          price: Number(t?.price) || 0,
+          description: t?.description || "",
+        });
       }
     }
 
@@ -142,7 +175,7 @@ export const upsertMany = async (req, res) => {
       }
     }
 
-    // Recalculate Starting Price
+    // Recalculate Starting Price & update both starting_price AND custom_pricing_packages
     const allTiersRes = await query(
       `SELECT * FROM pricing_tiers
        WHERE profile_id = $1
@@ -150,23 +183,28 @@ export const upsertMany = async (req, res) => {
       [targetProfileId]
     );
 
-    const validPrices = allTiersRes.rows
+    const formattedTiers = allTiersRes.rows.map(formatPricingTier);
+
+    const validPrices = formattedTiers
       .map((t) => Number(t.price))
       .filter((p) => p > 0);
 
     const startingPrice = validPrices.length > 0 ? Math.min(...validPrices) : 0;
 
+    // Keep custom_pricing_packages and starting_price fully synchronized
     await query(
       `UPDATE profiles
-       SET starting_price = $1, updated_at = NOW()
-       WHERE id = $2`,
-      [startingPrice, targetProfileId]
+       SET starting_price = $1,
+           custom_pricing_packages = $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $3`,
+      [startingPrice, JSON.stringify(formattedTiers), targetProfileId]
     );
 
     return res.status(200).json({
       success: true,
       message: "Pricing tiers updated successfully.",
-      data: allTiersRes.rows.map(formatPricingTier),
+      data: formattedTiers,
     });
   } catch (error) {
     console.error("Upsert pricing error:", error);

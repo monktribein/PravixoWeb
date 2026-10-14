@@ -359,7 +359,14 @@ export default function Reviews() {
   };
 
   const visibleReviews = reviews.filter((review) => {
-    const matchRole = review.targetRole === selectedRole;
+    const tRole = (review.targetRole || "creator").toLowerCase();
+    const rRole = (review.reviewerRole || (tRole === "creator" ? "brand" : "creator")).toLowerCase();
+
+    const matchRole =
+      selectedRole === "brand"
+        ? (rRole === "brand" || tRole === "brand")
+        : (rRole === "creator" || tRole === "creator");
+
     if (!matchRole) return false;
     if (filterType === "all") return true;
     if (filterType === "video") return review.reviewType === "video" || !!review.videoUrl;

@@ -290,14 +290,15 @@ export const listReviewsForTarget = async (req, res) => {
              row_to_json(p.*) as reviewer
       FROM reviews r
       LEFT JOIN profiles p ON r.reviewer_id = p.id
-      WHERE (r.target_id::text = $1 OR r.creator_id::text = $1 OR r.brand_id::text = $1)
+      WHERE (r.target_id::text = $1 OR r.creator_id::text = $1 OR r.brand_id::text = $1
+             OR r.target_id IN (SELECT id FROM profiles WHERE id::text = $1 OR user_id = $1))
         AND r.reviewer_id::text != $1
-        AND r.visible = true
-        ${includePending ? "" : "AND r.status IN ('approved', 'pending')"}
+        AND (r.visible IS TRUE OR r.visible IS NULL)
+        ${includePending ? "" : "AND (r.status IN ('approved', 'pending') OR r.status IS NULL)"}
       ORDER BY r.created_at DESC
     `;
 
-    const revRes = await query(sql, [targetUuid]);
+    const revRes = await query(sql, [String(targetUuid)]);
 
     const results = revRes.rows.map((row) => {
       const review = formatReview(row);
@@ -339,6 +340,62 @@ export const listReviewsForTarget = async (req, res) => {
         },
       };
     });
+
+    // Also include any reviews from video_reviews table targeting this profile if not already present
+    try {
+      const targetName = profile?.fullName || "";
+      const vSql = `
+        SELECT vr.*, row_to_json(p.*) as reviewer
+        FROM video_reviews vr
+        LEFT JOIN profiles p ON vr.reviewer_id = p.id
+        WHERE (vr.target_id::text = $1 ${targetName ? "OR vr.target_name ILIKE $2" : ""})
+        ORDER BY vr.created_at DESC
+      `;
+      const vParams = targetName ? [String(targetUuid), `%${targetName}%`] : [String(targetUuid)];
+      const vRes = await query(vSql, vParams);
+      const existingReviewerIds = new Set(results.map((r) => String(r.reviewerId || r.reviewer_id)));
+
+      for (const vRow of vRes.rows) {
+        if (!existingReviewerIds.has(String(vRow.reviewer_id))) {
+          const revProfile = vRow.reviewer ? formatProfile(vRow.reviewer) : null;
+          const cleanHandle = revProfile?.handle ? revProfile.handle.replace(/^@/, "") : "";
+          const finalName = vRow.reviewer_name || revProfile?.fullName || revProfile?.handle || "Verified Brand";
+          const finalAvatar = vRow.reviewer_avatar || revProfile?.avatarUrl || null;
+
+          results.push({
+            _id: vRow.id,
+            id: vRow.id,
+            targetId: vRow.target_id || targetUuid,
+            reviewerId: vRow.reviewer_id,
+            reviewerHandle: cleanHandle,
+            reviewerName: finalName,
+            reviewerAvatar: finalAvatar,
+            reviewerRole: "brand",
+            reviewerGender: revProfile?.gender || "male",
+            reviewerCompany: "Brand Partner",
+            rating: Number(vRow.rating || 5),
+            title: vRow.campaign_name ? `Campaign: ${vRow.campaign_name}` : "Verified Collaboration",
+            text: vRow.review_text,
+            status: "approved",
+            visible: true,
+            createdAt: vRow.created_at,
+            reviewer: {
+              _id: vRow.reviewer_id,
+              id: vRow.reviewer_id,
+              fullName: finalName,
+              name: finalName,
+              brandName: finalName,
+              handle: cleanHandle,
+              avatarUrl: finalAvatar,
+              role: "brand",
+              companyName: "Brand Partner",
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Video reviews merge note in listReviewsForTarget:", e.message);
+    }
 
     return res.status(200).json({
       success: true,

@@ -319,7 +319,9 @@ export function DashboardInfluencer() {
 
   const hasValidMongoProfileId =
     typeof mongoProfileId === "string" &&
-    /^[a-fA-F0-9]{24}$/.test(mongoProfileId);
+    mongoProfileId.trim().length > 0 &&
+    mongoProfileId !== "undefined" &&
+    mongoProfileId !== "null";
 
   const profileKey = mongoProfileId || "none";
   const [pricingRefreshKey, setPricingRefreshKey] = useState(0);
@@ -1608,17 +1610,18 @@ const CAMPAIGNS_PER_PAGE = 6;
   const savePricing = async () => {
     if (!profile) return;
     try {
+      const cleanTiers = tiers.map((t, idx) => ({
+        id: t.id,
+        name: t.name,
+        price: Number(t.price) || 0,
+        sortOrder: idx,
+      }));
       const res = await upsertPricing({
         profileId: mongoProfileId,
-        tiers: tiers.map((t, idx) => ({
-          id: t.id,
-          name: t.name,
-          price: Number(t.price) || 0,
-          sortOrder: idx,
-        })),
+        tiers: cleanTiers,
       });
       const updatedTiers = res?.data || res || [];
-      if (Array.isArray(updatedTiers)) {
+      if (Array.isArray(updatedTiers) && updatedTiers.length > 0) {
         setTiers(
           updatedTiers.map((t) => ({
             id: t._id || t.id,
@@ -1629,6 +1632,13 @@ const CAMPAIGNS_PER_PAGE = 6;
         );
       }
       setPricingRefreshKey((c) => c + 1);
+      if (updateLocalProfile) {
+        updateLocalProfile({
+          ...profile,
+          customPricingPackages: cleanTiers,
+          pricingTiers: cleanTiers,
+        });
+      }
       if (fetchProfile) fetchProfile();
       toast.success("Pricing updated successfully!");
     } catch (err) {
@@ -1642,7 +1652,7 @@ const CAMPAIGNS_PER_PAGE = 6;
     const newTiers = tiers.filter((_, i) => i !== idx);
     setTiers(newTiers);
 
-    if (t?.id && typeof t.id === "string" && /^[a-fA-F0-9]{24}$/.test(t.id)) {
+    if (t?.id && typeof t.id === "string" && t.id.length > 5) {
       try {
         await removeTierMutation({ id: t.id });
         setPricingRefreshKey((c) => c + 1);
