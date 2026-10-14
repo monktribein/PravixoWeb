@@ -681,7 +681,7 @@ export const exchangeOAuthCode = async (req, res) => {
 
     if (Array.isArray(oauthResult.customSocialFeeds) && oauthResult.customSocialFeeds.length > 0) {
       await query(
-        `UPDATE profiles SET custom_social_feeds = $1, updated_at = NOW() WHERE id = $2`,
+        `UPDATE profiles SET custom_social_feeds = $1::jsonb, updated_at = NOW() WHERE id = $2`,
         [JSON.stringify(oauthResult.customSocialFeeds), resolvedId]
       );
     }
@@ -1299,7 +1299,7 @@ export const autoFetchAccountReels = async (req, res) => {
 
     // Save directly to profiles custom_social_feeds
     await query(
-      `UPDATE profiles SET custom_social_feeds = $1, updated_at = NOW() WHERE id = $2`,
+      `UPDATE profiles SET custom_social_feeds = $1::jsonb, updated_at = NOW() WHERE id = $2`,
       [JSON.stringify(liveItems), resolvedId]
     );
 
