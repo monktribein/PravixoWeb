@@ -686,7 +686,7 @@ export default function CreatorMediaKit() {
   const liveFacebookFeeds = customFacebook.length > 0 ? customFacebook : defaultFacebookFeeds;
 
   // Calculate dynamic Average Views per Reel from live connected feeds or audience stats
-  const calculatedAvgViews = useMemo(() => {
+  const calculatedAvgViews = (() => {
     // 1. If custom social feeds exist, calculate average from their real views
     const targetFeeds = customInstagram.length > 0 ? customInstagram : liveInstagramFeeds;
     const feedsWithViews = (targetFeeds || []).filter((f) => f && f.views);
@@ -731,7 +731,7 @@ export default function CreatorMediaKit() {
     }
 
     return "200 - 500";
-  }, [customInstagram, liveInstagramFeeds, creator, instaFollowersCount]);
+  })();
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-white pb-24">
