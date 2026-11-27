@@ -104,6 +104,24 @@ export default function Register() {
 
   const [touched, setTouched] = useState(false);
 
+  // =====================================================
+  // PER-FIELD TOUCHED STATE (for inline validation)
+  // =====================================================
+  const [fieldTouched, setFieldTouched] = useState({
+    email: false,
+    password: false,
+    confirmPassword: false,
+    name: false,
+  });
+
+  const markTouched = (field) =>
+    setFieldTouched((prev) => ({ ...prev, [field]: true }));
+
+  const emailValid = /^\S+@\S+\.\S+$/.test(email.trim());
+  const passwordValid = password.length >= 8;
+  const confirmValid = confirmPassword === password;
+  const nameValid = name.trim().length > 1;
+
   const [submitting, setSubmitting] =
     useState(false);
 
@@ -232,10 +250,10 @@ export default function Register() {
   // =====================================================
 
   const valid =
-    name.trim().length > 1 &&
-    /^\S+@\S+\.\S+$/.test(email.trim()) &&
-    password.length >= 6 &&
-    password === confirmPassword &&
+    nameValid &&
+    emailValid &&
+    passwordValid &&
+    confirmValid &&
     acceptedTerms;
 
   // =====================================================
@@ -755,11 +773,15 @@ export default function Register() {
                 onChange={(e) =>
                   setEmail(e.target.value)
                 }
+                onBlur={() => markTouched("email")}
                 placeholder="you@email.com"
-                className="pl-10"
+                className={`pl-10 ${fieldTouched.email && !emailValid ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                 required
               />
             </div>
+            {fieldTouched.email && !emailValid && (
+              <p className="mt-1 text-xs text-red-500">Please enter a valid email address.</p>
+            )}
           </div>
 
           {/* PASSWORD */}
@@ -785,8 +807,9 @@ export default function Register() {
                     e.target.value
                   )
                 }
-                placeholder="At least 6 characters"
-                className="pl-10 pr-10"
+                onBlur={() => markTouched("password")}
+                placeholder="At least 8 characters"
+                className={`pl-10 pr-10 ${fieldTouched.password && !passwordValid ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                 required
               />
 
@@ -806,6 +829,9 @@ export default function Register() {
                 )}
               </button>
             </div>
+            {fieldTouched.password && !passwordValid && (
+              <p className="mt-1 text-xs text-red-500">Password must be at least 8 characters.</p>
+            )}
           </div>
 
           {/* CONFIRM PASSWORD */}
@@ -831,8 +857,9 @@ export default function Register() {
                     e.target.value
                   )
                 }
+                onBlur={() => markTouched("confirmPassword")}
                 placeholder="Repeat your password"
-                className="pl-10 pr-10"
+                className={`pl-10 pr-10 ${fieldTouched.confirmPassword && !confirmValid ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                 required
               />
 
@@ -852,6 +879,9 @@ export default function Register() {
                 )}
               </button>
             </div>
+            {fieldTouched.confirmPassword && !confirmValid && (
+              <p className="mt-1 text-xs text-red-500">Passwords do not match.</p>
+            )}
           </div>
 
           {/* REFERRAL CODE (Optional for creators) */}
